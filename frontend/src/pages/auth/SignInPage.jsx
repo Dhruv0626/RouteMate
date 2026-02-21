@@ -1,0 +1,195 @@
+import React, { useState } from "react";
+import { Mail, Lock, User, Car, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import Button from "../../components/ui/Button";
+import Input from "../../components/ui/Input";
+import ThemeToggle from "../../components/ui/ThemeToggle";
+import api from "../../services/api";
+
+const SignInPage = () => {
+  const navigate = useNavigate();
+  const { setUser } = useAuth();
+  const [role, setRole] = useState("passenger");
+  const [showPassword, setShowPassword] = useState(false);
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await api.post("/users/signin", { ...formData, role });
+      if (response.data.success) {
+        setUser(response.data.user);
+        navigate(`/${response.data.user.role}/dashboard`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Sign in failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mesh-bg flex min-h-screen items-center justify-center p-4 transition-colors duration-500">
+      <div className="absolute top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
+
+      <div className="glass-card relative z-10 grid w-full max-w-200 grid-cols-1 overflow-hidden rounded-3xl border-(--card-border) shadow-2xl lg:grid-cols-2">
+        {/* Left Side */}
+        <div className="from-primary/10 hidden flex-col justify-between border-r border-(--card-border) bg-linear-to-br to-transparent p-10 lg:flex">
+          <div className="relative z-10">
+            <h1 className="font-display mb-1 text-3xl font-black tracking-tighter text-(--text-main)">
+              <span className="bg-linear-to-br from-(--text-main) to-(--text-dim) bg-clip-text text-transparent italic">
+                Route
+              </span>
+              <span className="text-primary">Mate</span>
+            </h1>
+            <p className="text-base leading-relaxed font-medium text-(--text-dim) opacity-80">
+              Sign in to your dashboard.
+            </p>
+          </div>
+
+          <div className="relative z-10 space-y-6">
+            <div className="rounded-xl border border-(--card-border) bg-(--card-bg) p-4 backdrop-blur-md">
+              <p className="text-primary mb-1 text-[10px] leading-none font-black tracking-widest uppercase">
+                Status
+              </p>
+              <h4 className="text-xs leading-snug font-bold text-(--text-main)">
+                Managing the future of urban mobility.
+              </h4>
+            </div>
+          </div>
+
+          <p className="text-[9px] font-black tracking-[0.2em] text-(--text-dim) uppercase opacity-40">
+            Intelligent Systems • 2026
+          </p>
+        </div>
+
+        {/* Right Side */}
+        <div className="p-8 transition-colors duration-500 lg:p-10">
+          <div className="mb-6">
+            <h2 className="font-display mb-1 text-xl font-black text-(--text-main)">
+              Welcome Back
+            </h2>
+            <p className="text-sm font-medium text-(--text-dim) opacity-70">
+              Enter your credentials to continue.
+            </p>
+          </div>
+
+          <div className="mb-6 flex rounded-xl border border-(--card-border) bg-(--card-bg) p-1.5">
+            <button
+              onClick={() => setRole("passenger")}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-500 ${
+                role === "passenger"
+                  ? "bg-primary scale-[1.02] text-black shadow-md"
+                  : "text-(--text-dim) hover:text-(--text-main)"
+              }`}
+            >
+              <User size={14} /> Passenger
+            </button>
+            <button
+              onClick={() => setRole("driver")}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-500 ${
+                role === "driver"
+                  ? "bg-primary scale-[1.02] text-black shadow-md"
+                  : "text-(--text-dim) hover:text-(--text-main)"
+              }`}
+            >
+              <Car size={14} /> Driver
+            </button>
+          </div>
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {error && (
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs leading-tight font-bold text-red-500">
+                {error}
+              </div>
+            )}
+
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="name@example.com"
+              icon={Mail}
+              required
+              value={formData.email}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+            />
+
+            <Input
+              label="Password"
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              icon={Lock}
+              required
+              value={formData.password}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+              rightSection={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="hover:text-primary text-slate-500 transition-colors focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              }
+            />
+
+            <div className="flex items-center justify-between px-1">
+              <label className="group flex cursor-pointer items-center gap-2 text-[10px] text-(--text-dim)">
+                <input
+                  type="checkbox"
+                  className="text-primary focus:ring-primary/20 h-3.5 w-3.5 cursor-pointer rounded border-(--card-border) bg-(--card-bg) transition-all duration-500"
+                />
+                <span className="font-medium transition-colors group-hover:text-(--text-main)">
+                  Remember me
+                </span>
+              </label>
+              <Link
+                to="/forgot-password"
+                title="Recover Password"
+                className="text-primary text-[10px] font-black tracking-widest uppercase transition-colors hover:text-(--text-main)"
+              >
+                Forgot Password?
+              </Link>
+            </div>
+
+            <div className="pt-2">
+              <Button
+                type="submit"
+                fullWidth
+                disabled={loading}
+                className="py-3 shadow-md"
+              >
+                {loading ? "Authenticating..." : `Sign In`}
+                {!loading && <ArrowRight size={16} />}
+              </Button>
+            </div>
+
+            <p className="mt-6 text-center text-[11px] font-medium text-(--text-dim) opacity-80">
+              New to RouteMate?{" "}
+              <Link
+                to="/signup"
+                className="text-primary font-black transition-colors hover:text-(--text-main)"
+              >
+                Create Account
+              </Link>
+            </p>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SignInPage;

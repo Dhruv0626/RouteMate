@@ -17,8 +17,7 @@ const userSchema = new mongoose.Schema(
 
     Mobile_no: {
       type: String,
-      required: true,
-      unique: true
+      required: true
     },
 
     password: {
@@ -35,10 +34,15 @@ const userSchema = new mongoose.Schema(
     isBlocked: {
       type: Boolean,
       default: false
+    },
+
+    // Refresh Token Rotation — stores the latest hashed refresh token
+    refreshToken: {
+      type: String,
+      default: null
     }
   },
   { timestamps: true }
 );
 
 export default mongoose.model("User", userSchema);
-

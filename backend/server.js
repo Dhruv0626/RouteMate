@@ -1,29 +1,85 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import connectDB from "./src/config/db.js";
 import userRoutes from "./src/routes/User.js";
+import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 
-// Load environment variables
+// ─── Load Environment Variables ───────────────────────────────────────────────
 dotenv.config();
 
-// Connect to Database
+// ─── Connect to Database ──────────────────────────────────────────────────────
 connectDB();
 
 const app = express();
+const isProduction = process.env.NODE_ENV === "production";
 
-// Middleware
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
-app.use(express.json());
+// ─── 1. Helmet — Security HTTP Headers ───────────────────────────────────────
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", "https:", "data:"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: isProduction ? [] : null
+      }
+    },
+    crossOriginEmbedderPolicy: false
+  })
+);
 
+// ─── 2. CORS ──────────────────────────────────────────────────────────────────
+const allowedOrigins = isProduction
+  ? [process.env.FRONTEND_URL || "https://your-production-domain.com"]
+  : ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy: Origin ${origin} not allowed`));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"], // Removed x-csrf-token
+    credentials: true
+  })
+);
+
+// ─── 3. Cookie Parser ─────────────────────────────────────────────────────────
+app.use(cookieParser());
+
+// ─── 4. Body Parsers ──────────────────────────────────────────────────────────
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
+
+// ─── 5. Global Rate Limiting ──────────────────────────────────────────────────
+app.use("/api", apiLimiter);
+
+// ─── 6. Routes ────────────────────────────────────────────────────────────────
 app.use("/api/users", userRoutes);
 
-// Server
+// ─── 7. Global Error Handler ──────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error("Unhandled Error:", err.message);
+  res.status(err.status || 500).json({
+    success: false,
+    message: isProduction ? "Internal server error" : err.message
+  });
+});
+
+// ─── 8. Start Server ──────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
+  console.log(`🔒 Security: Helmet ✓ | CORS ✓ | Rate Limiting ✓ | Pure JWT ✓`);
 });

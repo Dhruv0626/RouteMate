@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 dist/
+BACKEND_SECURITY_GUIDE.txt
 
 # Environment Variables
 .env

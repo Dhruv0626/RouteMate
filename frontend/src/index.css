@@ -1,1 +1,101 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+
+  --color-primary: #ffcc00;
+  --color-primary-dark: #e6b800;
+  --color-accent: #3b82f6;
+
+  --transition-theme: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer base {
+  :root,
+  .dark {
+    --bg-main: #0a101e;
+    --card-bg: rgba(255, 255, 255, 0.04);
+    --card-border: rgba(255, 255, 255, 0.08);
+    --text-main: #f1f5f9;
+    --text-dim: #94a3b8;
+    --mesh-opacity: 0.15;
+  }
+
+  /* Light theme overrides */
+  .light {
+    --bg-main: #f8fafc;
+    --card-bg: #ffffff;
+    --card-border: #e2e8f0;
+    --text-main: #0f172a;
+    --text-dim: #475569;
+    --mesh-opacity: 0.1;
+  }
+
+  body {
+    @apply font-sans text-base antialiased;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    transition:
+      background-color 0.4s ease,
+      color 0.4s ease;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
+    @apply shadow-xl backdrop-blur-xl transition-all duration-300;
+  }
+
+  .mesh-bg {
+    position: relative;
+    background-color: var(--bg-main);
+    transition: background-color 0.4s ease;
+  }
+
+  .mesh-bg::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(
+        at 0% 0%,
+        hsla(215, 98%, 61%, var(--mesh-opacity)) 0,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 100% 0%,
+        hsla(45, 100%, 50%, calc(var(--mesh-opacity) * 0.4)) 0,
+        transparent 50%
+      );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ensure content in mesh-bg is above gradient */
+  .mesh-bg > * {
+    position: relative;
+    z-index: 10;
+  }
+}
+
+/* Tighter font scaling */
+@layer base {
+  h1 {
+    @apply font-display text-3xl font-black tracking-tight md:text-5xl;
+  }
+  h2 {
+    @apply font-display text-2xl font-black tracking-tight md:text-3xl;
+  }
+  h3 {
+    @apply font-display text-xl font-bold md:text-2xl;
+  }
+  p {
+    @apply text-sm leading-relaxed md:text-base;
+  }
+}
