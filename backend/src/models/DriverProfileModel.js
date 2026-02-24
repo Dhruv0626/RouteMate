@@ -13,6 +13,7 @@ const driverProfileSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+
     aadharNumber: {
       type: String,
       required: true
@@ -22,6 +23,7 @@ const driverProfileSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+
     isOnline: {
       type: Boolean,
       default: false

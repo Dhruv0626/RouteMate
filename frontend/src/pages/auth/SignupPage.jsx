@@ -64,7 +64,11 @@ const SignupPage = () => {
       const response = await api.post("/users/register", { ...formData, role });
       if (response.data.success) {
         setUser(response.data.user);
-        navigate(`/${response.data.user.role}/dashboard`);
+        if (response.data.user.role === "passenger") {
+          navigate("/passenger/ride");
+        } else {
+          navigate(`/${response.data.user.role}/dashboard`);
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed.");

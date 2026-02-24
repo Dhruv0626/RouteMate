@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import SignInPage from "./pages/auth/SigninPage";
+import SignInPage from "./pages/auth/SignInPage";
 import SignupPage from "./pages/auth/SignupPage";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import AdminSignInPage from "./pages/admin/AdminSignInPage";
@@ -15,6 +15,7 @@ import AdminSignupPage from "./pages/admin/AdminSignupPage";
 import HomePage from "./pages/DashboardPage";
 import LandingPage from "./pages/HomePage";
 import SplashPage from "./pages/SplashPage";
+import RideMapPage from "./pages/RideMapPage";
 import Loader from "./components/ui/Loader";
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
@@ -94,6 +95,15 @@ function AppContent() {
         <Route path="/loader" element={<Loader fullPage />} />
 
         {/* Protected Dashboard */}
+        <Route
+          path="/passenger/ride"
+          element={
+            <ProtectedRoute>
+              <RideMapPage />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/:role/dashboard"
           element={

@@ -30,7 +30,7 @@ const ROLE_CARDS = {
       title: "Book a Ride",
       desc: "Find a driver near you instantly",
       color: "primary",
-      href: "#",
+      href: "/passenger/ride",
     },
     {
       icon: Clock,
@@ -377,6 +377,7 @@ const HomePage = () => {
               return (
                 <button
                   key={i}
+                  onClick={() => card.href !== "#" && navigate(card.href)}
                   className={`group glass-card relative rounded-3xl p-6 text-left transition-all duration-300 hover:-translate-y-1 ${c.hover} border-(--card-border) shadow-sm`}
                 >
                   <div
