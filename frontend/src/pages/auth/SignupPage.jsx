@@ -17,6 +17,12 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import api from "../../services/api";
+import {
+  validateEmail,
+  validateName,
+  validatePhone,
+  validatePassword,
+} from "../../utils/validation";
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -32,6 +38,7 @@ const SignupPage = () => {
     secretKey: "",
   });
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const handleRoleChange = (newRole) => {
@@ -46,19 +53,35 @@ const SignupPage = () => {
         secretKey: "",
       });
       setError("");
+      setFieldErrors({});
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    setFieldErrors({});
 
-    if (role === "driver" && !formData.licenseNumber) {
-      setError("License number is required for drivers.");
-      setLoading(false);
+    // Client-side validation
+    const errors = {};
+    const nameErr = validateName(formData.name);
+    const emailErr = validateEmail(formData.email);
+    const phoneErr = validatePhone(formData.Mobile_no);
+    const passErr = validatePassword(formData.password);
+
+    if (nameErr) errors.name = nameErr;
+    if (emailErr) errors.email = emailErr;
+    if (phoneErr) errors.Mobile_no = phoneErr;
+    if (passErr) errors.password = passErr;
+    if (role === "driver" && !formData.licenseNumber)
+      errors.licenseNumber = "License number is required";
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
+
+    setLoading(true);
 
     try {
       const response = await api.post("/users/register", { ...formData, role });
@@ -66,19 +89,32 @@ const SignupPage = () => {
         setUser(response.data.user);
         if (response.data.user.role === "passenger") {
           navigate("/passenger/ride");
+        } else if (response.data.user.role === "driver") {
+          navigate("/driver/profile-form");
         } else {
           navigate(`/${response.data.user.role}/dashboard`);
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed.");
+      if (err.response?.data?.errors) {
+        const backendErrors = {};
+        err.response.data.errors.forEach((e) => {
+          backendErrors[e.field] = e.message;
+        });
+        setFieldErrors(backendErrors);
+      } else {
+        setError(err.response?.data?.message || "Registration failed.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e, field) => {
-    setFormData({ ...formData, [field]: e.target.value });
+  const handleInputChange = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+    if (fieldErrors[field]) {
+      setFieldErrors({ ...fieldErrors, [field]: "" });
+    }
   };
 
   return (
@@ -87,7 +123,7 @@ const SignupPage = () => {
         <ThemeToggle />
       </div>
 
-      <div className="glass-card relative z-10 grid w-full max-w-210 grid-cols-1 overflow-hidden rounded-3xl border-(--card-border) shadow-2xl lg:grid-cols-2">
+      <div className="glass-card relative z-10 grid w-full max-w-210 grid-cols-1 rounded-3xl border-(--card-border) shadow-2xl lg:grid-cols-2 lg:overflow-hidden">
         {/* Left Side */}
         <div className="from-primary/10 hidden flex-col justify-between border-r border-(--card-border) bg-linear-to-br to-transparent p-10 lg:flex">
           <div className="relative z-10">
@@ -173,7 +209,8 @@ const SignupPage = () => {
                 icon={User}
                 required
                 value={formData.name}
-                onChange={(e) => handleInputChange(e, "name")}
+                error={fieldErrors.name}
+                onChange={(e) => handleInputChange("name", e.target.value)}
               />
               <Input
                 label="Email"
@@ -182,7 +219,8 @@ const SignupPage = () => {
                 icon={Mail}
                 required
                 value={formData.email}
-                onChange={(e) => handleInputChange(e, "email")}
+                error={fieldErrors.email}
+                onChange={(e) => handleInputChange("email", e.target.value)}
               />
             </div>
 
@@ -193,7 +231,8 @@ const SignupPage = () => {
               icon={Phone}
               required
               value={formData.Mobile_no}
-              onChange={(e) => handleInputChange(e, "Mobile_no")}
+              error={fieldErrors.Mobile_no}
+              onChange={(e) => handleInputChange("Mobile_no", e.target.value)}
             />
 
             <Input
@@ -203,7 +242,8 @@ const SignupPage = () => {
               icon={Lock}
               required
               value={formData.password}
-              onChange={(e) => handleInputChange(e, "password")}
+              error={fieldErrors.password}
+              onChange={(e) => handleInputChange("password", e.target.value)}
               rightSection={
                 <button
                   type="button"
@@ -223,7 +263,8 @@ const SignupPage = () => {
                   icon={IdCard}
                   required
                   value={formData.licenseNumber}
-                  onChange={(e) => handleInputChange(e, "licenseNumber")}
+                  error={fieldErrors.licenseNumber}
+                  onChange={(e) => handleInputChange("licenseNumber", e.target.value)}
                 />
               </div>
             )}

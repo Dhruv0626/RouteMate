@@ -20,6 +20,7 @@
     --text-main: #f1f5f9;
     --text-dim: #94a3b8;
     --mesh-opacity: 0.15;
+    color-scheme: dark;
   }
 
   /* Light theme overrides */
@@ -30,6 +31,13 @@
     --text-main: #0f172a;
     --text-dim: #475569;
     --mesh-opacity: 0.1;
+    color-scheme: light;
+  }
+
+  /* Global Select & Option Reset for better Dark Mode UX */
+  select option {
+    background-color: var(--bg-main);
+    color: var(--text-main);
   }
 
   body {
@@ -98,4 +106,37 @@
   p {
     @apply text-sm leading-relaxed md:text-base;
   }
+}
+
+/* ─── Global Browser Overrides ────────────────────────────────────────────── */
+
+/* Force-hide ALL native browser password reveal and clear buttons */
+/* This prevents "double eye" icons in Edge, Chrome, Safari, etc. */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-reveal,
+input::-webkit-clear-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  appearance: none !important;
+}
+
+/* Hide auto-fill and credential icons that overlap our custom UI */
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-caps-lock-indicator {
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Hide scrollbars globally while keeping scroll functionality */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, and Opera */
 }

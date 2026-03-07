@@ -5,6 +5,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import connectDB from "./src/config/db.js";
 import userRoutes from "./src/routes/User.js";
+import driverProfileRoutes from "./src/routes/DriverProfile.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 
 // ─── Load Environment Variables ───────────────────────────────────────────────
@@ -67,6 +68,7 @@ app.use("/api", apiLimiter);
 
 // ─── 6. Routes ────────────────────────────────────────────────────────────────
 app.use("/api/users", userRoutes);
+app.use("/api/driver-profiles", driverProfileRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {

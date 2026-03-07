@@ -13,6 +13,9 @@ export const handleValidationErrors = (req, res, next) => {
     next();
 };
 
+// ─── Email Validation Regex (Highly Permissive) ──────────────────────────────
+const emailRegex = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~.-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+
 // ─── Register Validation Rules ────────────────────────────────────────────────
 export const validateRegister = [
     body("name")
@@ -23,7 +26,7 @@ export const validateRegister = [
     body("email")
         .trim()
         .notEmpty().withMessage("Email is required")
-        .isEmail().withMessage("Valid email is required")
+        .matches(emailRegex).withMessage("email is not validate")
         .normalizeEmail(),
 
     body("Mobile_no")
@@ -45,7 +48,7 @@ export const validateSignIn = [
     body("email")
         .trim()
         .notEmpty().withMessage("Email is required")
-        .isEmail().withMessage("Valid email is required")
+        .matches(emailRegex).withMessage("email is not validate")
         .normalizeEmail(),
 
     body("password")

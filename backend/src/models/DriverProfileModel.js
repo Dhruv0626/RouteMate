@@ -11,12 +11,27 @@ const driverProfileSchema = new mongoose.Schema(
 
     licenseNumber: {
       type: String,
-      required: true
+      default: null
     },
 
     aadharNumber: {
       type: String,
-      required: true
+      default: null
+    },
+
+    vehicleType: { 
+      type: String,
+      default: null
+    },
+
+    vehicleName: {
+      type: String,
+      default: null
+    },
+
+    vehicleNumber: { 
+      type: String,
+      default: null
     },
 
     isApproved: {

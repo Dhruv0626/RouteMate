@@ -19,6 +19,7 @@ import {
   UserCheck,
   Plus,
   Circle,
+  FileCheck,
 } from "lucide-react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
@@ -30,7 +31,7 @@ const ROLE_CARDS = {
       title: "Book a Ride",
       desc: "Find a driver near you instantly",
       color: "primary",
-      href: "/passenger/ride",
+      href: "/passenger/dashboard/ride",
     },
     {
       icon: Clock,
@@ -111,6 +112,13 @@ const ROLE_CARDS = {
       color: "cyan",
       href: "#",
     },
+    {
+      icon: FileCheck,
+      title: "My Profile",
+      desc: "Manage your driver credentials",
+      color: "violet",
+      href: "/driver/dashboard/profile",
+    },
   ],
   admin: [
     {
@@ -118,42 +126,42 @@ const ROLE_CARDS = {
       title: "User Management",
       desc: "Manage passengers and drivers",
       color: "primary",
-      href: "#",
+      href: "/admin/dashboard/manage-users",
     },
     {
       icon: BarChart2,
       title: "Analytics",
       desc: "Platform metrics and reports",
       color: "violet",
-      href: "#",
+      href: "/admin/dashboard/analytics",
     },
     {
       icon: Car,
       title: "Fleet Overview",
       desc: "Monitor all active vehicles",
       color: "emerald",
-      href: "#",
+      href: "/admin/dashboard/fleet",
     },
     {
       icon: Shield,
       title: "Security",
       desc: "Audit logs and access control",
       color: "rose",
-      href: "#",
+      href: "/admin/dashboard/security",
     },
     {
       icon: UserCheck,
       title: "Driver Approvals",
       desc: "Review pending applications",
       color: "amber",
-      href: "#",
+      href: "/admin/dashboard/driver-approvals",
     },
     {
       icon: Settings,
       title: "System Settings",
       desc: "Configure platform options",
       color: "cyan",
-      href: "#",
+      href: "/admin/dashboard/settings",
     },
   ],
 };
@@ -231,7 +239,7 @@ const ROLE_STATS = (user) =>
     ],
   })[user?.role || "passenger"];
 
-const HomePage = () => {
+const DashboardPage = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -455,4 +463,5 @@ const HomePage = () => {
   );
 };
 
-export default HomePage;
+export default DashboardPage;
+

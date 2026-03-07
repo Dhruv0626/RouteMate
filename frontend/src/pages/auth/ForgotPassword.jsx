@@ -4,14 +4,24 @@ import { Link } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { validateEmail } from "../../utils/validation";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError("");
+
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      return;
+    }
+
     setLoading(true);
     // Simulate API call
     setTimeout(() => {
@@ -57,7 +67,11 @@ const ForgotPassword = () => {
                 icon={Mail}
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                error={error}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError("");
+                }}
               />
 
               <Button

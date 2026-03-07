@@ -1,4 +1,5 @@
 import React from "react";
+import { AlertCircle } from "lucide-react";
 
 const Input = ({
   label,
@@ -36,9 +37,12 @@ const Input = ({
         )}
       </div>
       {error && (
-        <span className="ml-1 text-[10px] font-medium text-red-500">
-          {error}
-        </span>
+        <div className="flex items-center gap-1.5 ml-1 animate-in fade-in slide-in-from-top-1 duration-200">
+          <AlertCircle size={12} className="text-red-500" />
+          <span className="text-[10px] font-bold text-red-500">
+            {error}
+          </span>
+        </div>
       )}
     </div>
   );

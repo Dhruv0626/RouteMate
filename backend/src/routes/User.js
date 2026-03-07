@@ -4,7 +4,10 @@ import {
     SignInUser,
     RefreshToken,
     LogoutUser,
-    GetProfile
+    GetProfile,
+    DeleteUser,
+    GetAllUsers,
+    UpdateUser
 } from "../controllers/UserController.js";
 import authMiddleware from "../middlewares/AuthMid.js";
 import authorizeRoles from "../middlewares/RoleMid.js";
@@ -23,6 +26,16 @@ router.post("/logout", authMiddleware, LogoutUser);
 
 // ─── Protected Routes (JWT required) ─────────────────────────────────────────
 router.get("/profile", authMiddleware, GetProfile);
+
+// ─── Admin-Only Routes ────────────────────────────────────────────────────────
+// Get all non-admin users
+router.get("/all", authMiddleware, authorizeRoles("admin"), GetAllUsers);
+
+// Update a user by ID
+router.put("/:userId", authMiddleware, authorizeRoles("admin"), UpdateUser);
+
+// Delete a user by ID — deleted user will be automatically logged out on their browser
+router.delete("/:userId", authMiddleware, authorizeRoles("admin"), DeleteUser);
 
 // ─── RBAC Example Routes ──────────────────────────────────────────────────────
 // Admin only

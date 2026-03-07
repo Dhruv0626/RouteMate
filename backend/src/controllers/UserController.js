@@ -5,12 +5,12 @@ import crypto from "crypto";
 
 // ─── Token Helpers ────────────────────────────────────────────────────────────
 
-/** Generate short-lived Access Token (15 min) */
+/** Generate Access Token (1 hour for stability) */
 const generateAccessToken = (user) =>
     jwt.sign(
         { id: user._id, role: user.role },
         process.env.JWT_SECRET,
-        { expiresIn: "15m" }
+        { expiresIn: "1h" }
     );
 
 /** Generate long-lived Refresh Token (7 days for users, infinite for Admin) */
@@ -40,7 +40,7 @@ const setTokenCookies = (res, accessToken, refreshToken, role) => {
         httpOnly: true,                  // Not accessible via JS (XSS protection)
         secure: isProduction,            // HTTPS only in production
         sameSite: isProduction ? "Strict" : "Lax", // CSRF protection
-        maxAge: 15 * 60 * 1000          // 15 minutes
+        maxAge: 60 * 60 * 1000           // 1 hour
     });
 
     res.cookie("refreshToken", refreshToken, {
@@ -262,6 +262,133 @@ export const LogoutUser = async (req, res) => {
 
     } catch (error) {
         console.error("Logout Error:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
+// ─── Delete User (Admin only) ─────────────────────────────────────────────────
+/**
+ * Permanently deletes a user from the database.
+ * Nullifying the refreshToken before deletion ensures that:
+ *   - The deleted user's next API call will return 401 "User not found"
+ *   - The frontend interceptor will catch the 401 and force-log them out
+ */
+export const DeleteUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Prevent admin from deleting themselves
+        if (userId === req.user._id.toString()) {
+            return res.status(400).json({
+                success: false,
+                message: "Admins cannot delete their own account."
+            });
+        }
+
+        // 1. Verify the target user exists
+        const targetUser = await UserModel.findById(userId);
+        if (!targetUser) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        // 2. Invalidate the user's session by nullifying refresh token
+        //    (their next request or token refresh will fail with 401)
+        await UserModel.findByIdAndUpdate(userId, { refreshToken: null });
+
+        // 3. Delete the user document
+        await UserModel.findByIdAndDelete(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: `User "${targetUser.name}" has been permanently deleted.`
+        });
+
+    } catch (error) {
+        console.error("Delete User Error:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
+// ─── Update User (Admin only) ─────────────────────────────────────────────────
+/**
+ * Updates user details like name, email, mobile_no, role, or block status.
+ * If the user's block status is set to true, their refreshToken is nullified.
+ */
+export const UpdateUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { name, email, Mobile_no, role, isBlocked } = req.body;
+
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        // 1. If user is being blocked, invalidate their session
+        if (isBlocked === true && user.isBlocked === false) {
+            await UserModel.findByIdAndUpdate(userId, { refreshToken: null });
+        }
+
+        // 2. Update user fields
+        if (name) user.name = name;
+        if (email) user.email = email;
+        if (Mobile_no) user.Mobile_no = Mobile_no;
+        if (role) user.role = role;
+        if (typeof isBlocked === "boolean") user.isBlocked = isBlocked;
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `User "${user.name}" updated successfully.`,
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                Mobile_no: user.Mobile_no,
+                role: user.role,
+                isBlocked: user.isBlocked
+            }
+        });
+
+    } catch (error) {
+        console.error("Update User Error:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
+// ─── Get All Users (Admin only) ───────────────────────────────────────────────
+export const GetAllUsers = async (req, res) => {
+    try {
+        const detailedUsers = await UserModel.aggregate([
+            {
+                $lookup: {
+                    from: "driverprofiles",
+                    localField: "_id",
+                    foreignField: "user",
+                    as: "driverProfile"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$driverProfile",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $project: {
+                    password: 0,
+                    refreshToken: 0
+                }
+            },
+            {
+                $sort: { createdAt: -1 }
+            }
+        ]);
+
+        return res.status(200).json({ success: true, users: detailedUsers });
+    } catch (error) {
+        console.error("Get All Users Error:", error);
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };

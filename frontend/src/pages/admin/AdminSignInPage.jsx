@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Shield, Lock, Mail, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -6,23 +6,46 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import api from "../../services/api";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { validateEmail } from "../../utils/validation";
 
 const AdminSignInPage = () => {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { user, setUser } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
-  const [validationErrors, setValidationErrors] = useState([]);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user) {
+      if (user.role === "admin") {
+        navigate("/admin/dashboard", { replace: true });
+      } else {
+        navigate(`/${user.role}/dashboard`, { replace: true });
+      }
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setValidationErrors([]);
+    setFieldErrors({});
+
+    // Client-side validation
+    const emailError = validateEmail(formData.email);
+    const errors = {};
+    if (emailError) errors.email = emailError;
+    if (!formData.password) errors.password = "Password is required";
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
     setLoading(true);
 
-    // CSRF check removed
     try {
       const response = await api.post("/users/signin", {
         ...formData,
@@ -34,11 +57,13 @@ const AdminSignInPage = () => {
         navigate(`/${response.data.user.role}/dashboard`);
       }
     } catch (err) {
-      if (err.response?.status === 400 && err.response?.data?.errors) {
-        setValidationErrors(err.response.data.errors);
-        setError("Validation failed. Please check your credentials.");
+      if (err.response?.data?.errors) {
+        const backendErrors = {};
+        err.response.data.errors.forEach((e) => {
+          backendErrors[e.field] = e.message;
+        });
+        setFieldErrors(backendErrors);
       } else if (err.response?.status === 403) {
-        // Handle role mismatch or blocked account
         setError(err.response.data.message);
       } else {
         setError(err.response?.data?.message || "Admin authorization failed.");
@@ -66,22 +91,13 @@ const AdminSignInPage = () => {
           </p>
         </div>
 
-        <div className="glass-card group relative overflow-hidden rounded-4xl p-8 shadow-2xl">
+        <div className="glass-card group relative rounded-4xl p-8 shadow-2xl">
           <div className="bg-primary absolute top-0 left-0 h-0.75 w-full"></div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             {error && (
-              <div className="space-y-2">
-                <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-[11px] leading-tight font-bold text-red-500">
-                  {error}
-                </div>
-                {validationErrors.length > 0 && (
-                  <ul className="list-inside list-disc rounded-xl border border-red-500/10 bg-red-500/5 p-2 text-[10px] text-red-500/80">
-                    {validationErrors.map((err, i) => (
-                      <li key={i}>{err.message}</li>
-                    ))}
-                  </ul>
-                )}
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-[11px] leading-tight font-bold text-red-500">
+                {error}
               </div>
             )}
 
@@ -92,9 +108,11 @@ const AdminSignInPage = () => {
               icon={Mail}
               required
               value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
+              error={fieldErrors.email}
+              onChange={(e) => {
+                setFormData({ ...formData, email: e.target.value });
+                if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: "" });
+              }}
             />
 
             <Input
@@ -104,9 +122,11 @@ const AdminSignInPage = () => {
               icon={Lock}
               required
               value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
+              error={fieldErrors.password}
+              onChange={(e) => {
+                setFormData({ ...formData, password: e.target.value });
+                if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: "" });
+              }}
               rightSection={
                 <button
                   type="button"

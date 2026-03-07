@@ -9,24 +9,53 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [theme, setThemeState] = useState("dark");
 
-  // Initialize theme and user
+  // Initialize theme and user — then verify session is still valid on server
   useEffect(() => {
-    try {
-      // Restore User
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        setUserState(JSON.parse(storedUser));
-      }
-
-      // Restore Theme
+    const initializeAuth = async () => {
+      // Restore Theme first (no network needed)
       const storedTheme = localStorage.getItem("theme") || "dark";
       setThemeState(storedTheme);
       applyTheme(storedTheme);
-    } catch {
-      localStorage.removeItem("user");
-    } finally {
+
+      // Restore User from localStorage for instant UI
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          setUserState(JSON.parse(storedUser));
+        } catch {
+          // Corrupted localStorage — clear it
+          localStorage.removeItem("user");
+          setLoading(false);
+          return;
+        }
+
+        // ── Server-side session check ──────────────────────────────────────
+        // Verify the user still exists in the DB.
+        // IMPORTANT: We NEVER remove the user here on failure.
+        // If the access token is expired, the api.js interceptor will
+        // automatically refresh it using the refresh token cookie.
+        // Only if the refresh token itself is expired/invalid will the
+        // interceptor call forceLogout() → clear storage → redirect.
+        // Network errors or temporary server issues are silently ignored
+        // so the user stays logged in with cached data.
+        try {
+          const { data } = await api.get("/users/profile");
+          if (data.success) {
+            // Sync latest server data into state + storage
+            setUserState(data.user);
+            localStorage.setItem("user", JSON.stringify(data.user));
+          }
+        } catch {
+          // Let the api.js interceptor handle 401s (it will refresh
+          // or force-logout as needed). For any other error (network,
+          // 500, etc.) we keep the cached user — no accidental logout.
+        }
+      }
+
       setLoading(false);
-    }
+    };
+
+    initializeAuth();
   }, []);
 
   const applyTheme = (currentTheme) => {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Mail, Lock, User, Car, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -6,19 +6,45 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import api from "../../services/api";
+import { validateEmail } from "../../utils/validation";
 
 const SignInPage = () => {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { user, setUser } = useAuth();
   const [role, setRole] = useState("passenger");
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user) {
+      if (user.role === "passenger") {
+        navigate("/passenger/ride", { replace: true });
+      } else {
+        navigate(`/${user.role}/dashboard`, { replace: true });
+      }
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
+
+    // Client-side validation
+    const emailError = validateEmail(formData.email);
+    const errors = {};
+    if (emailError) errors.email = emailError;
+    if (!formData.password) errors.password = "Password is required";
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -32,7 +58,15 @@ const SignInPage = () => {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Sign in failed.");
+      if (err.response?.data?.errors) {
+        const backendErrors = {};
+        err.response.data.errors.forEach((e) => {
+          backendErrors[e.field] = e.message;
+        });
+        setFieldErrors(backendErrors);
+      } else {
+        setError(err.response?.data?.message || "Sign in failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -44,7 +78,7 @@ const SignInPage = () => {
         <ThemeToggle />
       </div>
 
-      <div className="glass-card relative z-10 grid w-full max-w-200 grid-cols-1 overflow-hidden rounded-3xl border-(--card-border) shadow-2xl lg:grid-cols-2">
+      <div className="glass-card relative z-10 grid w-full max-w-200 grid-cols-1 rounded-3xl border-(--card-border) shadow-2xl lg:grid-cols-2 lg:overflow-hidden">
         {/* Left Side */}
         <div className="from-primary/10 hidden flex-col justify-between border-r border-(--card-border) bg-linear-to-br to-transparent p-10 lg:flex">
           <div className="relative z-10">
@@ -123,9 +157,11 @@ const SignInPage = () => {
               icon={Mail}
               required
               value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
+              error={fieldErrors.email}
+              onChange={(e) => {
+                setFormData({ ...formData, email: e.target.value });
+                if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: "" });
+              }}
             />
 
             <Input
@@ -135,9 +171,11 @@ const SignInPage = () => {
               icon={Lock}
               required
               value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
+              error={fieldErrors.password}
+              onChange={(e) => {
+                setFormData({ ...formData, password: e.target.value });
+                if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: "" });
+              }}
               rightSection={
                 <button
                   type="button"

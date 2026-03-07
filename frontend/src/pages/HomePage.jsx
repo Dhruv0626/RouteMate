@@ -2,7 +2,7 @@ import { Link, Navigate } from "react-router-dom";
 import { ArrowRight, Navigation, Car, Shield } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
-const LandingPage = () => {
+const HomePage = () => {
   const { user } = useAuth();
   if (user) return <Navigate to={`/${user.role}/dashboard`} replace />;
 
@@ -88,4 +88,4 @@ const LandingPage = () => {
   );
 };
 
-export default LandingPage;
+export default HomePage;

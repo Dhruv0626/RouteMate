@@ -1,0 +1,429 @@
+import React, { useState, useEffect } from "react";
+import {
+  FileText,
+  Fingerprint,
+  Car,
+  ArrowRight,
+  CheckCircle,
+  AlertCircle,
+  Edit2,
+  Save,
+  X,
+  Clock,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import ThemeToggle from "../components/ui/ThemeToggle";
+import { getMyDriverProfile, updateDriverProfile } from "../services/driverProfileService";
+
+const DriverProfile = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [formData, setFormData] = useState({
+    licenseNumber: "",
+    aadharNumber: "",
+    vehicleType: "",
+    vehicleNumber: "",
+  });
+  const [errors, setErrors] = useState({});
+
+  // Redirect if not a driver
+  useEffect(() => {
+    if (user && user.role !== "driver") {
+      navigate(`/${user.role}/dashboard`);
+    }
+  }, [user, navigate]);
+
+  // Fetch driver profile
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await getMyDriverProfile();
+        if (response.data.success) {
+          setProfile(response.data.data);
+          setFormData({
+            licenseNumber: response.data.data.licenseNumber || "",
+            aadharNumber: response.data.data.aadharNumber || "",
+            vehicleType: response.data.data.vehicleType || "",
+            vehicleNumber: response.data.data.vehicleNumber || "",
+          });
+        }
+      } catch (err) {
+        setError(err.response?.data?.message || "Failed to load profile");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user?.role === "driver") {
+      fetchProfile();
+    }
+  }, [user]);
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (formData.licenseNumber.trim() && formData.licenseNumber.length < 10) {
+      newErrors.licenseNumber = "License number should be at least 10 characters";
+    }
+
+    if (formData.aadharNumber.trim() && !/^\d{12}$/.test(formData.aadharNumber.trim())) {
+      newErrors.aadharNumber = "Aadhar number must be 12 digits";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (e, field) => {
+    setFormData({ ...formData, [field]: e.target.value });
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: "" });
+    }
+  };
+
+  const handleSave = async () => {
+    setError("");
+    setSuccess("");
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const response = await updateDriverProfile({
+        licenseNumber: formData.licenseNumber.trim() || null,
+        aadharNumber: formData.aadharNumber.trim() || null,
+        vehicleType: formData.vehicleType.trim() || null,
+        vehicleNumber: formData.vehicleNumber.trim() || null,
+      });
+
+      if (response.data.success) {
+        setProfile(response.data.data);
+        setSuccess("Profile updated successfully!");
+        setIsEditing(false);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setFormData({
+      licenseNumber: profile?.licenseNumber || "",
+      aadharNumber: profile?.aadharNumber || "",
+      vehicleType: profile?.vehicleType || "",
+      vehicleNumber: profile?.vehicleNumber || "",
+    });
+    setErrors({});
+  };
+
+  if (loading) {
+    return (
+      <div className="mesh-bg flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 mb-4">
+            <Clock className="text-primary animate-spin" size={32} />
+          </div>
+          <p className="text-sm text-(--text-dim)">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mesh-bg flex min-h-screen items-center justify-center p-4 transition-colors duration-500">
+      <div className="absolute top-4 left-4 z-50">
+        <Button 
+          variant="secondary" 
+          onClick={() => navigate("/driver/dashboard")}
+          className="rounded-xl border border-(--card-border) bg-(--card-bg) px-3 py-2 text-sm font-semibold text-(--text-dim) hover:text-(--text-main)"
+        >
+          Back to Dashboard
+        </Button>
+      </div>
+      <div className="absolute top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
+
+      <div className="glass-card relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border-(--card-border) shadow-2xl">
+        {/* Header */}
+        <div className="from-primary/10 border-b border-(--card-border) bg-linear-to-br to-transparent p-8">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-primary/20 rounded-xl">
+                <Car className="text-primary" size={24} />
+              </div>
+              <div>
+                <h1 className="font-display text-2xl font-black tracking-tighter text-(--text-main)">
+                  My Driver Profile
+                </h1>
+                <p className="text-sm text-(--text-dim) mt-1">
+                  Manage your professional driving credentials
+                </p>
+              </div>
+            </div>
+            {!isEditing && (
+              <Button
+                onClick={() => setIsEditing(true)}
+                variant="secondary"
+                icon={Edit2}
+              >
+                Edit
+              </Button>
+            )}
+          </div>
+
+          {/* Approval Status */}
+          {profile && (
+            <div className="mt-6 flex items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+              {profile.isApproved ? (
+                <>
+                  <CheckCircle className="text-emerald-500" size={24} />
+                  <div>
+                    <p className="font-semibold text-emerald-500">Approved</p>
+                    <p className="text-xs text-(--text-dim)">Your profile has been verified by our admin team</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Clock className="text-amber-500" size={24} />
+                  <div>
+                    <p className="font-semibold text-amber-500">Pending Approval</p>
+                    <p className="text-xs text-(--text-dim)">Your profile is under review by our admin team</p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="p-8">
+          {/* Error Alert */}
+          {error && (
+            <div className="mb-6 flex items-center gap-3 rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+              <AlertCircle className="text-red-500 shrink-0" size={20} />
+              <p className="text-sm text-red-500">{error}</p>
+            </div>
+          )}
+
+          {/* Success Alert */}
+          {success && (
+            <div className="mb-6 flex items-center gap-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4">
+              <CheckCircle className="text-emerald-500 shrink-0" size={20} />
+              <p className="text-sm text-emerald-500">{success}</p>
+            </div>
+          )}
+
+          {isEditing ? (
+            // Edit Mode
+            <form className="space-y-5">
+              {/* License Number */}
+              <div>
+                <Input
+                  label="Driving License Number (Optional)"
+                  icon={FileText}
+                  type="text"
+                  placeholder="e.g., DL-2024-0001234"
+                  value={formData.licenseNumber}
+                  onChange={(e) => handleInputChange(e, "licenseNumber")}
+                  error={errors.licenseNumber}
+                  disabled={saving}
+                />
+                <p className="text-xs text-(--text-dim) mt-2 ml-1">
+                  Your valid driving license number
+                </p>
+              </div>
+
+              {/* Aadhar Number */}
+              <div>
+                <Input
+                  label="Aadhar Number (Optional)"
+                  icon={Fingerprint}
+                  type="text"
+                  placeholder="Enter 12-digit Aadhar number"
+                  value={formData.aadharNumber}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "");
+                    handleInputChange({ target: { value } }, "aadharNumber");
+                  }}
+                  maxLength="12"
+                  error={errors.aadharNumber}
+                  disabled={saving}
+                />
+                <p className="text-xs text-(--text-dim) mt-2 ml-1">
+                  Your Aadhar number for identity verification
+                </p>
+              </div>
+
+              {/* Vehicle Type */}
+              <div>
+                <Input
+                  label="Vehicle Type (Optional)"
+                  icon={Car}
+                  type="text"
+                  placeholder="e.g., Sedan, SUV, Hatchback"
+                  value={formData.vehicleType}
+                  onChange={(e) => handleInputChange(e, "vehicleType")}
+                  error={errors.vehicleType}
+                  disabled={saving}
+                />
+                <p className="text-xs text-(--text-dim) mt-2 ml-1">
+                  Type of vehicle you will use for rides
+                </p>
+              </div>
+
+              {/* Vehicle Number */}
+              <div>
+                <Input
+                  label="Vehicle Registration Number (Optional)"
+                  icon={FileText}
+                  type="text"
+                  placeholder="e.g., DL-01-AB-1234"
+                  value={formData.vehicleNumber}
+                  onChange={(e) => handleInputChange(e, "vehicleNumber")}
+                  error={errors.vehicleNumber}
+                  disabled={saving}
+                />
+                <p className="text-xs text-(--text-dim) mt-2 ml-1">
+                  Your vehicle's registration number
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <Button
+                  onClick={handleSave}
+                  variant="primary"
+                  fullWidth
+                  disabled={saving}
+                  icon={saving ? null : Save}
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
+                <Button
+                  onClick={handleCancel}
+                  variant="secondary"
+                  fullWidth
+                  disabled={saving}
+                  icon={X}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            // View Mode
+            <div className="space-y-5">
+              {/* License Number */}
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20 shrink-0">
+                    <FileText className="text-primary" size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-(--text-dim) uppercase tracking-wider">
+                      Driving License Number
+                    </p>
+                    <p className="text-sm text-(--text-main) font-semibold mt-1 wrap-break-word">
+                      {profile?.licenseNumber || "Not provided"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aadhar Number */}
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20 shrink-0">
+                    <Fingerprint className="text-primary" size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-(--text-dim) uppercase tracking-wider">
+                      Aadhar Number
+                    </p>
+                    <p className="text-sm text-(--text-main) font-semibold mt-1 wrap-break-word">
+                      {profile?.aadharNumber ? `****-****-${profile.aadharNumber.slice(-4)}` : "Not provided"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vehicle Type */}
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20 shrink-0">
+                    <Car className="text-primary" size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-(--text-dim) uppercase tracking-wider">
+                      Vehicle Type
+                    </p>
+                    <p className="text-sm text-(--text-main) font-semibold mt-1">
+                      {profile?.vehicleType || "Not provided"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vehicle Number */}
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20 shrink-0">
+                    <FileText className="text-primary" size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-(--text-dim) uppercase tracking-wider">
+                      Vehicle Registration Number
+                    </p>
+                    <p className="text-sm text-(--text-main) font-semibold mt-1">
+                      {profile?.vehicleNumber || "Not provided"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats */}
+              {profile && (
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-(--card-border)/50">
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-xs font-semibold text-emerald-500 uppercase">
+                      Total Rides
+                    </p>
+                    <p className="text-2xl font-black text-(--text-main) mt-2">
+                      {profile.totalRides || 0}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-xs font-semibold text-amber-500 uppercase">
+                      Rating
+                    </p>
+                    <p className="text-2xl font-black text-(--text-main) mt-2">
+                      {profile.averageRating?.toFixed(1) || "0.0"} ⭐
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DriverProfile;

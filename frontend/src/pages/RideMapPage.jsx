@@ -13,7 +13,7 @@ const RideMapPage = () => {
   const [destination, setDestination] = useState("");
 
   return (
-    <div className="relative min-h-screen bg-(--bg-main) font-sans text-(--text-main) overflow-hidden transition-colors duration-500">
+    <div className="relative min-h-screen bg-(--bg-main) font-sans text-(--text-main) overflow-x-hidden transition-colors duration-500">
       
       {/* ── Background Map Image (Placeholder) ── */}
       <div 
@@ -57,19 +57,19 @@ const RideMapPage = () => {
       </header>
 
       {/* ── Interactive Overlay ── */}
-      <main className="relative z-10 mx-auto flex h-screen max-w-lg flex-col justify-end px-6 pt-32 pb-10">
-        <div className="glass-card animate-in fade-in slide-in-from-bottom-10 overflow-hidden rounded-4xl border-(--card-border) shadow-2xl backdrop-blur-xl duration-700">
-          <div className="p-8">
-            <h1 className="font-display mb-2 text-2xl font-black text-(--text-main)">
+      <main className="relative z-10 mx-auto flex min-h-[100dvh] max-w-lg flex-col justify-end px-4 pt-24 pb-6 sm:px-6 sm:pb-10">
+        <div className="glass-card animate-in fade-in slide-in-from-bottom-10 flex max-h-[80vh] flex-col overflow-hidden rounded-3xl border-(--card-border) shadow-2xl backdrop-blur-xl duration-700 sm:rounded-4xl">
+          <div className="overflow-y-auto p-6 sm:p-8">
+            <h1 className="font-display mb-2 text-xl font-black text-(--text-main) sm:text-2xl">
               Where to, {user?.name?.split(' ')[0] || 'there'}?
             </h1>
-            <p className="mb-6 text-sm font-medium text-(--text-dim)">
+            <p className="mb-6 text-xs font-medium text-(--text-dim) sm:text-sm">
                Enter your route to find available rides near you.
             </p>
 
-            <div className="relative space-y-4">
+            <div className="relative space-y-3 sm:space-y-4">
                {/* Decorative Connection Line */}
-               <div className="absolute top-12 bottom-20 left-3.75 z-20 w-0.5 border-l-2 border-dashed border-(--card-border)" />
+               <div className="absolute top-12 bottom-16 left-3.75 z-0 w-0.5 border-l-2 border-dashed border-(--card-border) opacity-50 sm:bottom-20" />
 
                <div className="relative z-10">
                  <Input
@@ -77,7 +77,7 @@ const RideMapPage = () => {
                     placeholder="Pickup Location"
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
-                    className="bg-(--bg-main) relative z-10"
+                    className="relative z-10"
                  />
                </div>
                <div className="relative z-10">
@@ -86,24 +86,24 @@ const RideMapPage = () => {
                     placeholder="Destination (e.g. Airport, Downtown)"
                     value={destination}
                     onChange={(e) => setDestination(e.target.value)}
-                    className="bg-(--bg-main) relative z-10"
+                    className="relative z-10"
                  />
                </div>
 
-               <Button fullWidth className="mt-4 py-4 text-sm tracking-wide shadow-xl">
+               <Button fullWidth className="mt-2 py-3.5 text-sm tracking-wide shadow-xl sm:mt-4 sm:py-4">
                   Find Available Rides
                </Button>
             </div>
           </div>
-          <div className="border-t border-(--card-border) bg-(--card-bg) p-6">
+          <div className="border-t border-(--card-border) bg-(--card-bg)/30 p-4 sm:p-6">
              <div className="flex items-center justify-between">
                 <div>
                    <p className="text-xs font-bold text-(--text-main)">Available Vehicles</p>
                    <p className="text-[10px] font-medium text-(--text-dim)">3 rides near your location</p>
                 </div>
                 <div className="flex gap-2">
-                   <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10"><Car size={18} className="text-primary"/></div>
-                   <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10"><Car size={18} className="text-emerald-500"/></div>
+                   <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 transition-transform active:scale-95"><Car size={18} className="text-primary"/></div>
+                   <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 transition-transform active:scale-95"><Car size={18} className="text-emerald-500"/></div>
                 </div>
              </div>
           </div>
