@@ -40,6 +40,24 @@ const userSchema = new mongoose.Schema(
     refreshToken: {
       type: String,
       default: null
+    },
+
+    isGoogleAuth: {
+      type: Boolean,
+      default: false
+    },
+
+    isFacebookAuth: {
+      type: Boolean,
+      default: false
+    },
+
+    resetPasswordOtp: {
+      type: String
+    },
+
+    resetPasswordExpire: {
+      type: Date
     }
   },
   { timestamps: true }

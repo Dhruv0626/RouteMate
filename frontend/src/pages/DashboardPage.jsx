@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
 import {
   MapPin,
   Car,
@@ -75,42 +77,42 @@ const ROLE_CARDS = {
       title: "Go Online",
       desc: "Start accepting ride requests",
       color: "emerald",
-      href: "#",
+      href: "/driver/dashboard/active-rides",
     },
     {
       icon: TrendingUp,
       title: "My Earnings",
       desc: "Track daily and weekly income",
       color: "primary",
-      href: "#",
+      href: "/driver/dashboard/earnings",
     },
     {
       icon: Calendar,
       title: "My Schedule",
       desc: "Plan your driving hours",
       color: "violet",
-      href: "#",
+      href: "/driver/dashboard/schedule",
     },
     {
       icon: MapPin,
       title: "Active Rides",
       desc: "View ongoing trip details",
       color: "amber",
-      href: "#",
+      href: "/driver/dashboard/active-rides",
     },
     {
       icon: Star,
       title: "My Rating",
       desc: "See passenger feedback",
       color: "rose",
-      href: "#",
+      href: "/driver/dashboard/rating",
     },
     {
       icon: Wallet,
       title: "Payouts",
       desc: "Withdraw your earnings",
       color: "cyan",
-      href: "#",
+      href: "/driver/dashboard/payouts",
     },
     {
       icon: FileCheck,
@@ -220,8 +222,14 @@ const ROLE_LABELS = {
   },
 };
 
-const ROLE_STATS = (user) =>
-  ({
+const DashboardPage = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([]);
+
+  // Default fallback stats (demo)
+  const defaultStats = {
     passenger: [
       { label: "Total Trips", value: "0" },
       { label: "Saved Places", value: "0" },
@@ -237,11 +245,33 @@ const ROLE_STATS = (user) =>
       { label: "Active", value: "0" },
       { label: "Revenue", value: "₹0" },
     ],
-  })[user?.role || "passenger"];
+  };
 
-const DashboardPage = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        if (user?.role === "admin") {
+          const { data } = await api.get("/admin/dashboard-stats");
+          if (data.success) {
+            setStats([
+              { label: "Users", value: data.stats.counts.total.toLocaleString() },
+              { label: "Active", value: data.stats.drivers.online.toLocaleString() },
+              { label: "Revenue", value: `₹${(data.stats.business.revenue / 1000).toFixed(1)}K` },
+            ]);
+          }
+        } else {
+          setStats(defaultStats[user?.role || "passenger"]);
+        }
+      } catch (err) {
+        console.error("Dashboard Stats Fetch Error:", err);
+        setStats(defaultStats[user?.role || "passenger"]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) fetchDashboardStats();
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -250,7 +280,6 @@ const DashboardPage = () => {
 
   const role = user?.role || "passenger";
   const cards = ROLE_CARDS[role] || ROLE_CARDS.passenger;
-  const stats = ROLE_STATS(user);
   const roleInfo = ROLE_LABELS[role] || ROLE_LABELS.passenger;
   const firstName = user?.name?.split(" ")[0] || "there";
 
@@ -270,12 +299,9 @@ const DashboardPage = () => {
             </div>
 
             <nav className="hidden items-center gap-6 lg:flex">
-              <a
-                href="#"
-                className="text-primary after:bg-primary relative text-xs font-bold after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:w-full after:rounded-full after:content-['']"
-              >
+              <span className="text-primary after:bg-primary relative text-xs font-bold after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:w-full after:rounded-full after:content-[''] cursor-default">
                 Dashboard
-              </a>
+              </span>
               <a
                 href="#"
                 className="text-xs font-medium text-(--text-dim) transition-colors hover:text-(--text-main)"
@@ -349,15 +375,15 @@ const DashboardPage = () => {
                 </span>
               </h1>
               <p className="md:text-md max-w-md text-base leading-relaxed font-medium text-(--text-dim)">
-                Welcome back! Ready for your next journey today?
+                {loading ? "Fetching latest platform updates..." : "Welcome back! Ready for your next journey today?"}
               </p>
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-4 rounded-3xl border border-(--card-border) bg-black/5 p-6 shadow-sm backdrop-blur-md md:gap-8 dark:bg-black/20">
+            <div className={`grid grid-cols-3 gap-4 rounded-3xl border border-(--card-border) bg-black/5 p-6 shadow-sm backdrop-blur-md md:gap-8 dark:bg-black/20 transition-opacity ${loading ? "opacity-50" : "opacity-100"}`}>
               {stats.map((s, i) => (
                 <div key={i} className="min-w-17.5 text-center">
-                  <p className="mb-0.5 text-xl font-black text-(--text-main) md:text-2xl">
+                  <p className="mb-0.5 text-xl font-black text-(--text-main) md:text-2xl transition-all">
                     {s.value}
                   </p>
                   <p className="text-[8px] leading-none font-black tracking-widest text-(--text-dim) uppercase">
@@ -373,7 +399,7 @@ const DashboardPage = () => {
         <section>
           <div className="mb-6 flex items-center justify-between px-1">
             <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
-              Management{" "}
+              {role === "admin" ? "Platform Control" : "Your Travel Panel"}{" "}
               <span className="bg-primary h-1.5 w-1.5 rounded-full"></span>
             </h2>
           </div>

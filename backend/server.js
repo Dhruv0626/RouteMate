@@ -6,10 +6,14 @@ import cookieParser from "cookie-parser";
 import connectDB from "./src/config/db.js";
 import userRoutes from "./src/routes/User.js";
 import driverProfileRoutes from "./src/routes/DriverProfile.js";
+import adminRoutes from "./src/routes/Admin.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 
 // ─── Load Environment Variables ───────────────────────────────────────────────
 dotenv.config();
+
+// ─── Passport Configuration ───────────────────────────────────────────────────
+import passport from "./src/config/passport.js";
 
 // ─── Connect to Database ──────────────────────────────────────────────────────
 connectDB();
@@ -66,9 +70,12 @@ app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 // ─── 5. Global Rate Limiting ──────────────────────────────────────────────────
 app.use("/api", apiLimiter);
 
-// ─── 6. Routes ────────────────────────────────────────────────────────────────
+// ─── 6. Passport & Routes ──────────────────────────────────────────────────────
+app.use(passport.initialize());
+
 app.use("/api/users", userRoutes);
 app.use("/api/driver-profiles", driverProfileRoutes);
+app.use("/api/admin", adminRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {

@@ -25,6 +25,11 @@ import SplashPage from "./pages/SplashPage";
 import RideMapPage from "./pages/RideMapPage";
 import DriverProfileFormPage from "./pages/DriverProfileFormPage";
 import DriverProfile from "./pages/DriverProfile";
+import ActiveRidesPage from "./pages/driver/ActiveRidesPage";
+import EarningsPage from "./pages/driver/EarningsPage";
+import SchedulePage from "./pages/driver/SchedulePage";
+import MyRatingPage from "./pages/driver/MyRatingPage";
+import PayoutsPage from "./pages/driver/PayoutsPage";
 import Loader from "./components/ui/Loader";
 import { getMyDriverProfile } from "./services/driverProfileService";
 
@@ -102,10 +107,12 @@ function DriverProtectedRoute({ children }) {
     return <Loader fullPage text="Setting up your driver credentials..." />;
   }
 
-  // Driver doesn't have a profile - redirect to form
+  // Driver doesn't have a profile - allow access to dashboard for now
+  /*
   if (!hasProfile) {
-    return <Navigate to="/driver/profile-form" replace />;
+    return <Navigate to="/driver/dashboard/profile-form" replace />;
   }
+  */
 
   // Driver is authenticated and has profile - allow access
   return children;
@@ -160,9 +167,9 @@ function PageTransition({ children }) {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // Artificial delay removed for a smoother and faster experience
     setIsTransitioning(true);
-    const timer = setTimeout(() => setIsTransitioning(false), 800);
+    const timer = setTimeout(() => setIsTransitioning(false), 150); // Set to 150ms instead of 800ms so it barely flashes if needed
     return () => clearTimeout(timer);
   }, [location.pathname]);
 
@@ -178,12 +185,27 @@ function AppContent() {
   });
 
   useEffect(() => {
+    // Clean up Facebook OAuth URL hash artifact
+    if (window.location.hash === '#_=_') {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(
+          '',
+          document.title,
+          window.location.pathname + window.location.search
+        );
+      } else {
+        window.location.hash = '';
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     if (showSplash) {
-      // Show splash page on initial load
+      // Show splash page on initial load (reduced time for better experience)
       const timer = setTimeout(() => {
         setShowSplash(false);
         sessionStorage.setItem("splashShown", "true");
-      }, 4200);
+      }, 1200);
       return () => clearTimeout(timer);
     }
   }, [showSplash]);
@@ -287,6 +309,47 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <DriverProfile />
+            </DriverProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/driver/dashboard/active-rides"
+          element={
+            <DriverProtectedRoute>
+              <ActiveRidesPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/earnings"
+          element={
+            <DriverProtectedRoute>
+              <EarningsPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/schedule"
+          element={
+            <DriverProtectedRoute>
+              <SchedulePage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/rating"
+          element={
+            <DriverProtectedRoute>
+              <MyRatingPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/payouts"
+          element={
+            <DriverProtectedRoute>
+              <PayoutsPage />
             </DriverProtectedRoute>
           }
         />

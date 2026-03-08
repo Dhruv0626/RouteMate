@@ -236,11 +236,11 @@ const DriverProfileFormPage = () => {
               <div className="pt-2 border-t border-(--card-border)/50">
                 {/* Vehicle Type Dropdown */}
                 <div className="mb-4">
-                  <label className="block text-sm font-semibold mb-2">
+                  <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
                     Vehicle Type
                   </label>
                   <select
-                    className="w-full rounded-lg border p-2"
+                    className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleType ? "border-red-500/50 ring-red-500/10" : ""}`}
                     value={formData.vehicleType}
                     onChange={handleVehicleTypeChange}
                     disabled={loading}
@@ -252,20 +252,25 @@ const DriverProfileFormPage = () => {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-(--text-dim) mt-2 ml-1">
+                  {errors.vehicleType && (
+                    <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <AlertCircle size={12} className="text-red-500" />
+                      <span className="text-[10px] font-bold text-red-500">{errors.vehicleType}</span>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-(--text-dim) mt-2 ml-1 opacity-70">
                     Choose your vehicle type (2, 3, 4 wheeler)
                   </p>
                 </div>
 
-
                 {/* Vehicle Model Dropdown */}
                 {formData.vehicleType && (
                   <div className="mb-4">
-                    <label className="block text-sm font-semibold mb-2">
+                    <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
                       Vehicle Model/Name
                     </label>
                     <select
-                      className="w-full rounded-lg border p-2"
+                      className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleName ? "border-red-500/50 ring-red-500/10" : ""}`}
                       value={formData.vehicleName}
                       onChange={handleVehicleModelChange}
                       disabled={loading}
@@ -278,13 +283,19 @@ const DriverProfileFormPage = () => {
                       ))}
                       <option value="add-new">Add new model...</option>
                     </select>
-                    <p className="text-xs text-(--text-dim) mt-2 ml-1">
+                    {errors.vehicleName && (
+                      <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <AlertCircle size={12} className="text-red-500" />
+                        <span className="text-[10px] font-bold text-red-500">{errors.vehicleName}</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-(--text-dim) mt-2 ml-1 opacity-70">
                       Choose or add your vehicle model
                     </p>
                     {showNewModel && (
                       <div className="flex gap-2 mt-2">
                         <input
-                          className="border rounded-lg p-2 flex-1"
+                          className="w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none"
                           type="text"
                           placeholder="Enter new model name"
                           value={newModelName}

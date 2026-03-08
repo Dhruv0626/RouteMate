@@ -37,8 +37,7 @@ const FleetOverviewPage = () => {
   const [filter, setFilter] = useState("all");
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
+    setLoading(false);
   }, []);
 
   const filtered = vehicles.filter(v => {

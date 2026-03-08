@@ -73,7 +73,7 @@ export const CreateUser = async (req, res) => {
         if (existingUser) {
             return res.status(409).json({
                 success: false,
-                message: "User with this email or mobile number already exists."
+                message: "User with this email already exists."
             });
         }
 
@@ -114,6 +114,14 @@ export const CreateUser = async (req, res) => {
         });
 
     } catch (error) {
+        // Handle Duplicate Key Error (MongoDB 11000)
+        if (error.code === 11000) {
+            const key = Object.keys(error.keyValue)[0];
+            return res.status(409).json({
+                success: false,
+                message: `User with this ${key} already exists.`
+            });
+        }
         console.error("Create User Error:", error);
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
@@ -233,7 +241,6 @@ export const RefreshToken = async (req, res) => {
             message: "Token refreshed successfully",
             accessToken: newAccessToken
         });
-
     } catch (error) {
         console.error("Refresh Token Error:", error);
         return res.status(500).json({ success: false, message: "Internal server error" });

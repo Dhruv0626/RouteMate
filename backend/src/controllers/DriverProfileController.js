@@ -54,9 +54,10 @@ export const GetDriverProfile = async (req, res) => {
         const driverProfile = await DriverProfileModel.findOne({ user: userId }).populate("user", "name email Mobile_no");
 
         if (!driverProfile) {
-            return res.status(404).json({
-                success: false,
-                message: "Driver profile not found."
+            return res.status(200).json({
+                success: true,
+                message: "Driver profile not found (user has not submitted it yet).",
+                data: null
             });
         }
 

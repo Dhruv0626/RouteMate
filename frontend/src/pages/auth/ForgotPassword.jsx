@@ -1,33 +1,95 @@
-import React, { useState } from "react";
-import { Mail, ArrowRight, ShieldCheck, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Mail, ArrowRight, ShieldCheck, ArrowLeft, Lock, Key, Clock } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import { validateEmail } from "../../utils/validation";
+import api from "../../services/api";
 
 const ForgotPassword = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [step, setStep] = useState(1); // 1: Email, 2: OTP & Reset
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [timer, setTimer] = useState(0);
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    let interval = null;
+    if (timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (timer === 0 && step === 2) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [timer, step]);
+
+  const handleRequestOtp = async (e) => {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
+    setMessage("");
 
     const emailError = validateEmail(email);
     if (emailError) {
-      setError(emailError);
+      setFieldErrors({ email: emailError });
       return;
     }
 
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const { data } = await api.post("/users/forgot-password", { email });
+      if (data.success) {
+        setStep(2);
+        setTimer(60);
+        setMessage(data.message);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to send OTP.");
+    } finally {
       setLoading(false);
-      setSubmitted(true);
-    }, 1500);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setFieldErrors({});
+    setMessage("");
+
+    const errors = {};
+    if (!otp) errors.otp = "OTP is required";
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) errors.newPassword = passwordError;
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data } = await api.post("/users/reset-password", {
+        email,
+        otp,
+        newPassword,
+      });
+      if (data.success) {
+        setMessage("Password reset successful! Redirecting...");
+        setTimeout(() => navigate("/signin"), 2000);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to reset password.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,23 +104,28 @@ const ForgotPassword = () => {
             <ShieldCheck size={28} />
           </div>
           <h1 className="font-display text-3xl font-black text-(--text-main)">
-            Forget Password
+            Forgot Password
           </h1>
           <p className="mt-1 text-xs font-medium tracking-widest text-(--text-dim) uppercase opacity-70">
-            Enter your email to receive recovery link
+            {step === 1 ? "Step 1: Request OTP" : "Step 2: Reset Password"}
           </p>
         </div>
 
         <div className="glass-card group relative overflow-hidden rounded-4xl p-8 shadow-2xl">
           <div className="bg-primary absolute top-0 left-0 h-0.75 w-full"></div>
 
-          {!submitted ? (
-            <form className="space-y-6" onSubmit={handleSubmit}>
+          {step === 1 ? (
+            <form className="space-y-6" onSubmit={handleRequestOtp}>
               <p className="text-xs leading-relaxed font-medium text-(--text-dim)">
-                Lost your access? It happens. Provide the email associated with
-                your account and we'll send you instructions to reset your
-                password.
+                Provide the email associated with your account and we'll send
+                you a 6-digit OTP to reset your password.
               </p>
+
+              {message && (
+                <div className="rounded-xl bg-emerald-500/10 p-3 text-center text-xs font-bold text-emerald-500 border border-emerald-500/20">
+                  {message}
+                </div>
+              )}
 
               <Input
                 label="Registered Email"
@@ -67,10 +134,10 @@ const ForgotPassword = () => {
                 icon={Mail}
                 required
                 value={email}
-                error={error}
+                error={fieldErrors.email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  if (error) setError("");
+                  if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: "" });
                 }}
               />
 
@@ -80,34 +147,92 @@ const ForgotPassword = () => {
                 className="h-12 text-sm"
                 disabled={loading}
               >
-                {loading ? "Sending Instructions..." : "Send Recovery Link"}
+                {loading ? "Sending OTP..." : "Send OTP"}
                 {!loading && <ArrowRight size={18} className="ml-2" />}
               </Button>
             </form>
           ) : (
-            <div className="space-y-6 py-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-500">
-                <ShieldCheck size={32} />
+            <form className="space-y-5" onSubmit={handleResetPassword}>
+              <p className="text-xs leading-relaxed font-medium text-(--text-dim) mb-2 text-center">
+                We've sent an OTP to <span className="text-primary font-bold">{email}</span>.
+              </p>
+
+              {message && (
+                <div className="rounded-xl bg-emerald-500/10 p-3 text-center text-xs font-bold text-emerald-500 border border-emerald-500/20">
+                  {message}
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-xl bg-red-500/10 p-3 text-center text-xs font-bold text-red-500 border border-red-500/20">
+                  {error}
+                </div>
+              )}
+
+              <Input
+                label="Secret OTP"
+                type="text"
+                placeholder="Enter 6-digit code"
+                icon={Key}
+                required
+                value={otp}
+                error={fieldErrors.otp}
+                onChange={(e) => {
+                  setOtp(e.target.value);
+                  if (fieldErrors.otp) setFieldErrors({ ...fieldErrors, otp: "" });
+                }}
+              />
+
+              <Input
+                label="New Secure Password"
+                type="password"
+                placeholder="••••••••"
+                icon={Lock}
+                required
+                value={newPassword}
+                error={fieldErrors.newPassword}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (fieldErrors.newPassword) setFieldErrors({ ...fieldErrors, newPassword: "" });
+                }}
+              />
+
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-(--text-dim)">
+                  <Clock size={12} className={timer < 10 ? "text-red-500 animate-pulse" : ""} />
+                  Expires in: <span className={timer < 10 ? "text-red-500" : "text-primary"}>
+                    {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, "0")}
+                  </span>
+                </div>
+                {timer === 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRequestOtp}
+                    className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
+                  >
+                    Resend OTP
+                  </button>
+                )}
               </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-(--text-main)">
-                  Check your inbox
-                </h3>
-                <p className="text-sm leading-relaxed font-medium text-(--text-dim)">
-                  We've sent a recovery link to{" "}
-                  <span className="text-primary font-bold">{email}</span>. Click
-                  the link to securely reset your credentials.
-                </p>
-              </div>
+
               <Button
-                onClick={() => setSubmitted(false)}
-                variant="secondary"
+                type="submit"
                 fullWidth
-                className="h-10 text-xs"
+                className="h-12 text-sm"
+                disabled={loading || (timer === 0 && !message.includes("successful"))}
               >
-                Didn't receive email? Try again
+                {loading ? "Resetting..." : "Reset Password"}
+                {!loading && <ShieldCheck size={18} className="ml-2" />}
               </Button>
-            </div>
+
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="w-full text-center text-[10px] font-black uppercase tracking-widest text-(--text-dim) hover:text-primary transition-colors mt-2"
+              >
+                Change Email
+              </button>
+            </form>
           )}
 
           <div className="mt-8 border-t border-(--card-border) pt-6 text-center">

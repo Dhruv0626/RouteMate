@@ -11,6 +11,8 @@ import {
   IdCard,
   ShieldCheck,
 } from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
+import { FaFacebook } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
@@ -90,7 +92,7 @@ const SignupPage = () => {
         if (response.data.user.role === "passenger") {
           navigate("/passenger/ride");
         } else if (response.data.user.role === "driver") {
-          navigate("/driver/profile-form");
+          navigate("/driver/dashboard");
         } else {
           navigate(`/${response.data.user.role}/dashboard`);
         }
@@ -279,6 +281,33 @@ const SignupPage = () => {
                 {loading ? "Creating Account..." : "Continue"}
                 {!loading && <ArrowRight size={16} />}
               </Button>
+            </div>
+
+            <div className="relative my-6 flex items-center py-2">
+              <div className="grow border-t border-(--card-border)"></div>
+              <span className="shrink-0 px-4 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">
+                Or Continue With
+              </span>
+              <div className="grow border-t border-(--card-border)"></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => window.location.href = `http://localhost:5000/api/users/auth/google?role=${role}`}
+                className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
+              >
+                <FcGoogle size={18} />
+                Google
+              </button>
+              <button
+                type="button"
+                onClick={() => window.location.href = `http://localhost:5000/api/users/auth/facebook?role=${role}`}
+                className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
+              >
+                <FaFacebook size={18} className="text-[#1877F2]" />
+                Facebook
+              </button>
             </div>
 
             <p className="mt-4 text-center text-[11px] font-medium text-(--text-dim) opacity-80">

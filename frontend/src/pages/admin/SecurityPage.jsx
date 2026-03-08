@@ -26,8 +26,7 @@ const SecurityPage = () => {
   const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
+    setLoading(false);
   }, []);
 
   const runVulnerabilityScan = () => {

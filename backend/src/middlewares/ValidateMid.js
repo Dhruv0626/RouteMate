@@ -26,7 +26,7 @@ export const validateRegister = [
     body("email")
         .trim()
         .notEmpty().withMessage("Email is required")
-        .matches(emailRegex).withMessage("email is not validate")
+        .matches(emailRegex).withMessage("Please enter a valid email address")
         .normalizeEmail(),
 
     body("Mobile_no")
@@ -48,7 +48,7 @@ export const validateSignIn = [
     body("email")
         .trim()
         .notEmpty().withMessage("Email is required")
-        .matches(emailRegex).withMessage("email is not validate")
+        .matches(emailRegex).withMessage("Please enter a valid email address")
         .normalizeEmail(),
 
     body("password")

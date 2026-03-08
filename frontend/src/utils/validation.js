@@ -10,7 +10,7 @@ export const validateEmail = (email) => {
     const emailRegex = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~.-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
 
     if (!emailRegex.test(email)) {
-        return "email is not validate";
+        return "Please enter a valid email address";
     }
     return null;
 };

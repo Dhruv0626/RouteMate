@@ -9,10 +9,12 @@ import {
     GetAllUsers,
     UpdateUser
 } from "../controllers/UserController.js";
+import { ForgotPassword, ResetPassword } from "../controllers/PasswordController.js";
 import authMiddleware from "../middlewares/AuthMid.js";
 import authorizeRoles from "../middlewares/RoleMid.js";
 import { authLimiter } from "../middlewares/RateLimiter.js";
 import { validateRegister, validateSignIn } from "../middlewares/ValidateMid.js";
+import passport, { issueOAuthTokens } from "../config/passport.js";
 
 const router = express.Router();
 
@@ -23,6 +25,46 @@ router.post("/signin", authLimiter, validateSignIn, SignInUser);
 // ─── Token Management ─────────────────────────────────────────────────────────
 router.post("/refresh-token", RefreshToken);
 router.post("/logout", authMiddleware, LogoutUser);
+
+// ─── Password Management ──────────────────────────────────────────────────────
+router.post("/forgot-password", authLimiter, ForgotPassword);
+router.post("/reset-password", authLimiter, ResetPassword);
+
+// ─── OAuth Routes (Google & Facebook) ─────────────────────────────────────────
+router.get(
+    "/auth/google",
+    (req, res, next) => {
+        // Pass the requested role in state so the callback knows what type of account to create
+        const role = req.query.role || "passenger";
+        passport.authenticate("google", { scope: ["profile", "email"], state: role })(req, res, next);
+    }
+);
+
+router.get(
+    "/auth/google/callback",
+    passport.authenticate("google", { session: false, failureRedirect: "http://localhost:5173/signin?error=oauth_failed" }),
+    async (req, res) => {
+        await issueOAuthTokens(req.user, res);
+        res.redirect(`http://localhost:5173/${req.user.role}/dashboard`);
+    }
+);
+
+router.get(
+    "/auth/facebook",
+    (req, res, next) => {
+        const role = req.query.role || "passenger";
+        passport.authenticate("facebook", { scope: ["email"], state: role })(req, res, next);
+    }
+);
+
+router.get(
+    "/auth/facebook/callback",
+    passport.authenticate("facebook", { session: false, failureRedirect: "http://localhost:5173/signin?error=oauth_failed" }),
+    async (req, res) => {
+        await issueOAuthTokens(req.user, res);
+        res.redirect(`http://localhost:5173/${req.user.role}/dashboard`);
+    }
+);
 
 // ─── Protected Routes (JWT required) ─────────────────────────────────────────
 router.get("/profile", authMiddleware, GetProfile);

@@ -25,30 +25,25 @@ export const AuthProvider = ({ children }) => {
         } catch {
           // Corrupted localStorage — clear it
           localStorage.removeItem("user");
-          setLoading(false);
-          return;
         }
+      }
 
-        // ── Server-side session check ──────────────────────────────────────
-        // Verify the user still exists in the DB.
-        // IMPORTANT: We NEVER remove the user here on failure.
-        // If the access token is expired, the api.js interceptor will
-        // automatically refresh it using the refresh token cookie.
-        // Only if the refresh token itself is expired/invalid will the
-        // interceptor call forceLogout() → clear storage → redirect.
-        // Network errors or temporary server issues are silently ignored
-        // so the user stays logged in with cached data.
-        try {
-          const { data } = await api.get("/users/profile");
-          if (data.success) {
-            // Sync latest server data into state + storage
-            setUserState(data.user);
-            localStorage.setItem("user", JSON.stringify(data.user));
-          }
-        } catch {
-          // Let the api.js interceptor handle 401s (it will refresh
-          // or force-logout as needed). For any other error (network,
-          // 500, etc.) we keep the cached user — no accidental logout.
+      // ── Server-side session check ──────────────────────────────────────
+      // Verify session via HTTP-only cookies. This handles standard logins,
+      // refresh token cycles, AND redirects from OAuth flows.
+      try {
+        const { data } = await api.get("/users/profile");
+        if (data.success) {
+          // Sync latest server data into state + storage
+          setUserState(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
+        }
+      } catch {
+        // Only clear storage if API explicitely returns 401 Unauthorized
+        // Let interceptor handle it, but keep the UI state clean if totally unauth
+        if (!storedUser) {
+           setUserState(null);
+           localStorage.removeItem("user");
         }
       }
 
