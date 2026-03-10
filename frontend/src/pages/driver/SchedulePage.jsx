@@ -1,154 +1,602 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, ChevronLeft, Clock, Plus, Trash2, CheckCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  MapPin,
+  User,
+  Phone,
+  ChevronRight,
+  Plus,
+  Edit2,
+  Trash2,
+  ToggleRight,
+  BarChart3,
+  Settings,
+  TrendingUp,
+  Filter,
+  Download,
+} from "lucide-react";
+import { useState } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
-
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const INITIAL_SCHEDULE = {
-  Mon: [{ start: "08:00", end: "14:00" }],
-  Tue: [{ start: "08:00", end: "14:00" }],
-  Wed: [],
-  Thu: [{ start: "16:00", end: "22:00" }],
-  Fri: [{ start: "09:00", end: "18:00" }],
-  Sat: [{ start: "07:00", end: "20:00" }],
-  Sun: [],
-};
-
-const PEAK_HOURS = ["08:00–10:00", "12:00–14:00", "17:00–20:00"];
 
 const SchedulePage = () => {
   const navigate = useNavigate();
-  const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
-  const [selectedDay, setSelectedDay] = useState("Mon");
-  const [saved, setSaved] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("2025-03-07");
+  const [timeFilter, setTimeFilter] = useState("all");
+  const [expandedRide, setExpandedRide] = useState(null);
+  const [showAddSlot, setShowAddSlot] = useState(false);
+  const [availabilityToggle, setAvailabilityToggle] = useState(true);
 
-  const totalHours = Object.values(schedule).flat().reduce((acc, slot) => {
-    const [sh, sm] = slot.start.split(":").map(Number);
-    const [eh, em] = slot.end.split(":").map(Number);
-    return acc + (eh + em / 60) - (sh + sm / 60);
-  }, 0);
-
-  const addSlot = () => {
-    setSchedule(prev => ({ ...prev, [selectedDay]: [...prev[selectedDay], { start: "09:00", end: "17:00" }] }));
+  // Mock schedule data
+  const scheduleStats = {
+    upcomingRides: 5,
+    todayScheduled: 3,
+    weekScheduled: 18,
+    monthScheduled: 65,
+    hoursOnline: 32.5,
+    cancellationRate: 2.1,
   };
 
-  const removeSlot = (day, idx) => {
-    setSchedule(prev => ({ ...prev, [day]: prev[day].filter((_, i) => i !== idx) }));
+  const upcomingRides = [
+    {
+      id: 1,
+      time: "09:30 AM",
+      pickup: "Downtown Station, Main St",
+      dropoff: "Airport Terminal 2",
+      passengerName: "Sarah M.",
+      distance: "25 km",
+      estimatedDuration: "35 mins",
+      status: "confirmed",
+      rating: 4.9,
+      bookingTime: "2 hours ago",
+      phone: "+1 234-567-8901",
+      rideType: "Premium",
+    },
+    {
+      id: 2,
+      time: "11:15 AM",
+      pickup: "City Hospital, 5th Ave",
+      dropoff: "Westside Mall",
+      passengerName: "John D.",
+      distance: "12 km",
+      estimatedDuration: "20 mins",
+      status: "confirmed",
+      rating: 4.7,
+      bookingTime: "45 mins ago",
+      phone: "+1 234-567-8902",
+      rideType: "Standard",
+    },
+    {
+      id: 3,
+      time: "02:00 PM",
+      pickup: "Business District Center",
+      dropoff: "Grand Hotel",
+      passengerName: "Emma L.",
+      distance: "8 km",
+      estimatedDuration: "15 mins",
+      status: "pending",
+      rating: 4.6,
+      bookingTime: "30 mins ago",
+      phone: "+1 234-567-8903",
+      rideType: "Premium",
+    },
+    {
+      id: 4,
+      time: "04:45 PM",
+      pickup: "Central Market",
+      dropoff: "Residential Area - Oak Lane",
+      passengerName: "Michael T.",
+      distance: "18 km",
+      estimatedDuration: "28 mins",
+      status: "confirmed",
+      rating: 4.8,
+      bookingTime: "1 hour ago",
+      phone: "+1 234-567-8904",
+      rideType: "Standard",
+    },
+    {
+      id: 5,
+      time: "06:30 PM",
+      pickup: "Shopping Plaza Entrance",
+      dropoff: "Downtown Residential",
+      passengerName: "Lisa P.",
+      distance: "15 km",
+      estimatedDuration: "25 mins",
+      status: "confirmed",
+      rating: 4.9,
+      bookingTime: "20 mins ago",
+      phone: "+1 234-567-8905",
+      rideType: "Standard",
+    },
+  ];
+
+  const availabilitySlots = [
+    { id: 1, day: "Monday", start: "08:00 AM", end: "06:00 PM", active: true },
+    { id: 2, day: "Tuesday", start: "08:00 AM", end: "06:00 PM", active: true },
+    { id: 3, day: "Wednesday", start: "10:00 AM", end: "08:00 PM", active: true },
+    { id: 4, day: "Thursday", start: "08:00 AM", end: "06:00 PM", active: true },
+    { id: 5, day: "Friday", start: "08:00 AM", end: "10:00 PM", active: true },
+    { id: 6, day: "Saturday", start: "09:00 AM", end: "09:00 PM", active: true },
+    { id: 7, day: "Sunday", start: "Off Day", end: "", active: false },
+  ];
+
+  const scheduleTrend = [
+    { week: "Week 1", rides: 12, hours: 28.5 },
+    { week: "Week 2", rides: 15, hours: 32.0 },
+    { week: "Week 3", rides: 18, hours: 35.5 },
+    { week: "Week 4", rides: 20, hours: 38.3 },
+  ];
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "confirmed":
+        return "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300";
+      case "pending":
+        return "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300";
+      case "completed":
+        return "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300";
+      default:
+        return "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300";
+    }
   };
 
-  const updateSlot = (day, idx, field, value) => {
-    setSchedule(prev => {
-      const updated = [...prev[day]];
-      updated[idx] = { ...updated[idx], [field]: value };
-      return { ...prev, [day]: updated };
-    });
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "confirmed":
+        return <CheckCircle className="w-4 h-4" />;
+      case "pending":
+        return <AlertCircle className="w-4 h-4" />;
+      default:
+        return <Clock className="w-4 h-4" />;
+    }
   };
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+  const filteredRides = upcomingRides.filter((ride) => {
+    if (timeFilter === "morning")
+      return ride.time.includes("AM") && parseInt(ride.time) < 12;
+    if (timeFilter === "afternoon")
+      return ride.time.includes("PM") && parseInt(ride.time) < 6;
+    if (timeFilter === "evening") return ride.time.includes("PM");
+    return true;
+  });
 
   return (
-    <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main)">
-      <header className="sticky top-0 z-50 border-b border-(--card-border) bg-(--bg-main)/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate("/driver/dashboard")} className="rounded-xl p-2 text-(--text-dim) hover:bg-(--card-bg) hover:text-(--text-main) transition-all">
-              <ChevronLeft size={20} />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/driver/dashboard")}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
             </button>
-            <h1 className="font-display text-lg font-black text-(--text-main)">My Schedule</h1>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                My Schedule
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Manage your rides & availability
+              </p>
+            </div>
           </div>
           <ThemeToggle />
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto max-w-4xl space-y-6 px-6 py-8">
-        {/* Summary */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "Active Days", value: `${Object.values(schedule).filter(s => s.length > 0).length}/7` },
-            { label: "Total Hours", value: `${totalHours.toFixed(1)}h` },
-            { label: "Avg/Day", value: `${(totalHours / 7).toFixed(1)}h` },
-          ].map(({ label, value }) => (
-            <div key={label} className="glass-card rounded-2xl p-4 text-center">
-              <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">{label}</p>
-              <p className="mt-1 text-2xl font-black text-(--text-main)">{value}</p>
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <Calendar className="w-5 h-5 text-primary" />
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                {scheduleStats.upcomingRides}
+              </span>
             </div>
-          ))}
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Upcoming Rides
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <Clock className="w-5 h-5 text-emerald-500" />
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                {scheduleStats.hoursOnline}h
+              </span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Hours This Week
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <TrendingUp className="w-5 h-5 text-violet-500" />
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                {scheduleStats.weekScheduled}
+              </span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              This Week
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <AlertCircle className="w-5 h-5 text-orange-500" />
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                {scheduleStats.cancellationRate}%
+              </span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Cancellation Rate
+            </p>
+          </div>
         </div>
 
-        {/* Day Selector */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {DAYS.map(day => {
-            const hasSlots = schedule[day].length > 0;
-            return (
-              <button key={day} onClick={() => setSelectedDay(day)}
-                className={`flex flex-shrink-0 flex-col items-center rounded-2xl px-4 py-3 transition-all duration-300 ${selectedDay === day ? "bg-primary text-black shadow-lg scale-105" : "glass-card text-(--text-dim) hover:text-(--text-main)"}`}>
-                <span className="text-[10px] font-black tracking-widest uppercase">{day}</span>
-                <div className={`mt-1 h-1.5 w-1.5 rounded-full ${hasSlots ? (selectedDay === day ? "bg-black" : "bg-primary") : "bg-transparent"}`} />
-              </button>
-            );
-          })}
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Today's Schedule */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Schedule Header */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Today's Rides
+                </h2>
+                <div className="flex gap-2">
+                  <select
+                    value={timeFilter}
+                    onChange={(e) => setTimeFilter(e.target.value)}
+                    className="px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="all">All Times</option>
+                    <option value="morning">Morning (AM)</option>
+                    <option value="afternoon">Afternoon</option>
+                    <option value="evening">Evening (PM)</option>
+                  </select>
+                </div>
+              </div>
 
-        {/* Time Slots */}
-        <div className="glass-card rounded-3xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display font-black text-(--text-main)">{selectedDay}'s Shifts</h2>
-            <button onClick={addSlot}
-              className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-3 py-2 text-xs font-black text-primary hover:bg-primary hover:text-black transition-all">
-              <Plus size={14} /> Add Slot
-            </button>
+              {/* Rides List */}
+              <div className="space-y-4">
+                {filteredRides.length > 0 ? (
+                  filteredRides.map((ride) => (
+                    <div
+                      key={ride.id}
+                      className="border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:shadow-lg transition-all overflow-hidden"
+                    >
+                      <div
+                        onClick={() =>
+                          setExpandedRide(
+                            expandedRide === ride.id ? null : ride.id
+                          )
+                        }
+                        className="p-4 cursor-pointer bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full font-semibold text-sm whitespace-nowrap bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                <Clock className="w-4 h-4" />
+                                {ride.time}
+                              </span>
+                              <span
+                                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold border ${getStatusColor(
+                                  ride.status
+                                )}`}
+                              >
+                                {getStatusIcon(ride.status)}
+                                {ride.status.charAt(0).toUpperCase() +
+                                  ride.status.slice(1)}
+                              </span>
+                              <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-semibold">
+                                {ride.rideType}
+                              </span>
+                            </div>
+                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
+                              <MapPin className="w-4 h-4 mt-1 flex-shrink-0 text-emerald-500" />
+                              <div>
+                                <p className="font-medium text-gray-900 dark:text-white">
+                                  {ride.pickup}
+                                </p>
+                                <p className="text-sm mt-1 flex items-center gap-2">
+                                  <ChevronRight className="w-3 h-3" />
+                                  {ride.dropoff}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-semibold text-gray-900 dark:text-white">
+                              {ride.distance}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {ride.estimatedDuration}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded Details */}
+                      {expandedRide === ride.id && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="flex items-center gap-3">
+                              <User className="w-5 h-5 text-gray-400" />
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Passenger
+                                </p>
+                                <p className="font-semibold text-gray-900 dark:text-white">
+                                  {ride.passengerName}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Phone className="w-5 h-5 text-gray-400" />
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Phone
+                                </p>
+                                <p className="font-semibold text-gray-900 dark:text-white">
+                                  {ride.phone}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="w-5 h-5 flex items-center justify-center">
+                                <span className="text-sm font-bold text-gray-400">
+                                  ★
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Passenger Rating
+                                </p>
+                                <p className="font-semibold text-gray-900 dark:text-white">
+                                  {ride.rating}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Clock className="w-5 h-5 text-gray-400" />
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  Booked
+                                </p>
+                                <p className="font-semibold text-gray-900 dark:text-white">
+                                  {ride.bookingTime}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+                            <button className="flex-1 py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition">
+                              Accept Ride
+                            </button>
+                            <button className="flex-1 py-2 px-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-semibold transition">
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-12 text-center">
+                    <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                    <p className="text-gray-500 dark:text-gray-400">
+                      No rides scheduled for this time
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Schedule Trend */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                Monthly Trend
+              </h3>
+              <div className="space-y-3">
+                {scheduleTrend.map((trend, idx) => (
+                  <div key={idx} className="flex items-center gap-4">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 w-16">
+                      {trend.week}
+                    </span>
+                    <div className="flex-1">
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-gradient-to-r from-primary to-primary-dark h-full"
+                          style={{
+                            width: `${(trend.rides / 20) * 100}%`,
+                          }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {trend.rides} rides
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {trend.hours}h
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {schedule[selectedDay].length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-(--card-border) p-8 text-center">
-              <Clock size={32} className="mx-auto mb-2 text-(--text-dim) opacity-40" />
-              <p className="text-sm font-bold text-(--text-dim)">No shifts planned for {selectedDay}</p>
-              <p className="text-xs text-(--text-dim) opacity-60 mt-1">Click "Add Slot" to plan your working hours</p>
-            </div>
-          ) : (
-            schedule[selectedDay].map((slot, idx) => (
-              <div key={idx} className="flex items-center gap-3 rounded-2xl border border-(--card-border) bg-(--card-bg) p-4">
-                <Clock size={18} className="text-primary flex-shrink-0" />
-                <div className="flex flex-1 items-center gap-3">
-                  <input type="time" value={slot.start} onChange={e => updateSlot(selectedDay, idx, "start", e.target.value)}
-                    className="rounded-xl border border-(--card-border) bg-(--bg-main) px-3 py-2 text-sm font-bold text-(--text-main) focus:border-primary focus:outline-none" />
-                  <span className="text-sm font-black text-(--text-dim)">to</span>
-                  <input type="time" value={slot.end} onChange={e => updateSlot(selectedDay, idx, "end", e.target.value)}
-                    className="rounded-xl border border-(--card-border) bg-(--bg-main) px-3 py-2 text-sm font-bold text-(--text-main) focus:border-primary focus:outline-none" />
-                </div>
-                <button onClick={() => removeSlot(selectedDay, idx)}
-                  className="rounded-xl p-2 text-red-400 hover:bg-red-500/10 transition-all">
-                  <Trash2 size={16} />
+          {/* Availability Sidebar */}
+          <div className="space-y-6">
+            {/* Availability Status */}
+            <div className="bg-gradient-to-br from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10 rounded-xl p-6 border border-primary/20 dark:border-primary/30">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  Availability
+                </h3>
+                <button
+                  onClick={() => setAvailabilityToggle(!availabilityToggle)}
+                  className={`p-2 rounded-lg transition ${
+                    availabilityToggle
+                      ? "bg-primary text-white"
+                      : "bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  <ToggleRight className="w-5 h-5" />
                 </button>
               </div>
-            ))
-          )}
-        </div>
+              <p
+                className={`text-sm font-semibold ${
+                  availabilityToggle
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-orange-700 dark:text-orange-300"
+                }`}
+              >
+                {availabilityToggle ? "🟢 You are online" : "🔴 You are offline"}
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                Toggle to go online/offline and accept rides
+              </p>
+            </div>
 
-        {/* Peak Hours Tips */}
-        <div className="glass-card rounded-3xl p-6">
-          <h2 className="font-display font-black text-(--text-main) mb-4">Peak Hours in Ahmedabad</h2>
-          <div className="space-y-2">
-            {PEAK_HOURS.map(h => (
-              <div key={h} className="flex items-center gap-3 rounded-xl bg-amber-500/5 border border-amber-500/20 p-3">
-                <div className="h-2 w-2 rounded-full bg-amber-500" />
-                <span className="text-sm font-bold text-(--text-main)">{h}</span>
-                <span className="ml-auto text-xs font-bold text-amber-500">High Demand 🔥</span>
+            {/* Weekly Availability */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  Weekly Schedule
+                </h3>
+                <button
+                  onClick={() => setShowAddSlot(!showAddSlot)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                  title="Add new schedule"
+                >
+                  <Plus className="w-5 h-5 text-primary" />
+                </button>
               </div>
-            ))}
+
+              {showAddSlot && (
+                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <input
+                    type="text"
+                    placeholder="Day name..."
+                    className="w-full mb-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="time"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <input
+                      type="time"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <button className="w-full py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-dark transition text-sm">
+                    Add Slot
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {availabilitySlots.map((slot) => (
+                  <div
+                    key={slot.id}
+                    className={`p-3 rounded-lg border transition flex items-center justify-between ${
+                      slot.active
+                        ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
+                        : "bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700"
+                    }`}
+                  >
+                    <div>
+                      <p
+                        className={`font-semibold text-sm ${
+                          slot.active
+                            ? "text-emerald-900 dark:text-emerald-100"
+                            : "text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {slot.day}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          slot.active
+                            ? "text-emerald-700 dark:text-emerald-200"
+                            : "text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
+                        {slot.active
+                          ? `${slot.start} - ${slot.end}`
+                          : slot.start}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                      </button>
+                      <button
+                        className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Schedule Stats */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                This Month
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Total Rides
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-white">
+                    {scheduleStats.monthScheduled}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Avg. Rides/Day
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-white">
+                    2.2
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Cancellations
+                  </span>
+                  <span className="font-bold text-gray-900 dark:text-white">
+                    1
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Completion Rate
+                  </span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    98.5%
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Save Button */}
-        <button onClick={handleSave}
-          className={`w-full rounded-2xl py-4 text-sm font-black tracking-widest uppercase transition-all duration-300 ${saved ? "bg-emerald-500 text-white" : "bg-primary text-black hover:opacity-90"}`}>
-          {saved ? <span className="flex items-center justify-center gap-2"><CheckCircle size={16} /> Schedule Saved!</span> : "Save Schedule"}
-        </button>
-      </main>
+      </div>
     </div>
   );
 };

@@ -30,7 +30,17 @@ import EarningsPage from "./pages/driver/EarningsPage";
 import SchedulePage from "./pages/driver/SchedulePage";
 import MyRatingPage from "./pages/driver/MyRatingPage";
 import PayoutsPage from "./pages/driver/PayoutsPage";
+import GoOnlinePage from "./pages/driver/GoOnlinePage";
+import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
+import HistoryPage from "./pages/HistoryPage";
 import Loader from "./components/ui/Loader";
+import PassengerProfile from "./pages/PassengerProfile";
+import AdminProfile from "./pages/AdminProfile";
+import SavedPlacesPage from "./pages/SavedPlacesPage";
+import ReviewsPage from "./pages/ReviewsPage";
+import PaymentsPage from "./pages/PaymentsPage";
+import ReferralPage from "./pages/ReferralPage";
+
 import { getMyDriverProfile } from "./services/driverProfileService";
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
@@ -281,6 +291,22 @@ function AppContent() {
             </AdminProtectedRoute>
           }
         />
+        <Route
+          path="/admin/dashboard/profile"
+          element={
+            <AdminProtectedRoute>
+              <AdminProfile />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/dashboard/history"
+          element={
+            <AdminProtectedRoute>
+              <HistoryPage />
+            </AdminProtectedRoute>
+          }
+        />
 
         {/* Loader Demo Route */}
         <Route path="/loader" element={<Loader fullPage />} />
@@ -291,6 +317,54 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <RideMapPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/profile"
+          element={
+            <ProtectedRoute>
+              <PassengerProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/history"
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/places"
+          element={
+            <ProtectedRoute>
+              <SavedPlacesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/reviews"
+          element={
+            <ProtectedRoute>
+              <ReviewsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/payments"
+          element={
+            <ProtectedRoute>
+              <PaymentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/referral"
+          element={
+            <ProtectedRoute>
+              <ReferralPage />
             </ProtectedRoute>
           }
         />
@@ -309,6 +383,14 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <DriverProfile />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/history"
+          element={
+            <DriverProtectedRoute>
+              <HistoryPage />
             </DriverProtectedRoute>
           }
         />
@@ -351,6 +433,31 @@ function AppContent() {
             <DriverProtectedRoute>
               <PayoutsPage />
             </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/payout-request"
+          element={
+            <DriverProtectedRoute>
+              <PayoutRequestPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/go-online"
+          element={
+            <DriverProtectedRoute>
+              <GoOnlinePage />
+            </DriverProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/:role/dashboard/history"
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
+            </ProtectedRoute>
           }
         />
 

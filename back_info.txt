@@ -1,0 +1,153 @@
+================================================================================
+ROUTEMATE — UNIFIED BACKEND SCHEMA PROPOSAL
+================================================================================
+This document outlines the recommended MongoDB schema structure to support all 
+three user dashboards (Passenger, Driver, Admin) and their respective sub-pages 
+created in the frontend.
+
+--------------------------------------------------------------------------------
+1. USERS COLLECTION (Core Identity)
+--------------------------------------------------------------------------------
+Existing model handles Auth. Additions recommended for deep integration:
+
+- name, email, Mobile_no, password, role (passenger/driver/admin)
+- referralCode: { type: String, unique: true } 
+- referredBy: { type: Schema.Types.ObjectId, ref: 'User' }
+- currentWalletBalance: { type: Number, default: 0 }
+- profileImage: { type: String } 
+
+--------------------------------------------------------------------------------
+2. PASSENGER PROFILE (Enhanced with Trust Score)
+--------------------------------------------------------------------------------
+Purpose: Stores bio and cumulative stats shown on PassengerProfile.jsx.
+
+- user: { type: ObjectId, ref: 'User' }
+- bio: { type: String }
+- preferredLanguage: { type: String, default: 'English' }
+- totalDistanceTraveled: { type: Number, default: 0 }
+- totalReviewsGiven: { type: Number, default: 0 }
+- carbonSaved: { type: Number, default: 0 } 
+- averageRating: { type: Number, default: 5.0 } // Rating given to passenger by drivers
+- totalRatingsReceived: { type: Number, default: 0 }
+- trustScore: { type: Number, default: 100 } // Calculated based on cancellation rate & rating
+
+--------------------------------------------------------------------------------
+3. DRIVER PROFILE (Comprehensive Professional Info)
+--------------------------------------------------------------------------------
+Purpose: Stores professional credentials and performance metrics.
+
+- user: { type: ObjectId, ref: 'User' }
+- bio: { type: String }
+- license: { 
+    number: String,
+    expiry: Date,
+    frontImage: String, // URL
+    backImage: String   // URL
+  }
+- aadhar: { 
+    number: String,
+    image: String 
+  }
+- vehicle: {
+    name: String, // e.g., "Swift Dzire"
+    type: String, // e.g., "Sedan", "SUV", "Hatchback"
+    number: String,
+    color: String,
+    rcBookImage: String,
+    insuranceExpiry: Date
+  }
+- isApproved: { type: Boolean, default: false } // Admin verification status
+- isOnline: { type: Boolean, default: false }
+- stats: {
+    totalRides: { type: Number, default: 0 },
+    completedRides: { type: Number, default: 0 },
+    cancelledRides: { type: Number, default: 0 },
+    totalEarnings: { type: Number, default: 0 }
+  }
+- averageRating: { type: Number, default: 5.0 }
+- totalRatingsReceived: { type: Number, default: 0 }
+- trustScore: { type: Number, default: 100 } // Decreases with complaints/cancellations
+- currentLocation: { // Geospatial index for "Find near me"
+    type: { type: String, default: 'Point' },
+    coordinates: [Number] // [longitude, latitude]
+  }
+
+--------------------------------------------------------------------------------
+4. TRIP / RIDE COLLECTION (The Core Engine)
+--------------------------------------------------------------------------------
+Purpose: Feeds HistoryPage.jsx and Dashboard "Recent Activity".
+
+- passenger: { type: ObjectId, ref: 'User' }
+- driver: { type: ObjectId, ref: 'User' }
+- source: { address: String, coords: { lat: Number, lng: Number } }
+- destination: { address: String, coords: { lat: Number, lng: Number } }
+- fare: { type: Number }
+- status: { type: String, enum: ['pending', 'accepted', 'ongoing', 'completed', 'cancelled'] }
+- requestedAt: { type: Date, default: Date.now }
+
+--------------------------------------------------------------------------------
+5. REVIEWS & TRUST LOGIC (Two-Way Feedback)
+--------------------------------------------------------------------------------
+Purpose: Feeds ReviewsPage.jsx and Profile trust metrics.
+
+REVIEWS:
+- trip: { type: ObjectId, ref: 'Trip' }
+- reviewer: { type: ObjectId, ref: 'User' } // The one who writes
+- target: { type: ObjectId, ref: 'User' }   // The one being rated
+- role: { type: String, enum: ['to_driver', 'to_passenger'] }
+- rating: { type: Number, min: 1, max: 5 }
+- comment: { type: String }
+- tags: [String] // e.g., "Polite", "Clean Car", "On Time" for Drivers
+                // e.g., "Good Behavior", "Wait Time" for Passengers
+- createdAt: { type: Date, default: Date.now }
+
+TRUST SCORE CALCULATION (SUGGESTED ALGORITHM):
+- Base Score: 100
+- Multipliers:
+    * (+) 0.5 for every 5-star review.
+    * (-) 1.0 for every cancelled trip (if driver/passenger is at fault).
+    * (-) 5.0 for safety complaints (Admin manually flags).
+    * (+) 1.0 for every 50 completed rides.
+
+--------------------------------------------------------------------------------
+6. SAVED PLACES (Passenger Feature)
+--------------------------------------------------------------------------------
+- user: { type: ObjectId, ref: 'User' }
+- title: { type: String }
+- address: { type: String }
+- type: { type: String, enum: ['home', 'work', 'favorite', 'other'] }
+
+--------------------------------------------------------------------------------
+7. WALLET & TRANSACTIONS (Financials)
+--------------------------------------------------------------------------------
+- user: { type: ObjectId, ref: 'User' }
+- type: { type: String, enum: ['credit', 'debit'] }
+- amount: { type: Number }
+- description: { type: String } 
+
+--------------------------------------------------------------------------------
+8. DRIVER SCHEDULES
+--------------------------------------------------------------------------------
+- driver: { type: ObjectId, ref: 'User' }
+- shifts: [{ day: String, startTime: String, endTime: String }]
+
+--------------------------------------------------------------------------------
+9. ADMIN AUDIT & SYSTEM
+--------------------------------------------------------------------------------
+- actor: { type: ObjectId, ref: 'User' }
+- action: { type: String }
+- targetId: { type: ObjectId }
+
+--------------------------------------------------------------------------------
+10. NOTIFICATIONS (Cross-Role)
+--------------------------------------------------------------------------------
+- recipient: { type: ObjectId, ref: 'User' }
+- title: { type: String }
+- isRead: { type: Boolean, default: false }
+
+================================================================================
+TRUST SCORE SYNC:
+Every time a Review is saved or a Trip is cancelled, a background worker should
+re-calculate the 'trustScore' and 'averageRating' fields in the respective 
+PassengerProfile or DriverProfile models.
+================================================================================

@@ -10,6 +10,9 @@ import {
   Save,
   X,
   Clock,
+  User as UserIcon,
+  Phone,
+  Camera,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -28,11 +31,15 @@ const DriverProfile = () => {
   const [success, setSuccess] = useState("");
   const [profile, setProfile] = useState(null);
   const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
     licenseNumber: "",
     aadharNumber: "",
     vehicleType: "",
     vehicleNumber: "",
+    profileImage: "",
   });
+  const [profileImagePreview, setProfileImagePreview] = useState("");
   const [errors, setErrors] = useState({});
 
   // Redirect if not a driver
@@ -50,11 +57,17 @@ const DriverProfile = () => {
         if (response.data.success) {
           setProfile(response.data.data);
           setFormData({
+            name: user?.name || "",
+            phone: user?.phone || "",
             licenseNumber: response.data.data.licenseNumber || "",
             aadharNumber: response.data.data.aadharNumber || "",
             vehicleType: response.data.data.vehicleType || "",
             vehicleNumber: response.data.data.vehicleNumber || "",
+            profileImage: user?.profileImage || "",
           });
+          if (user?.profileImage) {
+            setProfileImagePreview(user.profileImage);
+          }
         }
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load profile");
@@ -90,6 +103,28 @@ const DriverProfile = () => {
     }
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImagePreview(reader.result);
+        setFormData({ ...formData, profileImage: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const getInitials = (name) => {
+    if (!name) return "D";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   const handleSave = async () => {
     setError("");
     setSuccess("");
@@ -123,11 +158,15 @@ const DriverProfile = () => {
   const handleCancel = () => {
     setIsEditing(false);
     setFormData({
+      name: user?.name || "",
+      phone: user?.phone || "",
       licenseNumber: profile?.licenseNumber || "",
       aadharNumber: profile?.aadharNumber || "",
       vehicleType: profile?.vehicleType || "",
       vehicleNumber: profile?.vehicleNumber || "",
+      profileImage: user?.profileImage || "",
     });
+    setProfileImagePreview(user?.profileImage || "");
     setErrors({});
   };
 
@@ -213,6 +252,32 @@ const DriverProfile = () => {
 
         {/* Content */}
         <div className="p-8">
+          {/* Basic User Info Header */}
+          <div className="flex items-center gap-6 mb-8 p-6 rounded-3xl bg-black/5 dark:bg-white/5 border border-(--card-border)">
+            <div className="relative h-20 w-20 group">
+              <div className="h-full w-full rounded-2xl bg-primary flex items-center justify-center text-3xl font-black text-black shadow-lg overflow-hidden transition-transform group-hover:scale-105">
+                {profileImagePreview ? (
+                  <img src={profileImagePreview} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  getInitials(user?.name)
+                )}
+              </div>
+              {isEditing && (
+                <label className="absolute -bottom-2 -right-2 cursor-pointer bg-(--bg-main) border border-(--card-border) p-2 rounded-xl text-primary shadow-xl hover:scale-110 transition-all hover:bg-primary hover:text-black z-10">
+                  <Camera size={14} />
+                  <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                </label>
+              )}
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-(--text-main)">{user?.name}</h2>
+              <p className="text-sm font-medium text-(--text-dim)">{user?.email}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">Verified Driver</span>
+              </div>
+            </div>
+          </div>
+
           {/* Error Alert */}
           {error && (
             <div className="mb-6 flex items-center gap-3 rounded-xl bg-red-500/10 border border-red-500/20 p-4">
@@ -232,6 +297,26 @@ const DriverProfile = () => {
           {isEditing ? (
             // Edit Mode
             <form className="space-y-5">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input
+                  label="Full Name"
+                  icon={UserIcon}
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange(e, "name")}
+                  disabled={saving}
+                />
+                <Input
+                  label="Phone Number"
+                  icon={Phone}
+                  type="text"
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange(e, "phone")}
+                  disabled={saving}
+                />
+              </div>
+
               {/* License Number */}
               <div>
                 <Input

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import {
@@ -22,6 +22,7 @@ import {
   Plus,
   Circle,
   FileCheck,
+  User,
 } from "lucide-react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
@@ -40,35 +41,42 @@ const ROLE_CARDS = {
       title: "My Trips",
       desc: "View your ride history",
       color: "violet",
-      href: "#",
+      href: "/passenger/dashboard/history",
     },
     {
       icon: MapPin,
       title: "Saved Places",
       desc: "Home, work and favourite spots",
       color: "emerald",
-      href: "#",
+      href: "/passenger/dashboard/places",
     },
     {
       icon: Star,
       title: "Rate & Review",
       desc: "Share your experience",
       color: "amber",
-      href: "#",
+      href: "/passenger/dashboard/reviews",
     },
     {
       icon: Wallet,
       title: "Payments",
       desc: "Manage cards and wallet balance",
       color: "rose",
-      href: "#",
+      href: "/passenger/dashboard/payments",
     },
     {
       icon: Users,
       title: "Refer a Friend",
       desc: "Earn credits for every referral",
       color: "cyan",
-      href: "#",
+      href: "/passenger/dashboard/referral",
+    },
+    {
+      icon: User,
+      title: "My Profile",
+      desc: "Manage your personal information",
+      color: "violet",
+      href: "/passenger/dashboard/profile",
     },
   ],
   driver: [
@@ -77,7 +85,7 @@ const ROLE_CARDS = {
       title: "Go Online",
       desc: "Start accepting ride requests",
       color: "emerald",
-      href: "/driver/dashboard/active-rides",
+      href: "/driver/dashboard/go-online",
     },
     {
       icon: TrendingUp,
@@ -168,6 +176,73 @@ const ROLE_CARDS = {
   ],
 };
 
+const MOCK_HISTORY = {
+  passenger: [
+    {
+      id: 1,
+      type: "Ride",
+      from: "Central Park",
+      to: "Times Square",
+      date: "Oct 12, 2023",
+      status: "Completed",
+      amount: "₹150",
+      icon: Navigation,
+    },
+    {
+      id: 2,
+      type: "Ride",
+      from: "JFK Airport",
+      to: "Brooklyn",
+      date: "Oct 10, 2023",
+      status: "Completed",
+      amount: "₹450",
+      icon: MapPin,
+    },
+  ],
+  driver: [
+    {
+      id: 1,
+      type: "Income",
+      from: "City Center",
+      to: "Green Valley",
+      date: "Oct 12, 2023",
+      status: "Completed",
+      amount: "+₹320",
+      icon: Wallet,
+    },
+    {
+      id: 2,
+      type: "Income",
+      from: "West End",
+      to: "North Gate",
+      date: "Oct 11, 2023",
+      status: "Completed",
+      amount: "+₹280",
+      icon: Car,
+    },
+  ],
+  admin: [
+    {
+      id: 1,
+      type: "Audit",
+      user: "John Doe",
+      action: "Account Verified",
+      date: "Oct 12, 2023",
+      status: "Success",
+      icon: UserCheck,
+    },
+    {
+      id: 2,
+      type: "Fleet",
+      user: "Cab #123",
+      action: "Maintenance Logged",
+      date: "Oct 12, 2023",
+      status: "Success",
+      icon: Shield,
+    },
+  ],
+};
+
 const COLOR_MAP = {
   primary: {
     bg: "bg-primary/10",
@@ -227,6 +302,39 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef(null);
+
+  const [notifications, setNotifications] = useState([
+    { id: 1, text: "Your ride GJ-01-AX-4512 has arrived.", time: "2 min ago", unread: true },
+    { id: 2, text: "System update: New fleet monitoring tools are live.", time: "1 hr ago", unread: true },
+    { id: 3, text: "Weekly report for March is now available.", time: "2 days ago", unread: true },
+  ]);
+
+  const handleMarkAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
+    setShowNotifications(false);
+  };
+
+  const handleMarkAsRead = (id) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n));
+  };
+
+  const unreadCount = notifications.filter(n => n.unread).length;
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+    }
+    if (showNotifications) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showNotifications]);
 
   // Default fallback stats (demo)
   const defaultStats = {
@@ -302,24 +410,68 @@ const DashboardPage = () => {
               <span className="text-primary after:bg-primary relative text-xs font-bold after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:w-full after:rounded-full after:content-[''] cursor-default">
                 Dashboard
               </span>
-              <a
-                href="#"
+              <Link
+                to={`/${user?.role}/dashboard/history`}
                 className="text-xs font-medium text-(--text-dim) transition-colors hover:text-(--text-main)"
               >
                 History
-              </a>
+              </Link>
             </nav>
           </div>
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
 
-            <button className="hover:border-primary/30 relative rounded-xl border border-(--card-border) bg-(--card-bg) p-2.5 text-(--text-dim) transition-all hover:text-(--text-main)">
-              <Bell size={18} />
-              <span className="bg-primary absolute top-2.5 right-2.5 h-2 w-2 rounded-full border-2 border-(--bg-main)"></span>
-            </button>
+            <div className="relative" ref={notificationRef}>
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className={`hover:border-primary/30 relative rounded-xl border border-(--card-border) bg-(--bg-main) p-2.5 text-(--text-dim) transition-all hover:text-(--text-main) ${showNotifications ? 'border-primary/50 text-main' : ''}`}
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="bg-primary absolute top-2.5 right-2.5 h-2 w-2 rounded-full border-2 border-(--bg-main)"></span>
+                )}
+              </button>
 
-            <div className="group flex cursor-pointer items-center gap-3 border-l border-(--card-border) pl-4">
+              {/* Notifications Dropdown */}
+              {showNotifications && (
+                <div className="glass-card animate-in fade-in slide-in-from-top-2 fixed left-4 right-4 top-18 z-[100] mt-3 overflow-hidden rounded-3xl border border-(--card-border) shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-3 sm:w-80 sm:rounded-2xl">
+                  <div className="border-b border-(--card-border) bg-black/5 p-4 dark:bg-white/5">
+                    <p className="text-xs font-black tracking-widest text-(--text-main) uppercase">Notifications</p>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        onClick={() => handleMarkAsRead(n.id)}
+                        className="group cursor-pointer border-b border-(--card-border)/50 p-4 transition-colors last:border-0 hover:bg-black/5 dark:hover:bg-white/5"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-xs leading-relaxed ${n.unread ? 'font-bold text-(--text-main)' : 'font-medium text-(--text-dim)'}`}>
+                            {n.text}
+                          </p>
+                          {n.unread && <div className="bg-primary h-1.5 w-1.5 shrink-0 rounded-full mt-1"></div>}
+                        </div>
+                        <p className="mt-1 text-[9px] font-bold text-(--text-dim) uppercase tracking-wider">{n.time}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-black/5 p-3 text-center dark:bg-white/5">
+                    <button 
+                      onClick={handleMarkAllAsRead}
+                      className="text-[10px] font-black tracking-widest text-primary uppercase hover:underline"
+                    >
+                      Mark all as read
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div 
+              onClick={() => navigate(`/${user?.role}/dashboard/profile`)}
+              className="group flex cursor-pointer items-center gap-3 border-l border-(--card-border) pl-4 hover:opacity-80 transition-all"
+            >
               <div className="hidden text-right sm:block">
                 <p className="text-primary mb-0.5 text-[9px] font-bold tracking-[0.2em] uppercase opacity-80">
                   {role}
@@ -367,6 +519,21 @@ const DashboardPage = () => {
                   />{" "}
                   Active
                 </span>
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="group/notify flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[9px] font-bold tracking-widest text-primary uppercase cursor-pointer hover:bg-primary hover:text-black transition-all duration-300"
+                >
+                  <Bell size={10} className="group-hover/notify:animate-bounce" /> 
+                  <span className="relative">
+                    {unreadCount > 0 ? `${unreadCount} New Notifications` : "No New Notifications"}
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                      </span>
+                    )}
+                  </span>
+                </button>
               </div>
               <h1 className="font-display text-3xl leading-tight font-bold tracking-tighter text-(--text-main) lg:text-4xl">
                 Hello,{" "}
@@ -412,7 +579,7 @@ const DashboardPage = () => {
                 <button
                   key={i}
                   onClick={() => card.href !== "#" && navigate(card.href)}
-                  className={`group glass-card relative rounded-3xl p-6 text-left transition-all duration-300 hover:-translate-y-1 ${c.hover} border-(--card-border) shadow-sm`}
+                  className={`group glass-card relative cursor-pointer rounded-3xl p-6 text-left transition-all duration-300 hover:-translate-y-1 ${c.hover} border-(--card-border) shadow-sm`}
                 >
                   <div
                     className={`h-12 w-12 ${c.bg} ${c.icon} group-hover:bg-primary mb-6 flex items-center justify-center rounded-xl transition-all duration-500 group-hover:text-black`}
@@ -436,6 +603,52 @@ const DashboardPage = () => {
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        {/* Recent History Section */}
+        <section id="history" className="space-y-6 scroll-mt-24">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
+              Recent Activity <span className="bg-primary h-1.5 w-1.5 rounded-full"></span>
+            </h2>
+            <Link to={`/${user?.role}/dashboard/history`} className="text-primary text-xs font-bold hover:underline cursor-pointer">
+              View All History
+            </Link>
+          </div>
+
+          <div className="glass-card overflow-hidden rounded-3xl">
+            <div className="divide-y divide-(--card-border)">
+              {(MOCK_HISTORY[role] || []).map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => navigate(`/${user?.role}/dashboard/history`)}
+                  className="group flex cursor-pointer items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl transition-all group-hover:bg-primary group-hover:text-black">
+                      <item.icon size={18} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-(--text-main)">
+                        {role === "admin" ? item.action : `${item.from} → ${item.to}`}
+                      </p>
+                      <p className="text-[10px] font-medium text-(--text-dim) uppercase tracking-wider">
+                        {item.date} • {role === "admin" ? item.user : item.type}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-(--text-main)">
+                      {item.amount || item.status}
+                    </p>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500">
+                      <Circle size={4} fill="currentColor" /> {item.status || "Completed"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
