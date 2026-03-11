@@ -28,3 +28,43 @@ export const exportEarningsToCSV = (data, filename) => {
     link.click();
     document.body.removeChild(link);
 };
+
+/**
+ * Exports ride history data to a CSV file and triggers a download.
+ * @param {Array} data - The ride history data to export.
+ * @param {string} filename - The name of the file to save.
+ */
+export const exportRideHistoryToCSV = (data, filename) => {
+    if (!data || data.length === 0) return;
+
+    const headers = [
+        "ID", "Customer/Driver", "Pickup", "Dropoff", "Distance (km)",
+        "Duration (min)", "Amount (₹)", "Status", "Date", "Ride Type", "Payment Method"
+    ];
+
+    const rows = data.map(ride => [
+        ride.id,
+        ride.name,
+        `"${ride.pickup}"`,
+        `"${ride.dropoff}"`,
+        ride.distance,
+        ride.duration,
+        ride.amount,
+        ride.status,
+        ride.date,
+        ride.rideType,
+        ride.paymentMethod
+    ]);
+
+    let csvContent = "data:text/csv;charset=utf-8,"
+        + headers.join(",") + "\n"
+        + rows.map(e => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};

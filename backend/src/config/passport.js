@@ -39,7 +39,12 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             let user = await UserModel.findOne({ email });
 
             if (user) {
-                // User exists — return them regardless of role (they pick role on dashboard)
+                // ── Role-gate: existing user must match the requested portal ──
+                if (user.role !== role) {
+                    return done(null, false, {
+                        message: `role_mismatch:${user.role}:${role}`
+                    });
+                }
                 return done(null, user);
             }
 
@@ -79,6 +84,12 @@ if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
             let user = await UserModel.findOne({ email });
 
             if (user) {
+                // ── Role-gate: existing user must match the requested portal ──
+                if (user.role !== role) {
+                    return done(null, false, {
+                        message: `role_mismatch:${user.role}:${role}`
+                    });
+                }
                 return done(null, user);
             }
 

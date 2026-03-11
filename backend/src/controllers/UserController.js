@@ -136,15 +136,17 @@ export const SignInUser = async (req, res) => {
         // 1. Find user by email
         const user = await UserModel.findOne({ email });
         if (!user) {
-            // Generic message to prevent user enumeration
-            return res.status(401).json({ success: false, message: "Invalid email or password." });
+            return res.status(401).json({
+                success: false,
+                message: `No ${role} account exists with this email.`
+            });
         }
 
         // ROLE CHECK: Ensure user is logging in from the correct panel
         if (user.role !== role) {
             return res.status(403).json({
                 success: false,
-                message: `Unauthorized. This is the ${role} portal, but your account is registered as a ${user.role}.`
+                message: `No ${role} account exists with this email.`
             });
         }
 

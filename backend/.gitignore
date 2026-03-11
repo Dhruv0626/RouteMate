@@ -2,6 +2,7 @@
 node_modules/
 dist/
 BACKEND_SECURITY_GUIDE.txt
+claude_merge_schema.txt
 
 # Environment Variables
 .env

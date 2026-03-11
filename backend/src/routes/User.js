@@ -42,10 +42,23 @@ router.get(
 
 router.get(
     "/auth/google/callback",
-    passport.authenticate("google", { session: false, failureRedirect: "http://localhost:5173/signin?error=oauth_failed" }),
-    async (req, res) => {
-        await issueOAuthTokens(req.user, res);
-        res.redirect(`http://localhost:5173/${req.user.role}/dashboard`);
+    (req, res, next) => {
+        passport.authenticate("google", { session: false }, async (err, user, info) => {
+            if (err) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+
+            // Role mismatch — user exists but belongs to a different portal
+            if (!user && info?.message?.startsWith("role_mismatch")) {
+                const [, existingRole, requestedRole] = info.message.split(":");
+                return res.redirect(
+                    `http://localhost:5173/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
+                );
+            }
+
+            if (!user) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+
+            await issueOAuthTokens(user, res);
+            res.redirect(`http://localhost:5173/${user.role}/dashboard`);
+        })(req, res, next);
     }
 );
 
@@ -59,10 +72,23 @@ router.get(
 
 router.get(
     "/auth/facebook/callback",
-    passport.authenticate("facebook", { session: false, failureRedirect: "http://localhost:5173/signin?error=oauth_failed" }),
-    async (req, res) => {
-        await issueOAuthTokens(req.user, res);
-        res.redirect(`http://localhost:5173/${req.user.role}/dashboard`);
+    (req, res, next) => {
+        passport.authenticate("facebook", { session: false }, async (err, user, info) => {
+            if (err) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+
+            // Role mismatch — user exists but belongs to a different portal
+            if (!user && info?.message?.startsWith("role_mismatch")) {
+                const [, existingRole, requestedRole] = info.message.split(":");
+                return res.redirect(
+                    `http://localhost:5173/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
+                );
+            }
+
+            if (!user) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+
+            await issueOAuthTokens(user, res);
+            res.redirect(`http://localhost:5173/${user.role}/dashboard`);
+        })(req, res, next);
     }
 );
 

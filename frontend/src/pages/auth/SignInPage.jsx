@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Mail, Lock, User, Car, ArrowRight, Eye, EyeOff } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { FaFacebook } from "react-icons/fa";
 import { useAuth } from "../../context/AuthContext";
@@ -12,6 +12,7 @@ import { validateEmail } from "../../utils/validation";
 
 const SignInPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, setUser } = useAuth();
   const [role, setRole] = useState("passenger");
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +20,28 @@ const SignInPage = () => {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Read OAuth error from URL query params (set by backend redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const oauthError = params.get("error");
+    if (oauthError === "role_mismatch") {
+      const existing = params.get("existing");   // e.g. "driver"
+      const requested = params.get("requested"); // e.g. "passenger"
+      
+      // Use the exact wording requested by user
+      setError(`No ${requested} account exists with this email.`);
+      
+      // Auto-switch the toggle to the correct role (helpful UX)
+      if (existing) setRole(existing);
+    } else if (oauthError === "oauth_failed") {
+      setError("OAuth sign-in failed. Please try again.");
+    }
+    // Clean the URL so the error doesn't persist on refresh
+    if (oauthError) {
+      window.history.replaceState({}, document.title, "/signin");
+    }
+  }, [location.search]);
 
   // Redirect if already authenticated
   useEffect(() => {

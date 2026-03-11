@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import SignInPage from "./pages/auth/SignInPage";
 import SignupPage from "./pages/auth/SignupPage";
 import ForgotPassword from "./pages/auth/ForgotPassword";
@@ -33,6 +34,7 @@ import PayoutsPage from "./pages/driver/PayoutsPage";
 import GoOnlinePage from "./pages/driver/GoOnlinePage";
 import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
 import HistoryPage from "./pages/HistoryPage";
+import AdminHistoryPage from "./pages/admin/AdminHistoryPage";
 import Loader from "./components/ui/Loader";
 import PassengerProfile from "./pages/PassengerProfile";
 import AdminProfile from "./pages/AdminProfile";
@@ -40,6 +42,7 @@ import SavedPlacesPage from "./pages/SavedPlacesPage";
 import ReviewsPage from "./pages/ReviewsPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ReferralPage from "./pages/ReferralPage";
+import NotificationsPage from "./pages/NotificationsPage";
 
 import { getMyDriverProfile } from "./services/driverProfileService";
 
@@ -177,9 +180,14 @@ function PageTransition({ children }) {
   };
 
   useEffect(() => {
-    // Artificial delay removed for a smoother and faster experience
+    // Prevent transition if we are already going to the loader page
+    if (location.pathname === "/loader") {
+      setIsTransitioning(false);
+      return;
+    }
+
     setIsTransitioning(true);
-    const timer = setTimeout(() => setIsTransitioning(false), 150); // Set to 150ms instead of 800ms so it barely flashes if needed
+    const timer = setTimeout(() => setIsTransitioning(false), 150);
     return () => clearTimeout(timer);
   }, [location.pathname]);
 
@@ -230,6 +238,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/home" element={<HomePage />} />
+        <Route path="/loader" element={<Loader fullPage text="System Demo Mode..." />} />
 
         {/* User Auth Routes */}
         <Route path="/signin" element={<SignInPage />} />
@@ -303,13 +312,11 @@ function AppContent() {
           path="/admin/dashboard/history"
           element={
             <AdminProtectedRoute>
-              <HistoryPage />
+              <AdminHistoryPage />
             </AdminProtectedRoute>
           }
         />
 
-        {/* Loader Demo Route */}
-        <Route path="/loader" element={<Loader fullPage />} />
 
         {/* Protected Dashboard Features */}
         <Route
@@ -365,6 +372,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <ReferralPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />
@@ -451,15 +466,15 @@ function AppContent() {
             </DriverProtectedRoute>
           }
         />
-
         <Route
-          path="/:role/dashboard/history"
+          path="/driver/dashboard/notifications"
           element={
-            <ProtectedRoute>
-              <HistoryPage />
-            </ProtectedRoute>
+            <DriverProtectedRoute>
+              <NotificationsPage />
+            </DriverProtectedRoute>
           }
         />
+
 
         <Route
           path="/:role/dashboard"
@@ -484,7 +499,9 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <NotificationProvider>
+        <AppRoutes />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

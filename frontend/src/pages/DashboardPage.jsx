@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useNotifications } from "../context/NotificationContext";
 import api from "../services/api";
 import {
   MapPin,
@@ -121,6 +122,13 @@ const ROLE_CARDS = {
       desc: "Withdraw your earnings",
       color: "cyan",
       href: "/driver/dashboard/payouts",
+    },
+    {
+      icon: Clock,
+      title: "My Rides",
+      desc: "View your completed rides",
+      color: "violet",
+      href: "/driver/dashboard/history",
     },
     {
       icon: FileCheck,
@@ -299,42 +307,11 @@ const ROLE_LABELS = {
 
 const DashboardPage = () => {
   const { user, logout } = useAuth();
+  const { unreadCount } = useNotifications();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState([]);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const notificationRef = useRef(null);
-
-  const [notifications, setNotifications] = useState([
-    { id: 1, text: "Your ride GJ-01-AX-4512 has arrived.", time: "2 min ago", unread: true },
-    { id: 2, text: "System update: New fleet monitoring tools are live.", time: "1 hr ago", unread: true },
-    { id: 3, text: "Weekly report for March is now available.", time: "2 days ago", unread: true },
-  ]);
-
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
-    setShowNotifications(false);
-  };
-
-  const handleMarkAsRead = (id) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, unread: false } : n));
-  };
-
-  const unreadCount = notifications.filter(n => n.unread).length;
-
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
-    }
-    if (showNotifications) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showNotifications]);
+  const role = user?.role || "passenger";
 
   // Default fallback stats (demo)
   const defaultStats = {
@@ -386,7 +363,6 @@ const DashboardPage = () => {
     navigate("/signin");
   };
 
-  const role = user?.role || "passenger";
   const cards = ROLE_CARDS[role] || ROLE_CARDS.passenger;
   const roleInfo = ROLE_LABELS[role] || ROLE_LABELS.passenger;
   const firstName = user?.name?.split(" ")[0] || "there";
@@ -422,50 +398,17 @@ const DashboardPage = () => {
           <div className="flex items-center gap-3">
             <ThemeToggle />
 
-            <div className="relative" ref={notificationRef}>
+            <div className="relative">
               <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className={`hover:border-primary/30 relative rounded-xl border border-(--card-border) bg-(--bg-main) p-2.5 text-(--text-dim) transition-all hover:text-(--text-main) ${showNotifications ? 'border-primary/50 text-main' : ''}`}
+                onClick={() => navigate(`/${role}/dashboard/notifications`)}
+                className="relative rounded-xl border border-(--card-border) bg-(--card-bg) p-2.5 text-(--text-dim) shadow-lg backdrop-blur-md transition-all duration-300 hover:text-primary"
               >
-                <Bell size={18} />
+                <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="bg-primary absolute top-2.5 right-2.5 h-2 w-2 rounded-full border-2 border-(--bg-main)"></span>
+                  <span className="absolute top-2.5 right-2.5 flex h-2 w-2 items-center justify-center rounded-full bg-amber-500 border-2 border-(--bg-main)">
+                  </span>
                 )}
               </button>
-
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div className="glass-card animate-in fade-in slide-in-from-top-2 fixed left-4 right-4 top-18 z-[100] mt-3 overflow-hidden rounded-3xl border border-(--card-border) shadow-2xl sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-3 sm:w-80 sm:rounded-2xl">
-                  <div className="border-b border-(--card-border) bg-black/5 p-4 dark:bg-white/5">
-                    <p className="text-xs font-black tracking-widest text-(--text-main) uppercase">Notifications</p>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.map(n => (
-                      <div 
-                        key={n.id} 
-                        onClick={() => handleMarkAsRead(n.id)}
-                        className="group cursor-pointer border-b border-(--card-border)/50 p-4 transition-colors last:border-0 hover:bg-black/5 dark:hover:bg-white/5"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className={`text-xs leading-relaxed ${n.unread ? 'font-bold text-(--text-main)' : 'font-medium text-(--text-dim)'}`}>
-                            {n.text}
-                          </p>
-                          {n.unread && <div className="bg-primary h-1.5 w-1.5 shrink-0 rounded-full mt-1"></div>}
-                        </div>
-                        <p className="mt-1 text-[9px] font-bold text-(--text-dim) uppercase tracking-wider">{n.time}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="bg-black/5 p-3 text-center dark:bg-white/5">
-                    <button 
-                      onClick={handleMarkAllAsRead}
-                      className="text-[10px] font-black tracking-widest text-primary uppercase hover:underline"
-                    >
-                      Mark all as read
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div 
@@ -520,12 +463,12 @@ const DashboardPage = () => {
                   Active
                 </span>
                 <button 
-                  onClick={() => setShowNotifications(!showNotifications)}
+                  onClick={() => navigate(`/${role}/dashboard/notifications`)}
                   className="group/notify flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[9px] font-bold tracking-widest text-primary uppercase cursor-pointer hover:bg-primary hover:text-black transition-all duration-300"
                 >
                   <Bell size={10} className="group-hover/notify:animate-bounce" /> 
                   <span className="relative">
-                    {unreadCount > 0 ? `${unreadCount} New Notifications` : "No New Notifications"}
+                    {unreadCount > 0 ? `${unreadCount} New Notifications` : "View Notifications"}
                     {unreadCount > 0 && (
                       <span className="absolute -top-1 -right-2 flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
