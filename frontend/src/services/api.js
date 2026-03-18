@@ -28,7 +28,11 @@ const processQueue = (error) => {
 const forceLogout = () => {
   localStorage.removeItem("user");
   localStorage.removeItem("csrfToken");
-  if (!window.location.pathname.includes("/signin")) {
+  
+  const publicPaths = ["/signin", "/signup", "/forgot-password", "/admin/signin", "/admin/signup"];
+  const isPublicPage = publicPaths.some(path => window.location.pathname.includes(path));
+
+  if (!isPublicPage && window.location.pathname !== "/") {
     window.location.href = "/signin";
   }
 };

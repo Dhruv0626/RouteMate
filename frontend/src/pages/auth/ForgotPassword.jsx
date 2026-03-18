@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import OTPInput from "../../components/ui/OTPInput";
 import { validateEmail } from "../../utils/validation";
 import api from "../../services/api";
 
@@ -18,6 +19,7 @@ const ForgotPassword = () => {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [timer, setTimer] = useState(0);
+  const [resetOTPTrigger, setResetOTPTrigger] = useState(false);
 
   useEffect(() => {
     let interval = null;
@@ -50,6 +52,7 @@ const ForgotPassword = () => {
         setStep(2);
         setTimer(60);
         setMessage(data.message);
+        setResetOTPTrigger((prev) => !prev);
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to send OTP.");
@@ -169,19 +172,22 @@ const ForgotPassword = () => {
                 </div>
               )}
 
-              <Input
-                label="Secret OTP"
-                type="text"
-                placeholder="Enter 6-digit code"
-                icon={Key}
-                required
-                value={otp}
-                error={fieldErrors.otp}
-                onChange={(e) => {
-                  setOtp(e.target.value);
-                  if (fieldErrors.otp) setFieldErrors({ ...fieldErrors, otp: "" });
-                }}
-              />
+              <div className="space-y-3 pb-2">
+                <p className="pl-1 text-[10px] font-black uppercase tracking-widest text-(--text-dim)">
+                  Secret 6-digit OTP
+                </p>
+                <OTPInput 
+                  length={6} 
+                  onComplete={(code) => {
+                    setOtp(code);
+                    if (fieldErrors.otp) setFieldErrors({ ...fieldErrors, otp: "" });
+                  }}
+                  resetTrigger={resetOTPTrigger}
+                />
+                {fieldErrors.otp && (
+                  <p className="pl-1 text-[10px] font-bold text-red-500">{fieldErrors.otp}</p>
+                )}
+              </div>
 
               <Input
                 label="New Secure Password"

@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import SignInPage from "./pages/auth/SignInPage";
 import SignupPage from "./pages/auth/SignupPage";
+import CompleteProfilePage from "./pages/auth/CompleteProfilePage";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import AdminSignInPage from "./pages/admin/AdminSignInPage";
 import AdminSignupPage from "./pages/admin/AdminSignupPage";
@@ -51,7 +52,18 @@ function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading)
     return <Loader fullPage text="Synchronizing your account securely..." />; // Use our new premium loader
-  return user ? children : <Navigate to="/signin" replace />;
+  
+  if (!user) return <Navigate to="/signin" replace />;
+
+  // Redirect to complete profile if mobile number is missing
+  if (user.role !== "admin" && (!user.Mobile_no || user.Mobile_no === "0000000000")) {
+    const location = window.location.pathname;
+    if (location !== "/complete-profile") {
+      return <Navigate to="/complete-profile" replace />;
+    }
+  }
+
+  return children;
 }
 
 // ─── Admin Protected Route ────────────────────────────────────────────────────
@@ -243,6 +255,7 @@ function AppContent() {
         {/* User Auth Routes */}
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/complete-profile" element={<CompleteProfilePage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
         {/* Admin Auth Routes */}
@@ -313,6 +326,14 @@ function AppContent() {
           element={
             <AdminProtectedRoute>
               <AdminHistoryPage />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/dashboard/notifications"
+          element={
+            <AdminProtectedRoute>
+              <NotificationsPage />
             </AdminProtectedRoute>
           }
         />
