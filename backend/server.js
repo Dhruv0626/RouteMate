@@ -91,4 +91,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
   console.log(`🔒 Security: Helmet ✓ | CORS ✓ | Rate Limiting ✓ | Pure JWT ✓`);
+  console.log(`⚡ Cache: Redis ${process.env.CACHE_ENABLED === "true" ? "✓" : "disabled"}`);
 });

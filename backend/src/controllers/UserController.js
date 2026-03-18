@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
 import { getEmailTemplate } from "../utils/emailTemplates.js";
+import cacheService from "../utils/redis.js";
 
 // ─── Token Helpers ────────────────────────────────────────────────────────────
 
@@ -281,6 +282,9 @@ export const LogoutUser = async (req, res) => {
             const user = await UserModel.findById(req.user?._id);
             if (user) {
                 await UserModel.findByIdAndUpdate(req.user?._id, { refreshToken: null });
+                
+                // 🧹 Invalidate Profile Cache on logout
+                await cacheService.del(`user:profile:${req.user._id}`);
             }
         }
 
@@ -325,6 +329,10 @@ export const DeleteUser = async (req, res) => {
         //    (their next request or token refresh will fail with 401)
         await UserModel.findByIdAndUpdate(userId, { refreshToken: null });
 
+        // 🧹 Clear Redis Cache for this user
+        await cacheService.del(`user:profile:${userId}`);
+        await cacheService.del("admin:dashboard-stats"); // Update stats since user count changed
+
         // 3. Delete the user document
         await UserModel.findByIdAndDelete(userId);
 
@@ -367,6 +375,10 @@ export const UpdateUser = async (req, res) => {
         if (typeof isBlocked === "boolean") user.isBlocked = isBlocked;
 
         await user.save();
+
+        // 🧹 Invalidate Profile Cache on update
+        await cacheService.del(`user:profile:${userId}`);
+        if (role) await cacheService.del("admin:dashboard-stats"); // Stats might change if role changed
 
         return res.status(200).json({
             success: true,
@@ -462,6 +474,9 @@ export const VerifyEmailOTP = async (req, res) => {
         user.otp = { code: null, expiresAt: null, purpose: null };
         await user.save();
 
+        // 🧹 Invalidate cache as verification status changed
+        await cacheService.del("admin:dashboard-stats");
+
         // Sign in user immediately after verification
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
@@ -544,6 +559,9 @@ export const UpdateMobileNumber = async (req, res) => {
         user.Mobile_no = mobileNumber;
         await user.save();
 
+        // 🧹 Invalidate Profile Cache
+        await cacheService.del(`user:profile:${user._id}`);
+
         res.status(200).json({ 
             success: true, 
             message: "Mobile number updated successfully.",
@@ -564,11 +582,31 @@ export const UpdateMobileNumber = async (req, res) => {
 // ─── Get Profile (RBAC example) ───────────────────────────────────────────────
 export const GetProfile = async (req, res) => {
     try {
+        // 🔐 Check Cache First
+        const cacheKey = `user:profile:${req.user._id}`;
+        const cachedUser = await cacheService.get(cacheKey);
+
+        if (cachedUser) {
+            return res.status(200).json({
+                success: true,
+                user: cachedUser,
+                source: "cache"
+            });
+        }
+
         const user = await UserModel.findById(req.user._id).select("-password -refreshToken");
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
         }
-        return res.status(200).json({ success: true, user });
+
+        // 📥 Store in Cache for 10 minutes (600 seconds)
+        await cacheService.set(cacheKey, user.toObject(), 600);
+
+        return res.status(200).json({ 
+            success: true, 
+            user,
+            source: "db"
+        });
     } catch (error) {
         console.error("Get Profile Error:", error);
         return res.status(500).json({ success: false, message: "Internal server error" });

@@ -1,5 +1,6 @@
 import UserModel from "../models/UserModel.js";
 import DriverProfileModel from "../models/DriverProfileModel.js";
+import cacheService from "../utils/redis.js";
 
 /**
  * Get core statistics for the admin dashboard
@@ -10,6 +11,18 @@ import DriverProfileModel from "../models/DriverProfileModel.js";
  */
 export const GetDashboardStats = async (req, res) => {
     try {
+        // 🔐 Check Cache First
+        const cacheKey = "admin:dashboard-stats";
+        const cachedData = await cacheService.get(cacheKey);
+        
+        if (cachedData) {
+            return res.status(200).json({
+                success: true,
+                stats: cachedData,
+                source: "cache" // Trace metadata for verification
+            });
+        }
+
         // 1. User Counts
         const totalUsers = await UserModel.countDocuments();
         const passengers = await UserModel.countDocuments({ role: "passenger" });
@@ -22,35 +35,39 @@ export const GetDashboardStats = async (req, res) => {
         const onlineDrivers = await DriverProfileModel.countDocuments({ isOnline: true });
 
         // 3. Business metrics (Demo logic since we don't have a RideModel yet)
-        // In a real app, you'd sum up 'amount' from a Rides/Transactions collection.
-        // For now, let's aggregate completions from DriverProfiles to show SOMETHING real.
         const completionAggr = await DriverProfileModel.aggregate([
             { $group: { _id: null, totalCompleted: { $sum: "$completedRides" } } }
         ]);
         const totalCompletedRides = completionAggr[0]?.totalCompleted || 0;
 
-        // Let's assume an average fare of ₹150 for dummy calculation
+        // Avg fare logic
         const estimatedRevenue = totalCompletedRides * 150;
+
+        const stats = {
+            counts: {
+                total: totalUsers,
+                passengers,
+                drivers,
+                admins
+            },
+            drivers: {
+                approved: approvedDrivers,
+                pending: pendingDrivers,
+                online: onlineDrivers
+            },
+            business: {
+                totalRides: totalCompletedRides,
+                revenue: estimatedRevenue
+            }
+        };
+
+        // 📥 Store in Cache for 5 minutes (300 seconds)
+        await cacheService.set(cacheKey, stats, 300);
 
         return res.status(200).json({
             success: true,
-            stats: {
-                counts: {
-                    total: totalUsers,
-                    passengers,
-                    drivers,
-                    admins
-                },
-                drivers: {
-                    approved: approvedDrivers,
-                    pending: pendingDrivers,
-                    online: onlineDrivers
-                },
-                business: {
-                    totalRides: totalCompletedRides,
-                    revenue: estimatedRevenue
-                }
-            }
+            stats,
+            source: "db" // Trace metadata for verification
         });
 
     } catch (error) {
