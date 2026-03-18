@@ -53,10 +53,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             user = await UserModel.create({
                 name,
                 email,
-                Mobile_no: "0000000000",         // Placeholder — complete profile later
                 password: hashToken(accessToken), // Unhashable — OAuth users can't use email/password
                 role: role || "passenger",
-                isGoogleAuth: true
+                provider: "google"
             });
 
             return done(null, user);
@@ -97,10 +96,9 @@ if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
             user = await UserModel.create({
                 name,
                 email,
-                Mobile_no: "0000000000",
                 password: hashToken(accessToken),
                 role: role || "passenger",
-                isFacebookAuth: true
+                provider: "facebook"
             });
 
             return done(null, user);

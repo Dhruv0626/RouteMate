@@ -7,7 +7,10 @@ import {
     GetProfile,
     DeleteUser,
     GetAllUsers,
-    UpdateUser
+    UpdateUser,
+    VerifyEmailOTP,
+    ResendVerificationOTP,
+    UpdateMobileNumber
 } from "../controllers/UserController.js";
 import { ForgotPassword, ResetPassword } from "../controllers/PasswordController.js";
 import authMiddleware from "../middlewares/AuthMid.js";
@@ -21,6 +24,9 @@ const router = express.Router();
 // ─── Public Routes (with auth rate limiter + input validation) ────────────────
 router.post("/register", authLimiter, validateRegister, CreateUser);
 router.post("/signin", authLimiter, validateSignIn, SignInUser);
+router.post("/verify-otp", authLimiter, VerifyEmailOTP);
+router.post("/resend-otp", authLimiter, ResendVerificationOTP);
+router.post("/update-mobile", authMiddleware, UpdateMobileNumber);
 
 // ─── Token Management ─────────────────────────────────────────────────────────
 router.post("/refresh-token", RefreshToken);
@@ -57,7 +63,13 @@ router.get(
             if (!user) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
 
             await issueOAuthTokens(user, res);
-            res.redirect(`http://localhost:5173/${user.role}/dashboard`);
+            
+            // Redirect to complete profile if mobile number is missing
+            const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000") 
+                ? "/complete-profile" 
+                : `/${user.role}/dashboard`;
+                
+            res.redirect(`http://localhost:5173${redirectPath}`);
         })(req, res, next);
     }
 );
@@ -87,7 +99,13 @@ router.get(
             if (!user) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
 
             await issueOAuthTokens(user, res);
-            res.redirect(`http://localhost:5173/${user.role}/dashboard`);
+            
+            // Redirect to complete profile if mobile number is missing
+            const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000") 
+                ? "/complete-profile" 
+                : `/${user.role}/dashboard`;
+                
+            res.redirect(`http://localhost:5173${redirectPath}`);
         })(req, res, next);
     }
 );

@@ -2,6 +2,7 @@ import UserModel from "../models/UserModel.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
+import { getEmailTemplate } from "../utils/emailTemplates.js";
 
 export const ForgotPassword = async (req, res) => {
     try {
@@ -16,7 +17,7 @@ export const ForgotPassword = async (req, res) => {
             });
         }
 
-        if (user.isGoogleAuth || user.isFacebookAuth) {
+        if (user.provider !== "local") {
             return res.status(400).json({ success: false, message: "Use social login instead." });
         }
 
@@ -24,19 +25,26 @@ export const ForgotPassword = async (req, res) => {
         const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
 
         // Hash OTP and set expire (1 min)
-        user.resetPasswordOtp = crypto.createHash("sha256").update(otpStr).digest("hex");
-        user.resetPasswordExpire = Date.now() + 1 * 60 * 1000;
+        user.otp = {
+            code: crypto.createHash("sha256").update(otpStr).digest("hex"),
+            expiresAt: Date.now() + 1 * 60 * 1000,
+            purpose: "reset"
+        };
 
         await user.save({ validateBeforeSave: false });
 
-        const htmlContent = `<h2>Password Reset Request</h2><p>Your OTP is:</p><h3>${otpStr}</h3><p>Valid for 1 minute.</p>`;
+        const htmlContent = getEmailTemplate({
+            title: "Password Reset Request",
+            message: "Verify your identity with the following OTP code to reset your password.",
+            otp: otpStr,
+            expiry: 1
+        });
 
         try {
             await sendEmail({ email: user.email, subject: "RouteMate - OTP", html: htmlContent });
             res.status(200).json({ success: true, message: "OTP sent to your email." });
         } catch (emailErr) {
-            user.resetPasswordOtp = undefined;
-            user.resetPasswordExpire = undefined;
+            user.otp = { code: null, expiresAt: null, purpose: null };
             await user.save({ validateBeforeSave: false });
             console.error("Email Error:", emailErr);
             return res.status(500).json({ success: false, message: "Email failure." });
@@ -74,7 +82,11 @@ export const ResetPassword = async (req, res) => {
             });
         }
 
-        if (user.resetPasswordOtp !== hashedOtp || user.resetPasswordExpire < Date.now()) {
+        if (
+            user.otp.purpose !== "reset" ||
+            user.otp.code !== hashedOtp || 
+            user.otp.expiresAt < Date.now()
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Verification failed",
@@ -99,8 +111,7 @@ export const ResetPassword = async (req, res) => {
         }
 
         user.password = await bcrypt.hash(newPassword, 12);
-        user.resetPasswordOtp = undefined;
-        user.resetPasswordExpire = undefined;
+        user.otp = { code: null, expiresAt: null, purpose: null };
         user.refreshToken = null;
 
         await user.save();

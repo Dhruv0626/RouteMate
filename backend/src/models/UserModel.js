@@ -17,7 +17,8 @@ const userSchema = new mongoose.Schema(
 
     Mobile_no: {
       type: String,
-      required: true
+      required: false,
+      default: null
     },
 
     password: {
@@ -42,22 +43,23 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
-    isGoogleAuth: {
+    // Auth provider for social logins
+    provider: {
+      type: String,
+      enum: ["local", "google", "facebook"],
+      default: "local"
+    },
+
+    // Consolidated OTP for both verification and reset
+    otp: {
+      code: { type: String, default: null },
+      expiresAt: { type: Date, default: null },
+      purpose: { type: String, enum: ["verification", "reset"], default: null }
+    },
+
+    isVerified: {
       type: Boolean,
       default: false
-    },
-
-    isFacebookAuth: {
-      type: Boolean,
-      default: false
-    },
-
-    resetPasswordOtp: {
-      type: String
-    },
-
-    resetPasswordExpire: {
-      type: Date
     }
   },
   { timestamps: true }

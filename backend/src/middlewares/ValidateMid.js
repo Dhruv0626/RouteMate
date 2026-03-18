@@ -29,11 +29,6 @@ export const validateRegister = [
         .matches(emailRegex).withMessage("Please enter a valid email address")
         .normalizeEmail(),
 
-    body("Mobile_no")
-        .trim()
-        .notEmpty().withMessage("Mobile number is required")
-        .matches(/^\d{10}$/).withMessage("Mobile number must be exactly 10 digits"),
-
     body("password")
         .notEmpty().withMessage("Password is required")
         .isLength({ min: 6 }).withMessage("Password must be at least 6 characters")

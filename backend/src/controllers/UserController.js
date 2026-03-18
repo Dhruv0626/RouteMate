@@ -2,6 +2,8 @@ import UserModel from "../models/UserModel.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { sendEmail } from "../utils/sendEmail.js";
+import { getEmailTemplate } from "../utils/emailTemplates.js";
 
 // ─── Token Helpers ────────────────────────────────────────────────────────────
 
@@ -80,38 +82,47 @@ export const CreateUser = async (req, res) => {
         // 2. Hash password with bcrypt (cost factor 12)
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        // 3. Create user — role defaults to "passenger" unless explicitly set
-        const user = await UserModel.create({
+        // 3. Prepare user data
+        const userData = {
             name,
             email,
             Mobile_no,
             password: hashedPassword,
-            role: role || "passenger"
+            role: role || "passenger",
+            isVerified: false // Everyone needs verification for local registration
+        };
+        // 4. Handle Email Verification (OTP) for all local registrations
+        const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
+        userData.otp = {
+            code: crypto.createHash("sha256").update(otpStr).digest("hex"),
+            expiresAt: Date.now() + 1 * 60 * 1000, // 1 min
+            purpose: "verification"
+        };
+
+        const htmlContent = getEmailTemplate({
+            title: "RouteMate Verification Required",
+            message: `To complete your RouteMate ${userData.role} registration, use the following OTP code to verify your email address.`,
+            otp: otpStr,
+            expiry: 1
         });
 
-        // 4. Generate Tokens immediately after registration
-        const accessToken = generateAccessToken(user);
-        const refreshToken = generateRefreshToken(user);
+        try {
+            await sendEmail({ email: userData.email, subject: "RouteMate - Verify Your Email", html: htmlContent });
+            const user = await UserModel.create(userData);
+            const userResponse = user.toObject();
+            delete userResponse.password;
+            delete userResponse.refreshToken;
 
-        // 5. Store latest hashed refresh token in DB
-        await UserModel.findByIdAndUpdate(user._id, {
-            refreshToken: hashToken(refreshToken)
-        });
-
-        // 6. Set tokens as secure HttpOnly cookies
-        setTokenCookies(res, accessToken, refreshToken, user.role);
-
-        // 7. Exclude sensitive fields from response
-        const userResponse = user.toObject();
-        delete userResponse.password;
-        delete userResponse.refreshToken;
-
-        return res.status(201).json({
-            success: true,
-            message: "User registered and signed in successfully",
-            accessToken,
-            user: userResponse
-        });
+            return res.status(201).json({
+                success: true,
+                message: "Registration successful. Please verify your email.",
+                needsVerification: true,
+                user: userResponse
+            });
+        } catch (emailErr) {
+            console.error("Verification Email Error:", emailErr);
+            return res.status(500).json({ success: false, message: "Error sending verification email. Please try again." });
+        }
 
     } catch (error) {
         // Handle Duplicate Key Error (MongoDB 11000)
@@ -159,6 +170,16 @@ export const SignInUser = async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(401).json({ success: false, message: "Invalid email or password." });
+        }
+
+        // 3.1 Check if admin is verified
+        if (user.role === "admin" && !user.isVerified) {
+            return res.status(403).json({
+                success: false,
+                message: "Email verification required. Please check your inbox for the OTP.",
+                needsVerification: true,
+                email: user.email
+            });
         }
 
         // 4. Generate Access Token (15 min) + Refresh Token (7 days)
@@ -399,6 +420,144 @@ export const GetAllUsers = async (req, res) => {
     } catch (error) {
         console.error("Get All Users Error:", error);
         return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
+// ─── Verify Email OTP ─────────────────────────────────────────────────────────
+export const VerifyEmailOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and OTP are required."
+            });
+        }
+
+        const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        if (user.isVerified) {
+            return res.status(400).json({ success: true, message: "User already verified." });
+        }
+
+        if (
+            user.otp.purpose !== "verification" ||
+            user.otp.code !== hashedOtp || 
+            user.otp.expiresAt < Date.now()
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired OTP code."
+            });
+        }
+
+        // Success: Clear OTP and verify user
+        user.isVerified = true;
+        user.otp = { code: null, expiresAt: null, purpose: null };
+        await user.save();
+
+        // Sign in user immediately after verification
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+
+        await UserModel.findByIdAndUpdate(user._id, {
+            refreshToken: hashToken(refreshToken)
+        });
+
+        setTokenCookies(res, accessToken, refreshToken, user.role);
+
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        delete userResponse.refreshToken;
+
+        return res.status(200).json({
+            success: true,
+            message: "Email verified and signed in successfully.",
+            accessToken,
+            user: userResponse
+        });
+
+    } catch (err) {
+        console.error("Verify OTP Error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error." });
+    }
+};
+
+// ─── Resend Verification OTP ──────────────────────────────────────────────────
+export const ResendVerificationOTP = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        if (user.isVerified) {
+            return res.status(400).json({ success: true, message: "User already verified." });
+        }
+
+        const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
+        user.otp = {
+            code: crypto.createHash("sha256").update(otpStr).digest("hex"),
+            expiresAt: Date.now() + 1 * 60 * 1000,
+            purpose: "verification"
+        };
+
+        await user.save();
+
+        const htmlContent = getEmailTemplate({
+            title: "Admin Verification (New OTP)",
+            message: "You requested a new verification code for your RouteMate admin account. Please use the following code:",
+            otp: otpStr,
+            expiry: 1
+        });
+
+        await sendEmail({ email: user.email, subject: "RouteMate Admin - New Verification OTP", html: htmlContent });
+
+        res.status(200).json({ success: true, message: "New verification OTP sent." });
+    } catch (error) {
+        console.error("Resend OTP Error:", error.message);
+        res.status(500).json({ success: false, message: "Server error during OTP resend." });
+    }
+};
+
+/**
+ * Update User Mobile Number
+ */
+export const UpdateMobileNumber = async (req, res) => {
+    try {
+        const { mobileNumber } = req.body;
+        if (!mobileNumber || !/^\d{10}$/.test(mobileNumber)) {
+            return res.status(400).json({ success: false, message: "Valid 10-digit mobile number is required." });
+        }
+
+        const user = await UserModel.findById(req.user.id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+        user.Mobile_no = mobileNumber;
+        await user.save();
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Mobile number updated successfully.",
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                Mobile_no: user.Mobile_no
+            }
+        });
+    } catch (error) {
+        console.error("Update Mobile Error:", error.message);
+        res.status(500).json({ success: false, message: "Server error while updating mobile number." });
     }
 };
 
