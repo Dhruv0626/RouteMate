@@ -1,10 +1,12 @@
 import DriverProfileModel from "../models/DriverProfileModel.js";
 import UserModel from "../models/UserModel.js";
+import NotificationModel from "../models/NotificationModel.js";
+import { notifyAdmins } from "../utils/NotifyUtil.js";
 
 // ─── Create Driver Profile ────────────────────────────────────────────────────
 export const CreateDriverProfile = async (req, res) => {
     try {
-        const { licenseNumber, aadharNumber, vehicleType, vehicleName, vehicleNumber } = req.body;
+        const { vehicleType, vehicleName, licenseImage, aadharImage, vehicleImage, rcbookimage, insuranceimage } = req.body;
         const userId = req.user.id;
 
         // Check if driver profile already exists for this user
@@ -19,17 +21,35 @@ export const CreateDriverProfile = async (req, res) => {
         // Create new driver profile
         const driverProfile = await DriverProfileModel.create({
             user: userId,
-            licenseNumber,
-            aadharNumber,
             vehicleType,
             vehicleName,
-            vehicleNumber,
+            licenseImage,
+            aadharImage,
+            vehicleImage,
+            rcbookimage,
+            insuranceimage,
             isApproved: false,
             isOnline: false
         });
 
         // Update user role to driver if not already
-        await UserModel.findByIdAndUpdate(userId, { role: "driver" });
+        const updatedUser = await UserModel.findByIdAndUpdate(userId, { role: "driver" }, { new: true });
+
+        // Notify Admins
+        const admins = await UserModel.find({ role: "admin" });
+        const adminNotifications = admins.map(admin => ({
+            recipient: admin._id,
+            sender: userId,
+            title: "New Driver Registration",
+            message: `A new driver profile has been submitted by ${updatedUser.name || 'a user'} for approval.`,
+            type: "notification",
+            link: "/admin/dashboard/driver-approvals",
+            metadata: { driverId: userId, profileId: driverProfile._id }
+        }));
+
+        if (adminNotifications.length > 0) {
+            await NotificationModel.insertMany(adminNotifications);
+        }
 
         res.status(201).json({
             success: true,
@@ -109,28 +129,49 @@ export const GetDriverProfileById = async (req, res) => {
 export const UpdateDriverProfile = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { licenseNumber, aadharNumber, vehicleType, vehicleName, vehicleNumber, currentLocation } = req.body;
+        const { vehicleType, vehicleName, currentLocation, licenseImage, aadharImage, vehicleImage, rcbookimage, insuranceimage } = req.body;
 
         // Build update object with only provided fields
         const updateData = {};
-        if (licenseNumber !== undefined) updateData.licenseNumber = licenseNumber;
-        if (aadharNumber !== undefined) updateData.aadharNumber = aadharNumber;
         if (vehicleType !== undefined) updateData.vehicleType = vehicleType;
         if (vehicleName !== undefined) updateData.vehicleName = vehicleName;
-        if (vehicleNumber !== undefined) updateData.vehicleNumber = vehicleNumber;
         if (currentLocation !== undefined) updateData.currentLocation = currentLocation;
+        if (licenseImage !== undefined) updateData.licenseImage = licenseImage;
+        if (aadharImage !== undefined) updateData.aadharImage = aadharImage;
+        if (vehicleImage !== undefined) updateData.vehicleImage = vehicleImage;
+        if (rcbookimage !== undefined) updateData.rcbookimage = rcbookimage;
+        if (insuranceimage !== undefined) updateData.insuranceimage = insuranceimage;
 
         const driverProfile = await DriverProfileModel.findOneAndUpdate(
             { user: userId },
-            updateData,
+            { $set: updateData },
             { new: true, runValidators: true }
-        ).populate("user", "name email Mobile_no");
+        );
 
         if (!driverProfile) {
             return res.status(404).json({
                 success: false,
                 message: "Driver profile not found."
             });
+        }
+
+        // Notify Admins if documents were updated
+        const isDocumentUpdate = licenseImage || aadharImage || vehicleImage || rcbookimage || insuranceimage;
+        if (isDocumentUpdate) {
+            const admins = await UserModel.find({ role: "admin" });
+            const adminNotifications = admins.map(admin => ({
+                recipient: admin._id,
+                sender: userId,
+                title: "Driver Document Updated",
+                message: `Driver ${req.user.name || 'User'} has updated their verification documents.`,
+                type: "notification",
+                link: "/admin/dashboard/driver-approvals",
+                metadata: { driverId: userId, profileId: driverProfile._id }
+            }));
+
+            if (adminNotifications.length > 0) {
+                await NotificationModel.insertMany(adminNotifications);
+            }
         }
 
         res.status(200).json({
@@ -161,11 +202,7 @@ export const UpdateDriverStatus = async (req, res) => {
             });
         }
 
-        const driverProfile = await DriverProfileModel.findOneAndUpdate(
-            { user: userId },
-            { isOnline },
-            { new: true }
-        ).populate("user", "name email Mobile_no");
+        const driverProfile = await DriverProfileModel.findOne({ user: userId });
 
         if (!driverProfile) {
             return res.status(404).json({
@@ -174,10 +211,23 @@ export const UpdateDriverStatus = async (req, res) => {
             });
         }
 
+        if (isOnline && !driverProfile.isApproved) {
+            return res.status(403).json({
+                success: false,
+                message: "Access Denied: Your driver profile is pending admin approval."
+            });
+        }
+
+        driverProfile.isOnline = isOnline;
+        await driverProfile.save();
+
+        const populatedProfile = await DriverProfileModel.findById(driverProfile._id).populate("user", "name email Mobile_no");
+
+
         res.status(200).json({
             success: true,
             message: `Driver status updated to ${isOnline ? "online" : "offline"}.`,
-            data: driverProfile
+            data: populatedProfile
         });
     } catch (error) {
         console.error("Update Driver Status Error:", error);
@@ -284,6 +334,17 @@ export const ApproveDriverProfile = async (req, res) => {
                 message: "Driver profile not found."
             });
         }
+
+        // Notify other admins about this action
+        const actionText = isApproved ? "approved" : "rejected";
+        await notifyAdmins({
+            title: `Driver ${actionText.charAt(0).toUpperCase() + actionText.slice(1)}`,
+            message: `Admin ${req.user.name || 'User'} has ${actionText} the driver profile of ${driverProfile.user.name || 'a driver'}.`,
+            senderId: req.user.id,
+            type: "notification",
+            link: "/admin/dashboard/driver-approvals",
+            metadata: { profileId: id, status: isApproved ? "approved" : "rejected" }
+        });
 
         res.status(200).json({
             success: true,

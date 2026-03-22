@@ -132,12 +132,14 @@ function DriverProtectedRoute({ children }) {
     return <Loader fullPage text="Setting up your driver credentials..." />;
   }
 
-  // Driver doesn't have a profile - allow access to dashboard for now
-  /*
+  // Driver doesn't have a profile - force them to fill it first
   if (!hasProfile) {
-    return <Navigate to="/driver/dashboard/profile-form" replace />;
+    // Only redirect if they are not already on the profile form page
+    const location = window.location.pathname;
+    if (location !== "/driver/dashboard/profile-form") {
+      return <Navigate to="/driver/dashboard/profile-form" replace />;
+    }
   }
-  */
 
   // Driver is authenticated and has profile - allow access
   return children;

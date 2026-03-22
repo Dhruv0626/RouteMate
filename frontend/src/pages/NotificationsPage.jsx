@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -15,103 +15,83 @@ import {
   Settings,
   X,
   Eye,
+  Info,
+  Navigation,
+  UserCheck,
+  ShieldAlert
 } from "lucide-react";
 import { useNotifications } from "../context/NotificationContext";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
+const ICONS = {
+  ride_request: Zap,
+  ride_update: Navigation,
+  account_update: UserCheck,
+  info: Info,
+  success: CheckCircle,
+  warning: AlertCircle,
+  error: ShieldAlert,
+  system: Settings,
+  notification: Bell
+};
+
 const NotificationsPage = () => {
   const navigate = useNavigate();
-  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, loading } = useNotifications();
   const [activeFilter, setActiveFilter] = useState("all");
 
   const filters = [
     { id: "all", label: "All", icon: Bell },
-    { id: "ride-request", label: "Rides", icon: Zap },
-    { id: "earnings", label: "Earnings", icon: TrendingUp },
-    { id: "alert", label: "Alerts", icon: AlertCircle },
-    { id: "message", label: "Messages", icon: MessageCircle },
+    { id: "ride_request", label: "Requests", icon: Zap },
+    { id: "ride_update", label: "Updates", icon: Navigation },
+    { id: "account_update", label: "Account", icon: UserCheck },
+    { id: "warning", label: "Alerts", icon: AlertCircle },
   ];
 
-  const filteredNotifications = notifications.filter((n) => {
-    if (activeFilter === "all") return true;
-    return n.type === activeFilter;
-  });
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter((n) => {
+      if (activeFilter === "all") return true;
+      return n.type === activeFilter;
+    });
+  }, [notifications, activeFilter]);
 
   const handleAction = (notification) => {
-    // Mark as read when clicked
-    markAsRead(notification.id);
-
-    // Navigate based on notification type
-    switch (notification.type) {
-      case "ride-request":
-        navigate("/driver/dashboard/go-online");
-        break;
-      case "earnings":
-        navigate("/driver/dashboard/earnings");
-        break;
-      case "rating":
-        navigate("/driver/dashboard/rating");
-        break;
-      case "alert":
-        // Navigate to maintenance/alerts section (can be custom page)
-        alert(`Alert: ${notification.message}`);
-        break;
-      case "approval":
-        // Navigate to documents/profile section
-        navigate("/driver/dashboard/profile");
-        break;
-      case "message":
-        // Navigate to support/messages section
-        alert(`Support Ticket: ${notification.metadata?.ticketId}\n${notification.message}`);
-        break;
-      case "system":
-        // Navigate to settings or show update prompt
-        alert(`System Update: ${notification.message}`);
-        break;
-      case "security":
-        // Navigate to security settings
-        alert(`Security Alert: ${notification.message}\nDevice: ${notification.metadata?.device}`);
-        break;
-      default:
-        // Already marked as read at top of function
+    if (!notification.isRead) {
+      markAsRead(notification._id);
     }
-  };
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "high":
-        return "border-l-4 border-red-500 bg-red-50/50 dark:bg-red-900/20";
-      case "medium":
-        return "border-l-4 border-amber-500 bg-amber-50/50 dark:bg-amber-900/20";
-      case "low":
-        return "border-l-4 border-gray-400 bg-gray-50/50 dark:bg-gray-800/50";
-      default:
-        return "border-l-4 border-gray-300 bg-gray-50/50 dark:bg-gray-800/50";
+    if (notification.link) {
+      navigate(notification.link);
     }
   };
 
   const getTypeColor = (type, isUnread) => {
     const baseColor = isUnread ? "bg-primary/10" : "bg-(--card-bg)";
     switch (type) {
-      case "ride-request":
+      case "ride_request":
+        return `${baseColor} text-primary`;
+      case "ride_update":
         return `${baseColor} text-emerald-600 dark:text-emerald-400`;
-      case "earnings":
-        return `${baseColor} text-green-600 dark:text-green-400`;
-      case "rating":
-        return `${baseColor} text-pink-600 dark:text-pink-400`;
-      case "alert":
-        return `${baseColor} text-amber-600 dark:text-amber-400`;
-      case "approval":
+      case "account_update":
         return `${baseColor} text-blue-600 dark:text-blue-400`;
-      case "message":
-        return `${baseColor} text-purple-600 dark:text-purple-400`;
+      case "success":
+        return `${baseColor} text-green-600 dark:text-green-400`;
+      case "warning":
+        return `${baseColor} text-amber-600 dark:text-amber-400`;
+      case "error":
+        return `${baseColor} text-red-600 dark:text-red-400`;
       case "system":
         return `${baseColor} text-indigo-600 dark:text-indigo-400`;
-      case "security":
-        return `${baseColor} text-red-600 dark:text-red-400`;
+      case "notification":
+        return `${baseColor} text-primary`;
       default:
         return baseColor;
     }
+  };
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString(); // Simple format
   };
 
   return (
@@ -182,17 +162,15 @@ const NotificationsPage = () => {
               const NotifIcon = notification.icon;
               return (
                 <button
-                  key={notification.id}
+                  key={notification._id}
                   onClick={() => handleAction(notification)}
-                  className={`glass-card group relative w-full overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer text-left ${getPriorityColor(
-                    notification.priority
-                  )} ${
-                    !notification.read ? "bg-primary/5 dark:bg-primary/10" : ""
+                  className={`glass-card group relative w-full overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer text-left ${
+                    !notification.isRead ? "bg-primary/5 dark:bg-primary/10" : "bg-(--card-bg)"
                   }`}
                 >
                   {/* Unread Indicator */}
-                  {!notification.read && (
-                    <div className="bg-primary absolute top-4 right-4 h-2 w-2 rounded-full animate-pulse"></div>
+                  {!notification.isRead && (
+                    <div className="bg-primary absolute top-4 right-4 h-2 w-2 rounded-full animate-pulse z-10"></div>
                   )}
 
                   <div className="flex gap-4">
@@ -200,10 +178,13 @@ const NotificationsPage = () => {
                     <div
                       className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl transition-all ${getTypeColor(
                         notification.type,
-                        !notification.read
+                        !notification.isRead
                       )}`}
                     >
-                      <NotifIcon size={22} />
+                      {(() => {
+                        const NotifIcon = ICONS[notification.type] || Info;
+                        return <NotifIcon size={22} />;
+                      })()}
                     </div>
 
                     {/* Content */}
@@ -226,7 +207,7 @@ const NotificationsPage = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-semibold text-(--text-dim) uppercase tracking-wider">
                           <Clock size={12} className="inline mr-1" />
-                          {notification.timestamp}
+                          {formatTimestamp(notification.createdAt)}
                         </span>
 
                         {!notification.read && (
@@ -242,9 +223,9 @@ const NotificationsPage = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteNotification(notification.id);
+                        deleteNotification(notification._id);
                       }}
-                      className="group/btn flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-(--card-bg) text-(--text-dim) hover:bg-red-500 hover:text-white transition-all"
+                      className="group/btn flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/5 text-(--text-dim) hover:bg-red-500 hover:text-white transition-all"
                     >
                       <X size={16} />
                     </button>
@@ -294,15 +275,15 @@ const NotificationsPage = () => {
               </div>
               <div className="text-center">
                 <p className="mb-1 text-2xl font-black text-amber-500">
-                  {notifications.filter((n) => n.priority === "high").length}
+                  {notifications.filter((n) => !n.isRead).length}
                 </p>
                 <p className="text-xs font-semibold text-(--text-dim) uppercase tracking-wider">
-                  High Priority
+                  Pending
                 </p>
               </div>
               <div className="text-center">
                 <p className="mb-1 text-2xl font-black text-blue-500">
-                  {notifications.filter((n) => n.read).length}
+                  {notifications.filter((n) => n.isRead).length}
                 </p>
                 <p className="text-xs font-semibold text-(--text-dim) uppercase tracking-wider">
                   Read

@@ -4,19 +4,9 @@ const driverProfileSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "UserModel",
+      ref: "User",
       required: true,
       unique: true
-    },
-
-    licenseNumber: {
-      type: String,
-      default: null
-    },
-
-    aadharNumber: {
-      type: String,
-      default: null
     },
 
     vehicleType: { 
@@ -25,11 +15,6 @@ const driverProfileSchema = new mongoose.Schema(
     },
 
     vehicleName: {
-      type: String,
-      default: null
-    },
-
-    vehicleNumber: { 
       type: String,
       default: null
     },
@@ -47,8 +32,7 @@ const driverProfileSchema = new mongoose.Schema(
     currentLocation: {
       type: {
         type: String,
-        enum: ["Point"],
-        default: "Point"
+        enum: ["Point"]
       },
       coordinates: {
         type: [Number]
@@ -68,6 +52,26 @@ const driverProfileSchema = new mongoose.Schema(
       default: 0
     },
 
+    licenseImage: {
+      type: String,
+      default: null
+    },
+    aadharImage: {
+      type: String,
+      default: null
+    },
+    vehicleImage: {
+      type: String,
+      default: null
+    },
+    rcbookimage: {
+      type: String,
+      default: null
+    },
+    insuranceimage: {
+      type: String,
+      default: null
+    },
     averageRating: {
       type: Number,
       default: 0

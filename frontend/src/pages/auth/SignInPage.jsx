@@ -29,10 +29,10 @@ const SignInPage = () => {
       const existing = params.get("existing");   // e.g. "driver"
       const requested = params.get("requested"); // e.g. "passenger"
       
-      // Use the exact wording requested by user
-      setError(`No ${requested} account exists with this email.`);
+      // Use a secure, generic error message that prevents role enumeration
+      setError("Authentication failed: This account is associated with a different portal. Please use the correct sign-in page.");
       
-      // Auto-switch the toggle to the correct role (helpful UX)
+      // Auto-switch the toggle to the correct role ONLY for the user who just tried to log in
       if (existing) setRole(existing);
     } else if (oauthError === "oauth_failed") {
       setError("OAuth sign-in failed. Please try again.");

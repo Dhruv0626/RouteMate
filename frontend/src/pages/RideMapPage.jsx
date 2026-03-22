@@ -267,8 +267,8 @@ const RideMapPage = () => {
         </div>
       </header>
 
-      {/* Main */}
-      <main className="relative z-10 flex flex-1 flex-col md:flex-row overflow-hidden" style={{ minHeight: 0 }}>
+      {/* Main Container */}
+      <main className="relative z-10 flex flex-1 flex-col lg:flex-row overflow-hidden" style={{ minHeight: "calc(100vh - 73px)" }}>
 
         {/* ── Sidebar ── */}
         <aside className="flex flex-col gap-4 p-4 sm:p-5 md:w-[390px] md:min-w-[350px] overflow-y-auto"
@@ -280,7 +280,7 @@ const RideMapPage = () => {
               Where to, <span style={{ color: "#6366f1" }}>{user?.name?.split(" ")[0] || "there"}?</span>
             </h1>
             <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-              Pick your route &amp; vehicle — we'll show the fixed fare. 🚀
+              The driver picks the route — you pick the vehicle and fare tier. 🚀
             </p>
           </div>
 
@@ -288,10 +288,10 @@ const RideMapPage = () => {
           <div className="rounded-2xl p-4 flex flex-col gap-4"
             style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
             <div className="relative">
-              <div style={{ position: "absolute", left: "7px", top: "52px", bottom: "20px", width: "2px", background: "linear-gradient(to bottom, #22c55e, #ef4444)", borderRadius: "2px", opacity: 0.4, zIndex: 0 }} />
+              <div style={{ position: "absolute", left: "5px", top: "40px", bottom: "20px", width: "3px", background: "linear-gradient(to bottom, #22c55e, #ef4444)", borderRadius: "2px", opacity: 0.4, zIndex: 0 }} />
               <div className="relative z-10 flex flex-col gap-4">
                 <div className="flex items-start gap-3">
-                  <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 8px #22c55e80", border: "2px solid #fff", marginTop: 14, flexShrink: 0 }} />
+                  <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 10px #22c55e80", border: "2px solid #fff", marginTop: 32, flexShrink: 0, position: "relative", zIndex: 2 }} />
                   <div className="flex-1">
                     <LocationSearch
                       label="Pickup"
@@ -303,7 +303,7 @@ const RideMapPage = () => {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 8px #ef444480", border: "2px solid #fff", marginTop: 14, flexShrink: 0 }} />
+                  <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 10px #ef444480", border: "2px solid #fff", marginTop: 32, flexShrink: 0, position: "relative", zIndex: 2 }} />
                   <div className="flex-1">
                     <LocationSearch
                       label="Destination"
@@ -330,35 +330,7 @@ const RideMapPage = () => {
             )}
           </div>
 
-          {/* ── Route Options ── */}
-          {routes.length > 0 && !nav.isNavigating && (
-            <div className="rounded-2xl p-4 flex flex-col gap-3"
-              style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
 
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
-                <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em", margin: 0 }}>
-                  Choose Route
-                </p>
-                <TrafficBadge traffic={traffic} />
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
-                {routes.map((route, idx) => (
-                  <RouteCard
-                    key={route.id}
-                    route={route}
-                    isSelected={idx === selectedRouteIdx}
-                    onClick={() => setSelectedRouteIdx(idx)}
-                  />
-                ))}
-              </div>
-
-              <p style={{ fontSize: "10px", color: "var(--text-dim)", margin: 0, lineHeight: 1.6 }}>
-                💡 You can also <strong>tap any route line on the map</strong> to select it.
-                ETA includes <span style={{ color: traffic?.color, fontWeight: 600 }}>{traffic?.label?.toLowerCase()}</span> for current conditions.
-              </p>
-            </div>
-          )}
 
           {/* ── Fare Selector ── */}
           {selectedRoute && !nav.isNavigating && (
@@ -501,9 +473,10 @@ const RideMapPage = () => {
           )}
         </aside>
 
-        {/* ── Map ── */}
-        <section className="relative flex-1 p-3 md:p-4" style={{ minHeight: "400px" }}>
-          <Suspense fallback={<MapSkeleton />}>
+        {/* ── Map area ── */}
+        <section className="relative flex-1 order-first lg:order-none" style={{ minHeight: "450px" }}>
+          <div style={{ position: "absolute", inset: 0 }}>
+            <Suspense fallback={<div className="h-full w-full flex items-center justify-center bg-[#05080f]"><Loader2 className="animate-spin text-indigo-500" /></div>}>
             <RideMap
               pickup={pickup}
               dropoff={dropoff}
@@ -511,7 +484,7 @@ const RideMapPage = () => {
               userLocation={userLocation}
               allRoutes={routes}
               selectedRouteIdx={selectedRouteIdx}
-              onRouteSelect={setSelectedRouteIdx}   // click on map polyline → select route
+              onRouteSelect={null}   // Route is locked by driver
               isNavigating={nav.isNavigating}
               currentPos={nav.currentPos}
               heading={nav.heading}
@@ -524,6 +497,7 @@ const RideMapPage = () => {
               routeInfo={routeInfo}
             />
           </Suspense>
+          </div>
         </section>
       </main>
 

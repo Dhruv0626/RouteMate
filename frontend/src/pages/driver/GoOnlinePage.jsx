@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { getMyDriverProfile, updateDriverStatus } from "../../services/driverProfileService";
 
 const GoOnlinePage = () => {
   const navigate = useNavigate();
@@ -32,6 +33,9 @@ const GoOnlinePage = () => {
   const [batteryLevel, setBatteryLevel] = useState(85);
   const [signalStrength, setSignalStrength] = useState(4);
   const [showDetails, setShowDetails] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // Ride type options
   const rideTypes = [
@@ -76,7 +80,23 @@ const GoOnlinePage = () => {
     }
   };
 
-  // Get current location (simulated)
+  // Fetch driver profile
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await getMyDriverProfile();
+        if (response.data.success) {
+          setProfile(response.data.data);
+          setIsOnline(response.data.data.isOnline);
+        }
+      } catch (err) {
+        console.error("Fetch profile error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
   const updateLocation = () => {
     // In real app, use Geolocation API
     // navigator.geolocation.getCurrentPosition(...)
@@ -84,12 +104,26 @@ const GoOnlinePage = () => {
   };
 
   // Handle go online/offline toggle
-  const handleOnlineToggle = () => {
+  const handleOnlineToggle = async () => {
     if (!isOnline && selectedRideTypes.length === 0) {
       alert("Please select at least one ride type to go online");
       return;
     }
-    setIsOnline(!isOnline);
+
+    if (!isOnline && profile && !profile.isApproved) {
+      setError("Your account is pending admin approval. You cannot go online yet.");
+      return;
+    }
+
+    try {
+      const response = await updateDriverStatus(!isOnline);
+      if (response.data.success) {
+        setIsOnline(!isOnline);
+        setError("");
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update status");
+    }
   };
 
   return (
@@ -119,6 +153,25 @@ const GoOnlinePage = () => {
 
       {/* ── Main Content ── */}
       <main className="mx-auto max-w-7xl px-6 py-8">
+        {error && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl bg-red-500/10 border border-red-500/20 p-4 animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={20} />
+            <div>
+              <p className="text-sm font-bold text-red-500">Access Restricted</p>
+              <p className="text-xs text-red-500 opacity-90">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {profile && !profile.isApproved && !error && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+            <Clock className="text-amber-500 shrink-0 mt-0.5" size={20} />
+            <div>
+              <p className="text-sm font-bold text-amber-500">Pending Approval</p>
+              <p className="text-xs text-amber-500 opacity-90">Our team is reviewing your documents. You'll be able to accept rides once verified.</p>
+            </div>
+          </div>
+        )}
         {/* Online Status Card */}
         <div className="mb-8 overflow-hidden rounded-2xl border border-(--card-border) bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 p-8 backdrop-blur-sm transition-all hover:border-primary/40">
           <div className="flex flex-col items-center justify-center gap-6 text-center">
@@ -436,8 +489,8 @@ const GoOnlinePage = () => {
               <div className="rounded-lg bg-(--bg-main) p-3">
                 <p className="text-sm text-(--text-dim) mb-1">Account Status</p>
                 <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                  <p className="font-semibold text-(--text-main)">Verified</p>
+                  <span className={`h-2 w-2 rounded-full ${profile?.isApproved ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                  <p className="font-semibold text-(--text-main)">{profile?.isApproved ? "Verified & Approved" : "Pending Verification"}</p>
                 </div>
               </div>
             </div>

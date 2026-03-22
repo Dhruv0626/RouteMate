@@ -7,6 +7,10 @@ import {
   CheckCircle,
   AlertCircle,
   TrendingUp,
+  Upload,
+  Image as ImageIcon,
+  Loader2,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -27,11 +31,20 @@ const DriverProfileFormPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [formData, setFormData] = useState({
-    licenseNumber: "",
-    aadharNumber: "",
     vehicleType: "",
     vehicleName: "",
-    vehicleNumber: "",
+    licenseImage: "",
+    aadharImage: "",
+    vehicleImage: "",
+    rcbookimage: "",
+    insuranceimage: "",
+  });
+  const [uploading, setUploading] = useState({
+    license: false,
+    aadhar: false,
+    vehicle: false,
+    rcbook: false,
+    insurance: false,
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -83,25 +96,6 @@ const DriverProfileFormPage = () => {
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (formData.licenseNumber.trim() && formData.licenseNumber.length < 10) {
-      newErrors.licenseNumber =
-        "License number should be at least 10 characters";
-    }
-
-    if (
-      formData.aadharNumber.trim() &&
-      !/^\d{12}$/.test(formData.aadharNumber.trim())
-    ) {
-      newErrors.aadharNumber = "Aadhar number must be 12 digits";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleInputChange = (e, field) => {
     setFormData({ ...formData, [field]: e.target.value });
     // Clear error for this field when user starts typing
@@ -110,24 +104,66 @@ const DriverProfileFormPage = () => {
     }
   };
 
+  const handleFileUpload = async (e, field, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Basic file validation
+    const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Only JPEG, JPG, and PNG images are allowed.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setError("File size should be less than 5MB.");
+      return;
+    }
+
+    setUploading({ ...uploading, [type]: true });
+    setError("");
+
+    const uploadData = new FormData();
+    uploadData.append("image", file);
+
+    try {
+      // Import api from services/api
+      const { default: api } = await import("../services/api");
+      const response = await api.post("/upload", uploadData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (response.data.success) {
+        setFormData({ ...formData, [field]: response.data.data.url });
+      }
+    } catch (err) {
+      setError("Failed to upload image. Please try again.");
+      console.error("Upload error:", err);
+    } finally {
+      setUploading({ ...uploading, [type]: false });
+    }
+  };
+
+  const handleImageRemove = (field) => {
+    setFormData({ ...formData, [field]: "" });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (!validateForm()) {
-      return;
-    }
-
     setLoading(true);
 
     try {
       const response = await createDriverProfile({
-        licenseNumber: formData.licenseNumber.trim() || null,
-        aadharNumber: formData.aadharNumber.trim() || null,
         vehicleType: formData.vehicleType.trim() || null,
         vehicleName: formData.vehicleName.trim() || null,
-        vehicleNumber: formData.vehicleNumber.trim() || null,
+        licenseImage: formData.licenseImage || null,
+        aadharImage: formData.aadharImage || null,
+        vehicleImage: formData.vehicleImage || null,
+        rcbookimage: formData.rcbookimage || null,
+        insuranceimage: formData.insuranceimage || null,
       });
 
       if (response.data.success) {
@@ -189,48 +225,6 @@ const DriverProfileFormPage = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* License Number */}
-            <div>
-              <Input
-                label="Driving License Number"
-                icon={FileText}
-                type="text"
-                placeholder="e.g., DL-2024-0001234"
-                value={formData.licenseNumber}
-                onChange={(e) => handleInputChange(e, "licenseNumber")}
-                error={errors.licenseNumber}
-                disabled={loading}
-              />
-              <p className="text-xs text-(--text-dim) mt-2 ml-1">
-                Enter your valid driving license number (can update later)
-              </p>
-            </div>
-
-            
-                {/* Aadhar Card Number */}
-                <div>
-                  <Input
-                    label="Aadhar Card Number"
-                    icon={Fingerprint}
-                    type="text"
-                    placeholder="Enter 12-digit Aadhar card number"
-                    value={formData.aadharNumber}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "");
-                      setFormData({ ...formData, aadharNumber: value });
-                      if (errors.aadharNumber) {
-                        setErrors({ ...errors, aadharNumber: "" });
-                      }
-                    }}
-                    maxLength="12"
-                    error={errors.aadharNumber}
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-(--text-dim) mt-2 ml-1">
-                    Enter your 12-digit Aadhar card number for identity
-                    verification (can update later)
-                  </p>
-                </div>
 
               {/* Vehicle Information */}
               <div className="pt-2 border-t border-(--card-border)/50">
@@ -241,7 +235,7 @@ const DriverProfileFormPage = () => {
                   </label>
                   <select
                     className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleType ? "border-red-500/50 ring-red-500/10" : ""}`}
-                    value={formData.vehicleType}
+                    value={formData.vehicleType || ""}
                     onChange={handleVehicleTypeChange}
                     disabled={loading}
                   >
@@ -271,7 +265,7 @@ const DriverProfileFormPage = () => {
                     </label>
                     <select
                       className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleName ? "border-red-500/50 ring-red-500/10" : ""}`}
-                      value={formData.vehicleName}
+                      value={formData.vehicleName || ""}
                       onChange={handleVehicleModelChange}
                       disabled={loading}
                     >
@@ -315,22 +309,259 @@ const DriverProfileFormPage = () => {
                   </div>
                 )}
 
-              {/* Vehicle Number */}
-              <br></br>
-              <div>
-                <Input
-                  label="Vehicle Registration Number"
-                  icon={FileText}
-                  type="text"
-                  placeholder="e.g., DL-01-AB-1234"
-                  value={formData.vehicleNumber}
-                  onChange={(e) => handleInputChange(e, "vehicleNumber")}
-                  error={errors.vehicleNumber}
-                  disabled={loading}
-                />
-                <p className="text-xs text-(--text-dim) mt-2 ml-1">
-                  Your vehicle's unique registration number (can update later)
-                </p>
+
+              {/* Document Uploads */}
+              <div className="pt-6 border-t border-(--card-border)/50 space-y-6">
+                <div>
+                  <h3 className="font-display text-sm font-bold text-(--text-main) px-1">
+                    Required Documents
+                  </h3>
+                  <p className="text-[10px] text-primary font-bold uppercase tracking-wider ml-1 mt-1 animate-pulse">
+                    ⚠️ Note: Upload a single image containing both front and back sides
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* License Upload */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                      Driving License Copy
+                    </label>
+                    <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
+                      formData.licenseImage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                    }`}>
+                      {formData.licenseImage ? (
+                        <>
+                          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button
+                              type="button"
+                              onClick={() => handleImageRemove('licenseImage')}
+                              className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-md transition-colors"
+                              title="Remove Image"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <img src={formData.licenseImage} alt="License" className="absolute inset-0 w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="flex flex-col items-center gap-1">
+                              <Upload size={20} className="text-white" />
+                              <span className="text-[8px] font-bold text-white uppercase tracking-wider">Change Photo</span>
+                            </div>
+                          </div>
+                          <label className="absolute inset-0 cursor-pointer">
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'licenseImage', 'license')} disabled={uploading.license} />
+                          </label>
+                        </>
+                      ) : (
+                        <div className="text-center">
+                          {uploading.license ? (
+                            <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
+                          ) : (
+                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                          )}
+                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload DL Photo</p>
+                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                            Select File
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'licenseImage', 'license')} disabled={uploading.license} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Aadhar Upload */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                      Aadhar Card Copy
+                    </label>
+                    <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
+                      formData.aadharImage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                    }`}>
+                      {formData.aadharImage ? (
+                        <>
+                          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button
+                              type="button"
+                              onClick={() => handleImageRemove('aadharImage')}
+                              className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-md transition-colors"
+                              title="Remove Image"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <img src={formData.aadharImage} alt="Aadhar" className="absolute inset-0 w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="flex flex-col items-center gap-1">
+                              <Upload size={20} className="text-white" />
+                              <span className="text-[8px] font-bold text-white uppercase tracking-wider">Change Photo</span>
+                            </div>
+                          </div>
+                          <label className="absolute inset-0 cursor-pointer">
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'aadharImage', 'aadhar')} disabled={uploading.aadhar} />
+                          </label>
+                        </>
+                      ) : (
+                        <div className="text-center">
+                          {uploading.aadhar ? (
+                            <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
+                          ) : (
+                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                          )}
+                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload Aadhar Photo</p>
+                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                            Select File
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'aadharImage', 'aadhar')} disabled={uploading.aadhar} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Vehicle Image Upload */}
+                  <div className="space-y-3 md:col-span-2">
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                      Vehicle Photo (Front View)
+                    </label>
+                    <div className={`relative group aspect-video md:aspect-[21/9] rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
+                      formData.vehicleImage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                    }`}>
+                      {formData.vehicleImage ? (
+                        <>
+                          <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button
+                              type="button"
+                              onClick={() => handleImageRemove('vehicleImage')}
+                              className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-xl backdrop-blur-md transition-colors"
+                              title="Remove Image"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <img src={formData.vehicleImage} alt="Vehicle" className="absolute inset-0 w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="flex flex-col items-center gap-1">
+                              <Upload size={24} className="text-white" />
+                              <span className="text-[10px] font-bold text-white uppercase tracking-wider">Change Vehicle Photo</span>
+                            </div>
+                          </div>
+                          <label className="absolute inset-0 cursor-pointer">
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'vehicleImage', 'vehicle')} disabled={uploading.vehicle} />
+                          </label>
+                        </>
+                      ) : (
+                        <div className="text-center">
+                          {uploading.vehicle ? (
+                            <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
+                          ) : (
+                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                          )}
+                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload Vehicle Photo</p>
+                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                            Select File
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'vehicleImage', 'vehicle')} disabled={uploading.vehicle} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RC Book Upload */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                      RC Book Image (Registration Certificate)
+                    </label>
+                    <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
+                      formData.rcbookimage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                    }`}>
+                      {formData.rcbookimage ? (
+                        <>
+                          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button
+                              type="button"
+                              onClick={() => handleImageRemove('rcbookimage')}
+                              className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-md transition-colors"
+                              title="Remove Image"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <img src={formData.rcbookimage} alt="RC Book" className="absolute inset-0 w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="flex flex-col items-center gap-1">
+                              <Upload size={20} className="text-white" />
+                              <span className="text-[8px] font-bold text-white uppercase tracking-wider">Change Photo</span>
+                            </div>
+                          </div>
+                          <label className="absolute inset-0 cursor-pointer">
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'rcbookimage', 'rcbook')} disabled={uploading.rcbook} />
+                          </label>
+                        </>
+                      ) : (
+                        <div className="text-center">
+                          {uploading.rcbook ? (
+                            <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
+                          ) : (
+                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                          )}
+                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload RC Book</p>
+                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                            Select File
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'rcbookimage', 'rcbook')} disabled={uploading.rcbook} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Insurance Upload */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                      Insurance Policy Image
+                    </label>
+                    <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
+                      formData.insuranceimage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                    }`}>
+                      {formData.insuranceimage ? (
+                        <>
+                          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button
+                              type="button"
+                              onClick={() => handleImageRemove('insuranceimage')}
+                              className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-lg backdrop-blur-md transition-colors"
+                              title="Remove Image"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <img src={formData.insuranceimage} alt="Insurance" className="absolute inset-0 w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                            <div className="flex flex-col items-center gap-1">
+                              <Upload size={20} className="text-white" />
+                              <span className="text-[8px] font-bold text-white uppercase tracking-wider">Change Photo</span>
+                            </div>
+                          </div>
+                          <label className="absolute inset-0 cursor-pointer">
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'insuranceimage', 'insurance')} disabled={uploading.insurance} />
+                          </label>
+                        </>
+                      ) : (
+                        <div className="text-center">
+                          {uploading.insurance ? (
+                            <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
+                          ) : (
+                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                          )}
+                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload Insurance</p>
+                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                            Select File
+                            <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'insuranceimage', 'insurance')} disabled={uploading.insurance} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -351,10 +582,9 @@ const DriverProfileFormPage = () => {
             <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-4 text-xs text-(--text-dim) space-y-1">
               <p className="font-semibold text-blue-500">📋 Note:</p>
               <ul className="space-y-1 ml-4 list-disc">
-                <li>All fields are optional - you can update them later</li>
                 <li>Your profile will be reviewed by our admin team</li>
                 <li>Once approved, you can start accepting and riding</li>
-                <li>Keep your documents valid and up-to-date</li>
+                <li>All documents must be clearly visible in images</li>
               </ul>
             </div>
           </form>

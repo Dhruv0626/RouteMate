@@ -8,7 +8,11 @@
 // ─── Location Search ──────────────────────────────────────────────────────────
 export async function searchLocation(query) {
   if (!query || query.trim().length < 2) return [];
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=in`;
+  
+  // Prioritize Ahmedabad viewbox, but allow India-wide search
+  const ahmedabadBias = "&viewbox=72.42,22.92,72.72,23.12";
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&countrycodes=in${ahmedabadBias}`;
+  
   try {
     const res = await fetch(url, {
       headers: { "Accept-Language": "en", "User-Agent": "RouteMate/1.0 (ride-sharing app)" },

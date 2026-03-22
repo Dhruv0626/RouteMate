@@ -3,7 +3,7 @@ import {
   ChevronLeft, RefreshCw, Car, CheckCircle2, XCircle,
   Clock, ShieldCheck, ShieldAlert, IdCard, Phone, Mail,
   Star, AlertTriangle, Filter, Search, Shield, User,
-  FileText, BadgeCheck, ChevronDown, ChevronUp
+  FileText, BadgeCheck, ChevronDown, ChevronUp, Image as ImageIcon, ExternalLink
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -154,6 +154,62 @@ const DriverCard = ({ driver, onApprove, onReject, loading }) => {
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Cancelled</p>
             <p className="text-sm font-bold text-(--text-main)">{driver.cancelledRides || 0}</p>
+          </div>
+
+          {/* Document Images Section */}
+          <div className="col-span-2 sm:col-span-4 mt-4 pt-4 border-t border-(--card-border)/50">
+            <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <ImageIcon size={12} className="text-primary" /> Document Verification Images
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {[
+                { label: "License Document", img: driver.licenseImage, icon: IdCard },
+                { label: "Aadhar Document", img: driver.aadharImage, icon: FileText },
+                { label: "Vehicle Photos", img: driver.vehicleImage, icon: Car },
+                { label: "RC Book", img: driver.rcbookimage, icon: FileText },
+                { label: "Insurance", img: driver.insuranceimage, icon: ShieldCheck }
+              ].map((doc, idx) => (
+                <div key={idx} className="space-y-2 group/img">
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-[9px] font-bold text-(--text-dim) uppercase flex items-center gap-1.5">
+                      <doc.icon size={10} /> {doc.label}
+                    </p>
+                    {doc.img && (
+                      <a 
+                        href={doc.img} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:text-white transition-colors"
+                        title="View Full Image"
+                      >
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
+                  
+                  <div className="relative aspect-video rounded-2xl overflow-hidden border border-(--card-border) bg-black/20 group-hover/img:border-primary/40 transition-all duration-300 shadow-lg">
+                    {doc.img ? (
+                      <>
+                        <img 
+                          src={doc.img} 
+                          alt={doc.label} 
+                          className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-500"
+                          onClick={() => window.open(doc.img, '_blank')}
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                           <p className="text-[10px] font-black uppercase text-white tracking-widest bg-primary/80 px-3 py-1.5 rounded-full shadow-2xl">Click to Enlarge</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-(--text-dim) bg-black/10">
+                        <AlertTriangle size={20} className="mb-2 opacity-30" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">No Image Uploaded</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

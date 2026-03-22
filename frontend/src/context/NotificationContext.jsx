@@ -1,6 +1,23 @@
-import React, { createContext, useContext, useState, useMemo } from "react";
-import { Zap, TrendingUp, Heart, AlertCircle, CheckCircle, MessageCircle, Settings, Shield } from "lucide-react";
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from "react";
+import {Zap, TrendingUp, Heart, AlertCircle, CheckCircle, MessageCircle, Settings, Shield, Bell, Info, ShieldAlert, CheckSquare, Navigation, UserCheck } from "lucide-react";
+import { useAuth } from "./AuthContext";
+import { 
+  getMyNotifications, 
+  markAsRead as apiMarkAsRead, 
+  markAllAsRead as apiMarkAllAsRead, 
+  deleteNotification as apiDeleteNotification 
+} from "../services/notificationService";
 
+const ICONS = {
+  ride_request: Zap,
+  ride_update: Navigation, // Check if Navigation is imported or use MapPin
+  account_update: UserCheck, // Check imports
+  info: Info,
+  success: CheckCircle,
+  warning: AlertCircle,
+  error: ShieldAlert,
+  system: Settings
+};
 const NotificationContext = createContext();
 
 export const useNotifications = () => {
@@ -12,128 +29,91 @@ export const useNotifications = () => {
 };
 
 export const NotificationProvider = ({ children }) => {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: "ride-request",
-      title: "New Ride Request",
-      message: "Ride request from Sarah M. at Downtown Station",
-      timestamp: "2 mins ago",
-      read: false,
-      priority: "high",
-      icon: Zap,
-      action: "Accept Ride",
-      metadata: { passengerName: "Sarah M.", location: "Downtown Station" },
-    },
-    {
-      id: 2,
-      type: "earnings",
-      title: "Daily Earnings Updated",
-      message: "You earned ₹1,250 today from 8 completed rides",
-      timestamp: "15 mins ago",
-      read: false,
-      priority: "medium",
-      icon: TrendingUp,
-      action: "View Earnings",
-      metadata: { amount: "₹1,250", rides: 8 },
-    },
-    {
-      id: 3,
-      type: "rating",
-      title: "New Rating Received",
-      message: "John D. rated you 5.0 stars for your last ride",
-      timestamp: "1 hour ago",
-      read: true,
-      priority: "low",
-      icon: Heart,
-      action: "View Ratings",
-      metadata: { rating: 5.0, passenger: "John D." },
-    },
-    {
-      id: 4,
-      type: "alert",
-      title: "Vehicle Maintenance Reminder",
-      message: "Your vehicle is due for inspection. Schedule it soon.",
-      timestamp: "3 hours ago",
-      read: true,
-      priority: "medium",
-      icon: AlertCircle,
-      action: "View Alert",
-      metadata: { daysUntilDue: 5 },
-    },
-    {
-      id: 5,
-      type: "approval",
-      title: "Document Verification",
-      message: "Your license document has been verified successfully",
-      timestamp: "5 hours ago",
-      read: true,
-      priority: "medium",
-      icon: CheckCircle,
-      action: "View Profile",
-      metadata: { document: "Driver License" },
-    },
-    {
-      id: 6,
-      type: "message",
-      title: "Support Message",
-      message: "Support team replied to your ticket #12345",
-      timestamp: "8 hours ago",
-      read: true,
-      priority: "low",
-      icon: MessageCircle,
-      action: "Reply Now",
-      metadata: { ticketId: "#12345" },
-    },
-    {
-      id: 7,
-      type: "system",
-      title: "Platform Update",
-      message: "New features available in the app. Update now!",
-      timestamp: "1 day ago",
-      read: true,
-      priority: "low",
-      icon: Settings,
-      action: "Check Update",
-      metadata: { version: "2.1" },
-    },
-    {
-      id: 8,
-      type: "security",
-      title: "Login Activity",
-      message: "New login detected from Chrome on Windows",
-      timestamp: "2 days ago",
-      read: true,
-      priority: "medium",
-      icon: Shield,
-      action: "Review Now",
-      metadata: { device: "Chrome on Windows" },
-    },
-  ]);
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  // Fetch notifications from API
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await getMyNotifications();
+      if (data.success) {
+        setNotifications(data.data.notifications);
+        setUnreadCount(data.data.unreadCount);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  }, [user]);
 
-  const markAsRead = (id) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  // Initial load and polling
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+
+      // Polling every 30 seconds for a "real-time" feel without WebSockets
+      const pollInterval = setInterval(() => {
+        fetchNotifications();
+      }, 30000);
+
+      return () => clearInterval(pollInterval);
+    } else {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  }, [user, fetchNotifications]);
+
+  const markAsRead = async (id) => {
+    try {
+      const { data } = await apiMarkAsRead(id);
+      if (data.success) {
+        setNotifications(prev => 
+          prev.map(n => n._id === id ? { ...n, isRead: true } : n)
+        );
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      const { data } = await apiMarkAllAsRead();
+      if (data.success) {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        setUnreadCount(0);
+      }
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+    }
   };
 
-  const deleteNotification = (id) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  const deleteNotification = async (id) => {
+    try {
+      const { data } = await apiDeleteNotification(id);
+      if (data.success) {
+        const wasUnread = notifications.find(n => n._id === id && !n.isRead);
+        setNotifications(prev => prev.filter(n => n._id !== id));
+        if (wasUnread) {
+          setUnreadCount(prev => Math.max(0, prev - 1));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+    }
   };
 
   const value = {
     notifications,
     unreadCount,
+    loading,
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    setNotifications,
+    refresh: fetchNotifications
   };
 
   return (

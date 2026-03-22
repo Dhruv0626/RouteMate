@@ -34,10 +34,7 @@ const SignupPage = () => {
   const [role, setRole] = useState("passenger");
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
     password: "",
-    licenseNumber: "",
     secretKey: "",
   });
   const [error, setError] = useState("");
@@ -57,7 +54,6 @@ const SignupPage = () => {
         name: "",
         email: "",
         password: "",
-        licenseNumber: "",
         secretKey: "",
       });
       setError("");
@@ -79,8 +75,6 @@ const SignupPage = () => {
     if (nameErr) errors.name = nameErr;
     if (emailErr) errors.email = emailErr;
     if (passErr) errors.password = passErr;
-    if (role === "driver" && !formData.licenseNumber)
-      errors.licenseNumber = "License number is required";
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -180,7 +174,8 @@ const SignupPage = () => {
     }
   };
 
-  const handleInputChange = (field, value) => {
+  const handleInputChange = (e, field) => {
+    const value = e.target?.value !== undefined ? e.target.value : e;
     setFormData({ ...formData, [field]: value });
     if (fieldErrors[field]) {
       setFieldErrors({ ...fieldErrors, [field]: "" });
@@ -304,118 +299,140 @@ const SignupPage = () => {
               </div>
             </div>
           ) : (
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              {error && (
-                <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs leading-tight font-bold text-red-500">
-                  {error}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Input
-                  label="Full Name"
-                  placeholder="Enter FullName"
-                  icon={User}
-                  required
-                  value={formData.name}
-                  error={fieldErrors.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                />
-                <Input
-                  label="Email"
-                  type="email"
-                  placeholder="name@example.com"
-                  icon={Mail}
-                  required
-                  value={formData.email}
-                  error={fieldErrors.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                />
+            <div className="transition-all duration-500">
+              <div className="mb-6">
+                <h2 className="font-display mb-1 text-xl font-black text-(--text-main)">
+                  Join RouteMate
+                </h2>
+                <p className="text-sm font-medium text-(--text-dim) opacity-70">
+                  Create your account to get started.
+                </p>
               </div>
 
-              <Input
-                label="Password"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                icon={Lock}
-                required
-                value={formData.password}
-                error={fieldErrors.password}
-                onChange={(e) => handleInputChange("password", e.target.value)}
-                rightSection={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="hover:text-primary text-slate-500 transition-colors focus:outline-none"
-                  >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                }
-              />
+              <div className="mb-6 flex rounded-xl border border-(--card-border) bg-(--card-bg) p-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleRoleChange('passenger')}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-500 ${role === 'passenger'
+                    ? 'bg-primary text-black shadow-md'
+                    : 'text-(--text-dim) hover:text-(--text-main)'
+                    }`}
+                >
+                  <User size={14} /> Passenger
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRoleChange('driver')}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-[10px] font-black tracking-widest uppercase transition-all duration-500 ${role === 'driver'
+                    ? 'bg-primary text-black shadow-md'
+                    : 'text-(--text-dim) hover:text-(--text-main)'
+                    }`}
+                >
+                  <Car size={14} /> Driver
+                </button>
+              </div>
 
-              {role === "driver" && (
-                <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+              <form className="space-y-4" onSubmit={handleSubmit}>
+                {error && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs leading-tight font-bold text-red-500">
+                    {error}
+                  </div>
+                )}
+
+                <div className="space-y-4">
                   <Input
-                    label="License ID"
-                    placeholder="Enter license number"
-                    icon={IdCard}
+                    label="Full Name"
+                    placeholder="Enter FullName"
+                    icon={User}
                     required
-                    value={formData.licenseNumber}
-                    error={fieldErrors.licenseNumber}
-                    onChange={(e) => handleInputChange("licenseNumber", e.target.value)}
+                    value={formData.name}
+                    error={fieldErrors.name}
+                    onChange={(e) => handleInputChange(e, 'name')}
+                  />
+                  <Input
+                    label="Email"
+                    type="email"
+                    placeholder="name@example.com"
+                    icon={Mail}
+                    required
+                    value={formData.email}
+                    error={fieldErrors.email}
+                    onChange={(e) => handleInputChange(e, 'email')}
                   />
                 </div>
-              )}
 
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  fullWidth
-                  disabled={loading}
-                  className="py-3 shadow-md"
-                >
-                  {loading ? "Creating Account..." : "Continue"}
-                  {!loading && <ArrowRight size={16} />}
-                </Button>
-              </div>
 
-              <div className="relative my-6 flex items-center py-2">
-                <div className="grow border-t border-(--card-border)"></div>
-                <span className="shrink-0 px-4 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">
-                  Or Continue With
-                </span>
-                <div className="grow border-t border-(--card-border)"></div>
-              </div>
+                <Input
+                  label="Password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  icon={Lock}
+                  required
+                  value={formData.password}
+                  error={fieldErrors.password}
+                  onChange={(e) => handleInputChange(e, 'password')}
+                  rightSection={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="hover:text-primary text-slate-500 transition-colors focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  }
+                />
 
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => window.location.href = `http://localhost:5000/api/users/auth/google?role=${role}`}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
-                >
-                  <FcGoogle size={18} />
-                  Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.location.href = `http://localhost:5000/api/users/auth/facebook?role=${role}`}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
-                >
-                  <FaFacebook size={18} className="text-[#1877F2]" />
-                  Facebook
-                </button>
-              </div>
 
-              <p className="mt-4 text-center text-[11px] font-medium text-(--text-dim) opacity-80">
-                Ready to join?{" "}
-                <Link
-                  to="/signin"
-                  className="text-primary font-black transition-colors hover:text-(--text-main)"
-                >
-                  Sign In
-                </Link>
-              </p>
-            </form>
+                <div className="pt-2">
+                  <Button
+                    type="submit"
+                    fullWidth
+                    disabled={loading}
+                    className="py-3 shadow-md"
+                  >
+                    {loading ? 'Creating Account...' : 'Continue'}
+                    {!loading && <ArrowRight size={16} />}
+                  </Button>
+                </div>
+
+                <div className="relative my-6 flex items-center py-2">
+                  <div className="grow border-t border-(--card-border)"></div>
+                  <span className="shrink-0 px-4 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">
+                    Or Continue With
+                  </span>
+                  <div className="grow border-t border-(--card-border)"></div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => window.location.href = `http://localhost:5000/api/users/auth/google?role=${role}`}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
+                  >
+                    <FcGoogle size={18} />
+                    Google
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.location.href = `http://localhost:5000/api/users/auth/facebook?role=${role}`}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
+                  >
+                    <FaFacebook size={18} className="text-[#1877F2]" />
+                    Facebook
+                  </button>
+                </div>
+
+                <p className="mt-4 text-center text-[11px] font-medium text-(--text-dim) opacity-80">
+                  Ready to join?{' '}
+                  <Link
+                    to="/signin"
+                    className="text-primary font-black transition-colors hover:text-(--text-main)"
+                  >
+                    Sign In
+                  </Link>
+                </p>
+              </form>
+            </div>
           )}
         </div>
       </div>

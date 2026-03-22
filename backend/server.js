@@ -7,6 +7,8 @@ import connectDB from "./src/config/db.js";
 import userRoutes from "./src/routes/User.js";
 import driverProfileRoutes from "./src/routes/DriverProfile.js";
 import adminRoutes from "./src/routes/Admin.js";
+import uploadRoutes from "./src/routes/Upload.js";
+import notificationRoutes from "./src/routes/Notification.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 
 // ─── Load Environment Variables ───────────────────────────────────────────────
@@ -76,6 +78,8 @@ app.use(passport.initialize());
 app.use("/api/users", userRoutes);
 app.use("/api/driver-profiles", driverProfileRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {

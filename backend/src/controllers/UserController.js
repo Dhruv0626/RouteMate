@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
 import { getEmailTemplate } from "../utils/emailTemplates.js";
 import cacheService from "../utils/redis.js";
+import { notifyAdmins } from "../utils/NotifyUtil.js";
 
 // ─── Token Helpers ────────────────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ export const SignInUser = async (req, res) => {
         if (!user) {
             return res.status(401).json({
                 success: false,
-                message: `No ${role} account exists with this email.`
+                message: "Authentication failed. Please check your credentials and portal type."
             });
         }
 
@@ -158,7 +159,7 @@ export const SignInUser = async (req, res) => {
         if (user.role !== role) {
             return res.status(403).json({
                 success: false,
-                message: `No ${role} account exists with this email.`
+                message: "Authentication failed. Please check your credentials and portal type."
             });
         }
 
@@ -336,6 +337,16 @@ export const DeleteUser = async (req, res) => {
         // 3. Delete the user document
         await UserModel.findByIdAndDelete(userId);
 
+        // Notify other admins about user deletion
+        await notifyAdmins({
+            title: "User Account Deleted",
+            message: `Admin ${req.user.name || 'User'} has permanently deleted the account of user ${targetUser.name || 'Unknown'}.`,
+            senderId: req.user.id,
+            type: "notification",
+            link: "/admin/dashboard/users",
+            metadata: { targetUserId: userId, action: "deleted" }
+        });
+
         return res.status(200).json({
             success: true,
             message: `User "${targetUser.name}" has been permanently deleted.`
@@ -375,6 +386,19 @@ export const UpdateUser = async (req, res) => {
         if (typeof isBlocked === "boolean") user.isBlocked = isBlocked;
 
         await user.save();
+
+        // Notify other admins about user update/block status
+        if (typeof isBlocked === "boolean") {
+            const status = isBlocked ? "blocked" : "unblocked";
+            await notifyAdmins({
+                title: `User ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+                message: `Admin ${req.user.name || 'User'} has ${status} the user ${user.name}.`,
+                senderId: req.user.id,
+                type: "notification",
+                link: "/admin/dashboard/users",
+                metadata: { targetUserId: userId, action: status }
+            });
+        }
 
         // 🧹 Invalidate Profile Cache on update
         await cacheService.del(`user:profile:${userId}`);
