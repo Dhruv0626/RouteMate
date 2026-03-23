@@ -19,6 +19,8 @@ import { useState } from "react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import { useAuth } from "../context/AuthContext";
 import { exportRideHistoryToCSV } from "../utils/exportUtils";
+import { getPassengerHistory, getDriverHistory } from "../services/rideService";
+import { useEffect } from "react";
 
 const HistoryPage = () => {
   const navigate = useNavigate();
@@ -30,116 +32,67 @@ const HistoryPage = () => {
   const [expandedRide, setExpandedRide] = useState(null);
   const [dateRange, setDateRange] = useState("all");
 
-  // Mock ride history data (Combined for both roles)
-  const rideHistory = role === "driver" ? [
-    {
-      id: 1,
-      name: "Sarah M.",
-      photo: "👩",
-      rating: 5,
-      review: "Amazing driver, very professional!",
-      pickup: "Downtown Station, Main St",
-      dropoff: "International Airport Terminal 2",
-      distance: 28.5,
-      duration: 45,
-      amount: 420,
-      baseFare: 25,
-      distanceFare: 280,
-      timeFare: 115,
-      surge: 0,
-      status: "completed",
-      date: "Today, 2:30 PM",
-      rideType: "Premium",
-      paymentMethod: "Online",
-      notes: "Customer was very friendly",
-    },
-    {
-      id: 2,
-      name: "John D.",
-      photo: "👨",
-      rating: 4,
-      review: "Good ride, took a different route",
-      pickup: "Shopping Mall, 5th Ave",
-      dropoff: "Central Park",
-      distance: 12.5,
-      duration: 22,
-      amount: 230,
-      baseFare: 15,
-      distanceFare: 119,
-      timeFare: 96,
-      surge: 0,
-      status: "completed",
-      date: "Today, 12:15 PM",
-      rideType: "Standard",
-      paymentMethod: "Card",
-      notes: "Passenger had luggage",
-    },
-    {
-      id: 5,
-      name: "Alex K.",
-      photo: "👨",
-      rating: null,
-      review: null,
-      pickup: "Business District",
-      dropoff: "Conference Hall",
-      distance: 15.3,
-      duration: 28,
-      amount: 0,
-      baseFare: 0,
-      distanceFare: 0,
-      timeFare: 0,
-      surge: 0,
-      status: "cancelled",
-      date: "2 days ago, 3:45 PM",
-      rideType: "Standard",
-      paymentMethod: "Online",
-      notes: "Customer cancelled after 5 minutes",
-      cancelReason: "Passenger cancelled",
-    }
-  ] : [
-    {
-      id: 1,
-      name: "Ravi Kumar",
-      photo: "🧔",
-      rating: 4.9,
-      pickup: "Maninagar Cross Roads",
-      dropoff: "Iskon Temple",
-      distance: 11.2,
-      duration: 22,
-      amount: 185,
-      baseFare: 30,
-      distanceFare: 112,
-      timeFare: 43,
-      status: "completed",
-      date: "Today, 3:14 PM",
-      rideType: "Standard",
-      paymentMethod: "Online",
-      myRating: 5,
-      myReview: "Very smooth ride, driver was polite.",
-    },
-    {
-      id: 3,
-      name: "Suresh P.",
-      photo: "👨‍🦱",
-      rating: 4.5,
-      pickup: "Science City Road",
-      dropoff: "Railway Station",
-      distance: 14.6,
-      duration: 30,
-      amount: 260,
-      baseFare: 30,
-      distanceFare: 146,
-      timeFare: 84,
-      status: "cancelled",
-      date: "7 Mar, 11:30 AM",
-      rideType: "Premium",
-      paymentMethod: "Online",
-      myRating: null,
-      myReview: null,
-      cancelReason: "Driver cancelled the ride",
-      refundStatus: "Refund Processed",
-    }
-  ];
+  const [rideHistory, setRideHistory] = useState([]);
+  const [stats, setStats] = useState({
+    totalRides: 0,
+    totalAmount: 0,
+    averageRating: "0.0",
+    cancelledRides: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  // ─── Fetch Real History from Database ───────────────────────────────────────
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        setLoading(true);
+        const fetchFn = role === "driver" ? getDriverHistory : getPassengerHistory;
+        const response = await fetchFn({ limit: 50, status: activeFilter });
+        
+        if (response.data.success) {
+          const { rides, stats: serverStats } = response.data.data;
+          
+          // Map backend schema to frontend UI expectations
+          const formattedRides = rides.map(ride => ({
+            id: ride._id,
+            name: role === "driver" ? ride.passenger?.name : ride.driver?.name,
+            photo: role === "driver" ? "👤" : "🚕",
+            rating: role === "driver" ? ride.rating?.passengerToDriver : 4.8, // Fallback if no specific driver rating stored
+            pickup: ride.pickup?.name,
+            dropoff: ride.destination?.name,
+            distance: ride.distance,
+            duration: ride.duration,
+            amount: ride.fare,
+            baseFare: Math.floor(ride.fare * 0.2), // Approx breakdown for UI
+            distanceFare: Math.floor(ride.fare * 0.6),
+            timeFare: Math.floor(ride.fare * 0.2),
+            status: ride.status,
+            date: new Date(ride.createdAt).toLocaleString('en-IN', { 
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+            }),
+            rideType: ride.vehicleType.charAt(0).toUpperCase() + ride.vehicleType.slice(1),
+            paymentMethod: ride.paymentMethod,
+            cancelReason: ride.cancelReason
+          }));
+
+          setRideHistory(formattedRides);
+          
+          setStats({
+            totalRides: serverStats.totalRides,
+            totalAmount: role === "driver" ? serverStats.totalEarnings : serverStats.totalSpent,
+            averageRating: serverStats.avgRating || "0.0",
+            cancelledRides: formattedRides.filter(r => r.status === 'cancelled').length
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load ride history:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) fetchHistory();
+  }, [user, role, activeFilter]);
 
   const filters = [
     { id: "all", label: "All Rides", icon: Navigation },
@@ -167,19 +120,8 @@ const HistoryPage = () => {
     return matchesStatus && matchesSearch && matchesDate;
   });
 
-  const stats = {
-    totalRides: rideHistory.filter((r) => r.status === "completed").length,
-    totalAmount: rideHistory
-      .filter((r) => r.status === "completed")
-      .reduce((sum, r) => sum + r.amount, 0),
-    averageRating: (
-      rideHistory
-        .filter((r) => (role === "driver" ? r.rating : r.myRating) !== null)
-        .reduce((sum, r) => sum + (role === "driver" ? r.rating : r.myRating), 0) /
-      rideHistory.filter((r) => (role === "driver" ? r.rating : r.myRating) !== null).length || 0
-    ).toFixed(1),
-    cancelledRides: rideHistory.filter((r) => r.status === "cancelled").length,
-  };
+    // Stats were previously derived from mock data here, now provided by API/State
+  ;
 
   const getStatusColor = (status) => {
     switch (status) {

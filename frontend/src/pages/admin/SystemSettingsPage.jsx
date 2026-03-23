@@ -22,17 +22,24 @@ const SettingGroup = ({ title, desc, children }) => (
   </div>
 );
 
-const ConfigInput = ({ label, desc, type = "text", value, onChange, icon: Icon, suffix }) => (
+const ConfigInput = ({ label, desc, type = "text", value, onChange, icon: Icon, prefix, suffix }) => (
   <div className="space-y-2">
     <label className="text-xs font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1.5">
       {Icon && <Icon size={12} className="text-primary" />} {label}
     </label>
     <div className="relative group">
+      {prefix && (
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-primary">
+          {prefix}
+        </span>
+      )}
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-black/5 dark:bg-black/20 border border-(--card-border) rounded-2xl py-3 px-4 outline-none focus:border-primary/50 text-sm font-semibold transition-all"
+        className={`w-full bg-black/5 dark:bg-black/20 border border-(--card-border) rounded-2xl py-3 outline-none focus:border-primary/50 text-sm font-semibold transition-all ${
+          prefix ? "pl-8 pr-4" : "px-4"
+        }`}
       />
       {suffix && (
         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-(--text-dim) uppercase">
@@ -73,24 +80,14 @@ const SystemSettingsPage = () => {
 
   const [loading, setLoading] = useState(true);
 
-  // Configuration State
-  const [config, setConfig] = useState({
-    pricing: {
-      bike: { baseFare: "₹25", costPerKm: "₹8" },
-      auto: { baseFare: "₹35", costPerKm: "₹10" },
-      sedan: { baseFare: "₹50", costPerKm: "₹15" },
-      suv: { baseFare: "₹80", costPerKm: "₹20" }
-    },
-    surgeMultiplier: "1.2x",
-    commission: "15%",
-    appName: "RouteMate",
-    supportEmail: "support@routemate.com",
-    maintenanceMode: false,
-    autoApproveDrivers: false,
-    enableCrypto: true,
-    realTimeTracking: true,
-    maxRadius: "25km",
-  });
+  // Configuration State - Start empty to ensure data source is DB
+  const [config, setConfig] = useState(null);
+
+  // Helper to strip symbols for editing
+  const strip = (val) => {
+    if (typeof val !== 'string') return val;
+    return val.replace(/[₹%xkm\s]/g, "");
+  };
 
   // Fetch initial settings from DB
   useEffect(() => {
@@ -99,11 +96,20 @@ const SystemSettingsPage = () => {
         setLoading(true);
         const { data } = await api.get("/admin/system-settings");
         if (data.success && data.settings) {
-          // Sync with local state
-          setConfig(prev => ({
-            ...prev,
-            ...data.settings
-          }));
+          const s = data.settings;
+          // Sync with local state, stripping symbols for clean input
+          setConfig({
+            ...s,
+            pricing: {
+              bike: { baseFare: strip(s.pricing?.bike?.baseFare), costPerKm: strip(s.pricing?.bike?.costPerKm) },
+              auto: { baseFare: strip(s.pricing?.auto?.baseFare), costPerKm: strip(s.pricing?.auto?.costPerKm) },
+              sedan: { baseFare: strip(s.pricing?.sedan?.baseFare), costPerKm: strip(s.pricing?.sedan?.costPerKm) },
+              suv: { baseFare: strip(s.pricing?.suv?.baseFare), costPerKm: strip(s.pricing?.suv?.costPerKm) }
+            },
+            surgeMultiplier: strip(s.surgeMultiplier),
+            commission: strip(s.commission),
+            maxRadius: strip(s.maxRadius)
+          });
         }
       } catch (err) {
         console.error("Failed to fetch settings", err);
@@ -114,6 +120,13 @@ const SystemSettingsPage = () => {
 
     fetchSettings();
   }, []);
+
+  if (loading || !config) return (
+    <div className="min-h-screen mesh-bg flex flex-col items-center justify-center gap-4">
+      <RefreshCw className="animate-spin text-primary" size={40} />
+      <p className="text-sm font-black text-primary uppercase tracking-[0.2em] animate-pulse">Establishing Secure Database Link...</p>
+    </div>
+  );
 
   const handleSave = async () => {
     setSaving(true);
@@ -187,17 +200,17 @@ const SystemSettingsPage = () => {
            {/* Bike Pricing */}
            <div className="space-y-4 p-4 rounded-3xl bg-primary/5 border border-primary/20">
              <h4 className="text-xs font-black text-primary uppercase tracking-widest flex items-center gap-2">
-               🚴 2-Wheeler (Bike)
+               🏍️ 2-Wheeler (Bike)
              </h4>
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.bike.baseFare}
+                 value={config.pricing.bike.baseFare} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, bike: {...config.pricing.bike, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.bike.costPerKm}
+                 value={config.pricing.bike.costPerKm} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, bike: {...config.pricing.bike, costPerKm: v}}})}
                />
              </div>
@@ -211,12 +224,12 @@ const SystemSettingsPage = () => {
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.auto.baseFare}
+                 value={config.pricing.auto.baseFare} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, auto: {...config.pricing.auto, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.auto.costPerKm}
+                 value={config.pricing.auto.costPerKm} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, auto: {...config.pricing.auto, costPerKm: v}}})}
                />
              </div>
@@ -230,12 +243,12 @@ const SystemSettingsPage = () => {
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.sedan.baseFare}
+                 value={config.pricing.sedan.baseFare} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, sedan: {...config.pricing.sedan, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.sedan.costPerKm}
+                 value={config.pricing.sedan.costPerKm} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, sedan: {...config.pricing.sedan, costPerKm: v}}})}
                />
              </div>
@@ -249,12 +262,12 @@ const SystemSettingsPage = () => {
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.suv.baseFare}
+                 value={config.pricing.suv.baseFare} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, suv: {...config.pricing.suv, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.suv.costPerKm}
+                 value={config.pricing.suv.costPerKm} prefix="₹"
                  onChange={(v) => setConfig({...config, pricing: {...config.pricing, suv: {...config.pricing.suv, costPerKm: v}}})}
                />
              </div>
@@ -263,21 +276,21 @@ const SystemSettingsPage = () => {
 
         <SettingGroup title="Global Multipliers" desc="Platform-wide adjustments and fees.">
            <ConfigInput
-             label="Surge Multiplier" desc="Global multiplier for peak demand periods."
-             value={config.surgeMultiplier} icon={Sliders} suffix="× Ratio"
+             label="Surge Multiplier" desc="Global multiplier"
+             value={config.surgeMultiplier} icon={Sliders} suffix="x"
              onChange={(v) => setConfig({...config, surgeMultiplier: v})}
            />
            <ConfigInput
-             label="Commission Fees" desc="Platform cut for every successful transaction."
-             value={config.commission} icon={Smartphone}
+             label="Commission Fees" desc="Platform cut"
+             value={config.commission} icon={Smartphone} suffix="%"
              onChange={(v) => setConfig({...config, commission: v})}
            />
         </SettingGroup>
 
         <SettingGroup title="Operational Logic" desc="Fine-tune how the platform behaves.">
            <ConfigInput
-             label="Max Search Radius" desc="Distance to scan for available drivers."
-             value={config.maxRadius} icon={Globe}
+             label="Max Search Radius" desc="Distance to scan"
+             value={config.maxRadius} icon={Globe} suffix="km"
              onChange={(v) => setConfig({...config, maxRadius: v})}
            />
            <div className="flex flex-col gap-4">

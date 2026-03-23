@@ -44,6 +44,7 @@ import ReviewsPage from "./pages/ReviewsPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ReferralPage from "./pages/ReferralPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import { ShieldAlert } from "lucide-react";
 
 import { getMyDriverProfile } from "./services/driverProfileService";
 
@@ -87,6 +88,7 @@ function DriverProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   const [profileLoading, setProfileLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
+  const [errorStatus, setErrorStatus] = useState(null);
 
   useEffect(() => {
     const checkDriverProfile = async () => {
@@ -96,52 +98,82 @@ function DriverProtectedRoute({ children }) {
       }
 
       try {
+        setProfileLoading(true);
+        setErrorStatus(null);
         const response = await getMyDriverProfile();
-        if (response.data.success && response.data.data) {
-          setHasProfile(true);
+        
+        // If success:true but data:null, they haven't submitted the form yet
+        if (response.data.success) {
+          if (response.data.data) {
+            setHasProfile(true);
+          } else {
+            setHasProfile(false);
+          }
         }
-      } catch {
-        setHasProfile(false);
+      } catch (err) {
+        console.error("Driver Profile Guard Error:", err);
+        // If it's a real API error (429, 500, etc.), don't assume they have no profile!
+        // Stay on current page or show error, but DON'T force redirect to form
+        setErrorStatus(err.response?.status || 500);
       } finally {
         setProfileLoading(false);
       }
     };
 
-    if (!loading) {
+    if (!loading && user?.role === "driver") {
       checkDriverProfile();
+    } else if (!loading && user?.role !== "driver") {
+        setProfileLoading(false);
     }
   }, [user, loading]);
 
-  // Still loading auth
-  if (loading) {
-    return <Loader fullPage text="Synchronizing your account securely..." />;
+  // 1. Still loading Auth/Profile?
+  if (loading || profileLoading) {
+    return <Loader fullPage text="Synchronizing your driver status..." />;
   }
 
-  // Not authenticated
+  // 2. Not authenticated?
   if (!user) {
     return <Navigate to="/signin" replace />;
   }
 
-  // Not a driver
+  // 3. Not a driver?
   if (user.role !== "driver") {
     return <Navigate to={`/${user.role}/dashboard`} replace />;
   }
 
-  // Still checking driver profile
-  if (profileLoading) {
-    return <Loader fullPage text="Setting up your driver credentials..." />;
+  // 4. API Error (Transient)?
+  if (errorStatus && errorStatus !== 404) {
+    return (
+        <div className="mesh-bg min-h-screen flex items-center justify-center p-6 text-center">
+            <div className="glass-card p-10 max-w-sm rounded-3xl border-(--card-border)">
+                <div className="bg-red-500/10 p-4 rounded-full w-fit mx-auto mb-6">
+                    <ShieldAlert size={48} className="text-red-500" />
+                </div>
+                <h2 className="text-xl font-black mb-2">Connectivity Error</h2>
+                <p className="text-sm text-(--text-dim) mb-6">
+                    We're having trouble reaching the server. Please check your connection and try again.
+                </p>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-primary text-black py-3 rounded-xl font-bold hover:scale-105 transition-all"
+                >
+                    Retry Connection
+                </button>
+            </div>
+        </div>
+    );
   }
 
-  // Driver doesn't have a profile - force them to fill it first
+  // 5. Driver HAS NO PROFILE RECORD - force them to fill it
   if (!hasProfile) {
-    // Only redirect if they are not already on the profile form page
     const location = window.location.pathname;
     if (location !== "/driver/dashboard/profile-form") {
       return <Navigate to="/driver/dashboard/profile-form" replace />;
     }
   }
 
-  // Driver is authenticated and has profile - allow access
+  // 6. Authorized and ready!
   return children;
 }
 

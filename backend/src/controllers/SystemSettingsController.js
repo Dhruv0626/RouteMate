@@ -1,5 +1,5 @@
 import SettingsModel from "../models/SettingsModel.js";
-import { notifyAdmins, notifyDrivers } from "../utils/NotifyUtil.js";
+import { notifySettingsUpdated, notifyPricingUpdated } from "../utils/NotifyUtil.js";
 
 /**
  * Get current system settings
@@ -68,28 +68,18 @@ export const UpdateSettings = async (req, res) => {
 
         await settings.save();
 
-        // Notify Admins about the change
-        await notifyAdmins({
-            title: "System Settings Updated",
-            message: `Admin ${req.user.name || 'User'} has updated system configuration.`,
-            senderId: req.user.id,
-            type: "notification",
-            link: "/admin/dashboard/system-settings",
-            metadata: { updates: Object.keys(updateData) }
+        // Notify admins that settings were changed
+        await notifySettingsUpdated({
+            adminId: req.user.id,
+            updatedKeys: Object.keys(updateData)
         });
 
-        // If price changed, notify ALL drivers
+        // If price changed, notify ALL drivers AND passengers
         if (isPriceChange) {
-            await notifyDrivers({
-                title: "Fare Rates Updated",
-                message: `Attention Drivers: RouteMate has updated its fare structure for different vehicle categories. Check your dashboard for new rates.`,
-                senderId: req.user.id,
-                type: "notification",
-                link: "/driver/dashboard",
-                metadata: {
-                    newPricing: settings.pricing,
-                    surgeMultiplier: settings.surgeMultiplier
-                }
+            await notifyPricingUpdated({
+                adminId: req.user.id,
+                newPricing: settings.pricing,
+                surgeMultiplier: settings.surgeMultiplier
             });
         }
 

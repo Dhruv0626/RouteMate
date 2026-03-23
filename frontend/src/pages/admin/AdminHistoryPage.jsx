@@ -18,8 +18,10 @@ import {
   ArrowRight,
   TrendingUp,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import api from "../../services/api";
+import Loader from "../../components/ui/Loader";
 
 const AdminHistoryPage = () => {
   const navigate = useNavigate();
@@ -28,120 +30,37 @@ const AdminHistoryPage = () => {
   const [expandedLog, setExpandedLog] = useState(null);
   const [dateRange, setDateRange] = useState("all");
 
-  const auditLogs = [
-    {
-      id: "AUD-101",
-      action: "System Config Update",
-      category: "system",
-      actor: "Dhruv (Admin)",
-      actorRole: "Super Admin",
-      target: "Base Fare: ₹45 → ₹50",
-      date: "Today, 4:20 PM",
-      status: "success",
-      urgent: false,
-      ip: "192.168.1.10",
-      details: "Updated base fare configuration for all ride types. Change effective immediately.",
-      affectedUsers: 0,
-    },
-    {
-      id: "AUD-100",
-      action: "User Blocked",
-      category: "user",
-      actor: "Security-Sentry",
-      actorRole: "Automated System",
-      target: "user_7841 (Driver - Ramesh K.)",
-      date: "Today, 2:11 PM",
-      status: "enforced",
-      urgent: true,
-      ip: "System",
-      details: "Account suspended due to multiple fraud reports. Manual review required.",
-      affectedUsers: 1,
-    },
-    {
-      id: "AUD-099",
-      action: "New Driver Verified",
-      category: "driver",
-      actor: "Dhruv (Admin)",
-      actorRole: "Super Admin",
-      target: "Karan Singh (#V-881)",
-      date: "Yesterday, 11:45 AM",
-      status: "success",
-      urgent: false,
-      ip: "192.168.1.10",
-      details: "Driver documents verified and account activated. License no: GJ05TC2024.",
-      affectedUsers: 1,
-    },
-    {
-      id: "AUD-098",
-      action: "Database Optimization",
-      category: "system",
-      actor: "Cron Job",
-      actorRole: "Automated System",
-      target: "Ride history index migration",
-      date: "Yesterday, 3:00 AM",
-      status: "success",
-      urgent: false,
-      ip: "Internal",
-      details: "Scheduled maintenance task. Indexed 48,291 ride records. Query speed improved by 34%.",
-      affectedUsers: 0,
-    },
-    {
-      id: "AUD-097",
-      action: "Security Breach Attempt",
-      category: "security",
-      actor: "103.44.2.11",
-      actorRole: "Unknown IP",
-      target: "API Endpoints /auth/login",
-      date: "6 Mar, 10:22 PM",
-      status: "blocked",
-      urgent: true,
-      ip: "103.44.2.11",
-      details: "Brute-force attempt detected. 512 failed login attempts in 60 seconds. IP banned for 24h.",
-      affectedUsers: 0,
-    },
-    {
-      id: "AUD-096",
-      action: "Payout Processed",
-      category: "finance",
-      actor: "Finance System",
-      actorRole: "Automated System",
-      target: "Weekly driver payout batch — 214 drivers",
-      date: "6 Mar, 9:00 AM",
-      status: "success",
-      urgent: false,
-      ip: "Internal",
-      details: "Total payout: ₹4,82,300. All transactions settled via NEFT.",
-      affectedUsers: 214,
-    },
-    {
-      id: "AUD-095",
-      action: "User Role Changed",
-      category: "user",
-      actor: "Dhruv (Admin)",
-      actorRole: "Super Admin",
-      target: "Sneha Patel → Promoted to Admin",
-      date: "5 Mar, 3:30 PM",
-      status: "success",
-      urgent: false,
-      ip: "192.168.1.10",
-      details: "User role elevated from 'moderator' to 'admin'. Access level updated.",
-      affectedUsers: 1,
-    },
-    {
-      id: "AUD-094",
-      action: "Ride Dispute Resolved",
-      category: "support",
-      actor: "Priya (Support)",
-      actorRole: "Support Agent",
-      target: "Ride #RM-7820 — Refund ₹185",
-      date: "5 Mar, 1:15 PM",
-      status: "success",
-      urgent: false,
-      ip: "10.0.0.44",
-      details: "Passenger complaint resolved. Partial refund issued after driver route deviation verified.",
-      affectedUsers: 2,
-    },
-  ];
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [dateRange]);
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/admin/audit-logs");
+      if (data.success) {
+        setAuditLogs(data.logs);
+      }
+    } catch (error) {
+      console.error("Failed to fetch audit logs", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (days === 0) return `Today, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    if (days === 1) return `Yesterday, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
 
   const filters = [
     { id: "all", label: "All Events", icon: Database },
@@ -218,6 +137,8 @@ const AdminHistoryPage = () => {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (loading && auditLogs.length === 0) return <Loader fullPage text="Retrieving Platform Audit Records..." />;
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">
@@ -374,7 +295,7 @@ const AdminHistoryPage = () => {
 
                         <div className="flex items-center gap-3 text-xs text-(--text-dim)">
                           <span className="flex items-center gap-1">
-                            <Clock size={12} />{log.date}
+                            <Clock size={12} />{formatDate(log.date)}
                           </span>
                           <span className="font-mono text-[10px] bg-(--card-bg) border border-(--card-border) px-2 py-0.5 rounded-full">
                             {log.id}

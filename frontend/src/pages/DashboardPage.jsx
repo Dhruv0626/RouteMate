@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications } from "../context/NotificationContext";
 import api from "../services/api";
+import { getPassengerHistory, getDriverHistory } from "../services/rideService";
 import {
   MapPin,
   Car,
@@ -311,6 +312,7 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState([]);
+  const [activities, setActivities] = useState([]);
   const role = user?.role || "passenger";
 
   // Default fallback stats (demo)
@@ -336,20 +338,68 @@ const DashboardPage = () => {
     const fetchDashboardStats = async () => {
       try {
         if (user?.role === "admin") {
-          const { data } = await api.get("/admin/dashboard-stats");
-          if (data.success) {
+          const statsRes = await api.get("/admin/dashboard-stats");
+          if (statsRes.data.success) {
             setStats([
-              { label: "Users", value: data.stats.counts.total.toLocaleString() },
-              { label: "Active", value: data.stats.drivers.online.toLocaleString() },
-              { label: "Revenue", value: `₹${(data.stats.business.revenue / 1000).toFixed(1)}K` },
+              { label: "Users", value: statsRes.data.stats.counts.total.toLocaleString() },
+              { label: "Active", value: statsRes.data.stats.drivers.online.toLocaleString() },
+              { label: "Revenue", value: `₹${(statsRes.data.stats.business.revenue / 1000).toFixed(1)}K` },
             ]);
           }
+
+          // Fetch Recent Activity for Admin
+          const logsRes = await api.get("/admin/audit-logs?limit=5");
+          if (logsRes.data.success) {
+            setActivities(logsRes.data.logs.map(log => ({
+                id: log.id,
+                action: log.action,
+                user: log.actor,
+                date: new Date(log.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+                status: "Success",
+                icon: log.category === 'driver' ? FileCheck : (log.category === 'security' ? Shield : Settings)
+            })));
+          }
         } else {
-          setStats(defaultStats[user?.role || "passenger"]);
+          // Fetch Real Stats and Activity for Passenger/Driver
+          const fetchFn = user.role === "driver" ? getDriverHistory : getPassengerHistory;
+          const historyRes = await fetchFn({ limit: 5 });
+          
+          if (historyRes.data.success) {
+            const { stats: s, rides } = historyRes.data.data;
+            
+            if (user.role === "driver") {
+              setStats([
+                { label: "Total Rides", value: s.totalRides.toString() },
+                { label: "Earnings", value: `₹${s.totalEarnings.toLocaleString()}` },
+                { label: "Rating", value: s.avgRating },
+              ]);
+            } else {
+              setStats([
+                { label: "Total Trips", value: s.totalRides.toString() },
+                { label: "Saved Places", value: "3" }, // Keep static or fetch if implemented
+                { label: "Total Spent", value: `₹${s.totalSpent.toLocaleString()}` },
+              ]);
+            }
+
+            // For Activity, we'll use a mix of recent rides and notifications for a truly "live" feel
+            const activityHistory = rides.map(ride => ({
+              id: ride._id,
+              type: "Ride",
+              from: ride.pickup.name?.split(',')[0] || "Unknown",
+              to: ride.destination.name?.split(',')[0] || "Unknown",
+              date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+              rawDate: new Date(ride.createdAt),
+              status: ride.status.charAt(0).toUpperCase() + ride.status.slice(1),
+              amount: `₹${ride.fare}`,
+              icon: Navigation
+            }));
+
+            setActivities(activityHistory);
+          }
         }
       } catch (err) {
-        console.error("Dashboard Stats Fetch Error:", err);
-        setStats(defaultStats[user?.role || "passenger"]);
+        console.error("Dashboard Data Fetch Error:", err);
+        setStats(defaultStats[role]);
       } finally {
         setLoading(false);
       }
@@ -562,14 +612,13 @@ const DashboardPage = () => {
 
           <div className="glass-card overflow-hidden rounded-3xl">
             <div className="divide-y divide-(--card-border)">
-              {(MOCK_HISTORY[role] || []).map((item) => (
+              {(activities || []).length > 0 ? activities.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => navigate(`/${user?.role}/dashboard/history`)}
-                  className="group flex cursor-pointer items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                  className="group flex items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl transition-all group-hover:bg-primary group-hover:text-black">
+                    <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl transition-all">
                       <item.icon size={18} />
                     </div>
                     <div>
@@ -590,7 +639,11 @@ const DashboardPage = () => {
                     </span>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="p-10 text-center opacity-50">
+                   <p className="text-xs font-bold uppercase tracking-widest">No Recent Activity Found</p>
+                </div>
+              )}
             </div>
           </div>
         </section>

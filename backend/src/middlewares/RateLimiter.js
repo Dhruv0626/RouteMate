@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 // Optimized for minimum server stability (Prevent memory/socket exhaustion)
 export const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100,                  // max 100 requests per window per IP
+    max: 1000,                 // max 1000 requests per window per IP
     standardHeaders: true,
     legacyHeaders: false,
     message: {

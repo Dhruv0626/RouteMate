@@ -9,6 +9,7 @@ import driverProfileRoutes from "./src/routes/DriverProfile.js";
 import adminRoutes from "./src/routes/Admin.js";
 import uploadRoutes from "./src/routes/Upload.js";
 import notificationRoutes from "./src/routes/Notification.js";
+import rideRoutes from "./src/routes/Ride.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 
 // ─── Load Environment Variables ───────────────────────────────────────────────
@@ -80,6 +81,7 @@ app.use("/api/driver-profiles", driverProfileRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/rides", rideRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {

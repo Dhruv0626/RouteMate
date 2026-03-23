@@ -1,7 +1,7 @@
 import DriverProfileModel from "../models/DriverProfileModel.js";
 import UserModel from "../models/UserModel.js";
 import NotificationModel from "../models/NotificationModel.js";
-import { notifyAdmins } from "../utils/NotifyUtil.js";
+import { notifyDriverProfileSubmitted, notifyDriverApproved, notifyDriverRejected } from "../utils/NotifyUtil.js";
 
 // ─── Create Driver Profile ────────────────────────────────────────────────────
 export const CreateDriverProfile = async (req, res) => {
@@ -33,23 +33,14 @@ export const CreateDriverProfile = async (req, res) => {
         });
 
         // Update user role to driver if not already
-        const updatedUser = await UserModel.findByIdAndUpdate(userId, { role: "driver" }, { new: true });
+        const updatedUser = await UserModel.findByIdAndUpdate(userId, { role: "driver" }, { returnDocument: 'after' });
 
-        // Notify Admins
-        const admins = await UserModel.find({ role: "admin" });
-        const adminNotifications = admins.map(admin => ({
-            recipient: admin._id,
-            sender: userId,
-            title: "New Driver Registration",
-            message: `A new driver profile has been submitted by ${updatedUser.name || 'a user'} for approval.`,
-            type: "notification",
-            link: "/admin/dashboard/driver-approvals",
-            metadata: { driverId: userId, profileId: driverProfile._id }
-        }));
-
-        if (adminNotifications.length > 0) {
-            await NotificationModel.insertMany(adminNotifications);
-        }
+        // Notify admins + confirm to driver using the specific event function
+        await notifyDriverProfileSubmitted({
+            driver: updatedUser,
+            profileId: driverProfile._id,
+            adminId: null
+        });
 
         res.status(201).json({
             success: true,
@@ -145,7 +136,7 @@ export const UpdateDriverProfile = async (req, res) => {
         const driverProfile = await DriverProfileModel.findOneAndUpdate(
             { user: userId },
             { $set: updateData },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!driverProfile) {
@@ -325,7 +316,7 @@ export const ApproveDriverProfile = async (req, res) => {
         const driverProfile = await DriverProfileModel.findByIdAndUpdate(
             id,
             { isApproved },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).populate("user", "name email Mobile_no");
 
         if (!driverProfile) {
@@ -335,16 +326,20 @@ export const ApproveDriverProfile = async (req, res) => {
             });
         }
 
-        // Notify other admins about this action
-        const actionText = isApproved ? "approved" : "rejected";
-        await notifyAdmins({
-            title: `Driver ${actionText.charAt(0).toUpperCase() + actionText.slice(1)}`,
-            message: `Admin ${req.user.name || 'User'} has ${actionText} the driver profile of ${driverProfile.user.name || 'a driver'}.`,
-            senderId: req.user.id,
-            type: "notification",
-            link: "/admin/dashboard/driver-approvals",
-            metadata: { profileId: id, status: isApproved ? "approved" : "rejected" }
-        });
+        // Use dedicated, role-specific notification functions
+        if (isApproved) {
+            await notifyDriverApproved({
+                driver: driverProfile.user,
+                adminId: req.user.id,
+                profileId: id
+            });
+        } else {
+            await notifyDriverRejected({
+                driver: driverProfile.user,
+                adminId: req.user.id,
+                profileId: id
+            });
+        }
 
         res.status(200).json({
             success: true,

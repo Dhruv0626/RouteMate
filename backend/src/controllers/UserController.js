@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
 import { getEmailTemplate } from "../utils/emailTemplates.js";
 import cacheService from "../utils/redis.js";
-import { notifyAdmins } from "../utils/NotifyUtil.js";
+import { notifyUserBlocked, notifyUserUnblocked, notifyUserDeleted } from "../utils/NotifyUtil.js";
 
 // ─── Token Helpers ────────────────────────────────────────────────────────────
 
@@ -337,14 +337,10 @@ export const DeleteUser = async (req, res) => {
         // 3. Delete the user document
         await UserModel.findByIdAndDelete(userId);
 
-        // Notify other admins about user deletion
-        await notifyAdmins({
-            title: "User Account Deleted",
-            message: `Admin ${req.user.name || 'User'} has permanently deleted the account of user ${targetUser.name || 'Unknown'}.`,
-            senderId: req.user.id,
-            type: "notification",
-            link: "/admin/dashboard/users",
-            metadata: { targetUserId: userId, action: "deleted" }
+        // Notify all admins about user deletion
+        await notifyUserDeleted({
+            targetUser,
+            adminId: req.user.id
         });
 
         return res.status(200).json({
@@ -387,17 +383,13 @@ export const UpdateUser = async (req, res) => {
 
         await user.save();
 
-        // Notify other admins about user update/block status
+        // Notify the target user AND all admins about the block/unblock action
         if (typeof isBlocked === "boolean") {
-            const status = isBlocked ? "blocked" : "unblocked";
-            await notifyAdmins({
-                title: `User ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-                message: `Admin ${req.user.name || 'User'} has ${status} the user ${user.name}.`,
-                senderId: req.user.id,
-                type: "notification",
-                link: "/admin/dashboard/users",
-                metadata: { targetUserId: userId, action: status }
-            });
+            if (isBlocked) {
+                await notifyUserBlocked({ targetUser: user, adminId: req.user.id });
+            } else {
+                await notifyUserUnblocked({ targetUser: user, adminId: req.user.id });
+            }
         }
 
         // 🧹 Invalidate Profile Cache on update
