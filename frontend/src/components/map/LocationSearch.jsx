@@ -190,7 +190,7 @@ const LocationSearch = ({
         console.warn("[LocationSearch] GPS error:", err.message);
         setGpsLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 8000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, [gpsLocation, handleSelect]);
 

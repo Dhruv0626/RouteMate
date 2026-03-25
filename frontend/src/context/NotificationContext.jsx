@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from "react";
-import {Zap, TrendingUp, Heart, AlertCircle, CheckCircle, MessageCircle, Settings, Shield, Bell, Info, ShieldAlert, CheckSquare, Navigation, UserCheck } from "lucide-react";
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { Zap, TrendingUp, Heart, AlertCircle, CheckCircle, MessageCircle, Settings, Shield, Bell, Info, ShieldAlert, CheckSquare, Navigation, UserCheck } from "lucide-react";
 import { useAuth } from "./AuthContext";
 import { 
   getMyNotifications, 
@@ -10,14 +10,15 @@ import {
 
 const ICONS = {
   ride_request: Zap,
-  ride_update: Navigation, // Check if Navigation is imported or use MapPin
-  account_update: UserCheck, // Check imports
+  ride_update: Navigation, 
+  account_update: UserCheck,
   info: Info,
   success: CheckCircle,
   warning: AlertCircle,
   error: ShieldAlert,
   system: Settings
 };
+
 const NotificationContext = createContext();
 
 export const useNotifications = () => {
@@ -28,40 +29,98 @@ export const useNotifications = () => {
   return context;
 };
 
+// Common notification sound URL (Standard ping)
+const NOTIFICATION_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+
 export const NotificationProvider = ({ children }) => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  
+  // Refs to track previous state for change detection
+  const prevUnreadCountRef = useRef(0);
+  const audioRef = useRef(new Audio(NOTIFICATION_SOUND_URL));
+
+  /**
+   * Triggers a browser native notification with sound
+   */
+  const showNativeNotification = useCallback((notification) => {
+    // 1. Play Sound
+    try {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(e => console.log("Audio play blocked by browser policy"));
+    } catch (err) {
+      console.error("Sound playback error:", err);
+    }
+
+    // 2. Show System Notification (if permitted)
+    if ("Notification" in window && Notification.permission === "granted") {
+      const { title, message, type } = notification;
+      
+      const n = new Notification(title || "New Message", {
+        body: message || "You have a new update in RouteMate.",
+        icon: "/logo192.png", // Fallback to app icon if exists
+        tag: notification._id, // Prevent duplicate notifications for same ID
+        vibrate: [200, 100, 200]
+      });
+
+      n.onclick = () => {
+        window.focus();
+        n.close();
+      };
+    }
+  }, []);
+
+  // Request Notification Permission on mount
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Fetch notifications from API
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (isInitial = false) => {
     if (!user) return;
     try {
       const { data } = await getMyNotifications();
       if (data.success) {
-        setNotifications(data.data.notifications);
-        setUnreadCount(data.data.unreadCount);
+        const newNotifications = data.data.notifications;
+        const newUnreadCount = data.data.unreadCount;
+
+        // Detection Logic: If unread count increased, trigger an alert for the latest notification
+        if (!isInitial && newUnreadCount > prevUnreadCountRef.current) {
+          // Find the newest unread notification that wasn't previously known
+          const latest = newNotifications.find(n => !n.isRead);
+          if (latest) {
+             showNativeNotification(latest);
+          }
+        }
+
+        setNotifications(newNotifications);
+        setUnreadCount(newUnreadCount);
+        prevUnreadCountRef.current = newUnreadCount;
       }
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
     }
-  }, [user]);
+  }, [user, showNativeNotification]);
 
   // Initial load and polling
   useEffect(() => {
     if (user) {
-      fetchNotifications();
+      fetchNotifications(true);
 
-      // Polling every 30 seconds for a "real-time" feel without WebSockets
+      // Polling every 15 seconds for a snappy feel (reduced from 30)
       const pollInterval = setInterval(() => {
-        fetchNotifications();
-      }, 30000);
+        fetchNotifications(false);
+      }, 15000);
 
       return () => clearInterval(pollInterval);
     } else {
       setNotifications([]);
       setUnreadCount(0);
+      prevUnreadCountRef.current = 0;
     }
   }, [user, fetchNotifications]);
 
@@ -72,7 +131,9 @@ export const NotificationProvider = ({ children }) => {
         setNotifications(prev => 
           prev.map(n => n._id === id ? { ...n, isRead: true } : n)
         );
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        const newCount = Math.max(0, unreadCount - 1);
+        setUnreadCount(newCount);
+        prevUnreadCountRef.current = newCount;
       }
     } catch (error) {
       console.error("Failed to mark notification as read:", error);
@@ -85,6 +146,7 @@ export const NotificationProvider = ({ children }) => {
       if (data.success) {
         setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
         setUnreadCount(0);
+        prevUnreadCountRef.current = 0;
       }
     } catch (error) {
       console.error("Failed to mark all notifications as read:", error);
@@ -98,7 +160,9 @@ export const NotificationProvider = ({ children }) => {
         const wasUnread = notifications.find(n => n._id === id && !n.isRead);
         setNotifications(prev => prev.filter(n => n._id !== id));
         if (wasUnread) {
-          setUnreadCount(prev => Math.max(0, prev - 1));
+          const newCount = Math.max(0, unreadCount - 1);
+          setUnreadCount(newCount);
+          prevUnreadCountRef.current = newCount;
         }
       }
     } catch (error) {
@@ -113,7 +177,8 @@ export const NotificationProvider = ({ children }) => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    refresh: fetchNotifications
+    refresh: fetchNotifications,
+    showNativeNotification // Exposed if we want to trigger manually
   };
 
   return (

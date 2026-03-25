@@ -12,6 +12,7 @@ import {
     ResendVerificationOTP,
     UpdateMobileNumber
 } from "../controllers/UserController.js";
+import { GetSettings } from "../controllers/SystemSettingsController.js";
 import { ForgotPassword, ResetPassword } from "../controllers/PasswordController.js";
 import authMiddleware from "../middlewares/AuthMid.js";
 import authorizeRoles from "../middlewares/RoleMid.js";
@@ -112,6 +113,9 @@ router.get(
 
 // ─── Protected Routes (JWT required) ─────────────────────────────────────────
 router.get("/profile", authMiddleware, GetProfile);
+
+// ─── System Settings (Read-only for all authenticated users) ─────────────────
+router.get("/system-settings", authMiddleware, GetSettings);
 
 // ─── Admin-Only Routes ────────────────────────────────────────────────────────
 // Get all non-admin users

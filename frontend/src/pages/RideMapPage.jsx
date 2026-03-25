@@ -9,6 +9,7 @@ import ThemeToggle          from "../components/ui/ThemeToggle";
 import LocationSearch       from "../components/map/LocationSearch";
 import { getMultipleRoutes, getTrafficCondition } from "../utils/geocode";
 import { useGeoNavigation } from "../hooks/useGeoNavigation";
+import api from "../services/api";
 
 const RideMap = lazy(() => import("../components/map/RideMap"));
 
@@ -149,6 +150,20 @@ const RideMapPage = () => {
 
   // Always-on GPS dot
   const [userLocation, setUserLocation] = useState(null);
+  const [systemConfig, setSystemConfig] = useState(null);
+
+  // Fetch system config on mount
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const { data } = await api.get("/users/system-settings");
+        if (data.success) setSystemConfig(data.settings);
+      } catch (err) {
+        console.error("Failed to fetch system config:", err);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   // ─── GPS watch ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -156,12 +171,12 @@ const RideMapPage = () => {
     navigator.geolocation.getCurrentPosition(
       (p) => setUserLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
       (e) => console.warn("[RideMapPage] GPS:", e.message),
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
     const wid = navigator.geolocation.watchPosition(
       (p) => setUserLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
       (e) => console.warn("[RideMapPage] watch:", e.message),
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
     return () => navigator.geolocation.clearWatch(wid);
   }, []);
@@ -185,7 +200,7 @@ const RideMapPage = () => {
     setSelectedRouteIdx(0);
     try {
       setTraffic(getTrafficCondition());
-      const fetched = await getMultipleRoutes(from, to);
+      const fetched = await getMultipleRoutes(from, to, systemConfig);
       setRoutes(fetched);
     } catch (e) {
       console.error("[RideMapPage] fetchRoutes:", e);

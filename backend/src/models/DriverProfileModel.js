@@ -9,7 +9,7 @@ const driverProfileSchema = new mongoose.Schema(
       unique: true
     },
 
-    vehicleType: { 
+    vehicleType: {
       type: String,
       default: null
     },

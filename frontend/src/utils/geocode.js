@@ -54,9 +54,20 @@ export const FARE_TIERS = [
   { id: "suv",   label: "SUV",   emoji: "🚐",  baseFare: 100, perKm: 20, perMin: 2.5, capacity: "6 seats" },
 ];
 
-export function calculateFares(distanceKm, durationMin) {
+export function calculateFares(distanceKm, durationMin, systemConfig = null) {
+  const surge = systemConfig ? parseFloat(String(systemConfig.surgeMultiplier).replace(/[^\d.]/g, "")) : 1;
+  const pricing = systemConfig?.pricing;
+
   return FARE_TIERS.map((tier) => {
-    const fare = Math.round(tier.baseFare + tier.perKm * distanceKm + tier.perMin * durationMin);
+    let base = tier.baseFare;
+    let kmRate = tier.perKm;
+
+    if (pricing && pricing[tier.id]) {
+      base = parseFloat(String(pricing[tier.id]?.baseFare || "").replace(/[^\d.]/g, "")) || base;
+      kmRate = parseFloat(String(pricing[tier.id]?.costPerKm || "").replace(/[^\d.]/g, "")) || kmRate;
+    }
+
+    const fare = Math.round((base + kmRate * distanceKm) * surge);
     return { ...tier, fare, fareStr: `₹${fare}` };
   });
 }
@@ -168,7 +179,7 @@ function routesTooSimilar(a, b) {
  *  5. Deduplicate routes that are geometrically too similar.
  *  6. Return up to 3, labelled per ROUTE_META.
  */
-export async function getMultipleRoutes(pickup, dropoff) {
+export async function getMultipleRoutes(pickup, dropoff, systemConfig = null) {
   if (!pickup || !dropoff) return [];
 
   const traffic = getTrafficCondition();
@@ -234,7 +245,7 @@ export async function getMultipleRoutes(pickup, dropoff) {
       durationMin,
       durationRaw: rawMin,
       coords:      r.coords,
-      fares:       calculateFares(distanceKm, durationMin),
+      fares:       calculateFares(distanceKm, durationMin, systemConfig),
       traffic:     traffic2,
     };
   });

@@ -1,4 +1,21 @@
 import RideModel from "../models/RideModel.js";
+import SystemConfig from "../models/SystemConfig.js";
+
+/**
+ * Helper to calculate fare based on distance and vehicle type using SystemConfig
+ */
+const calculateFare = async (distanceKm, vehicleType) => {
+  const config = await SystemConfig.findOne();
+  if (!config) return 150; // Fallback
+
+  const pricing = config.pricing[vehicleType] || config.pricing.sedan;
+  const baseFare = parseFloat(String(pricing?.baseFare || "").replace(/[^\d.]/g, "")) || 0;
+  const costPerKm = parseFloat(String(pricing?.costPerKm || "").replace(/[^\d.]/g, "")) || 0;
+  const surgeMultiplier = parseFloat(String(config.surgeMultiplier || "").replace(/[^\d.]/g, "")) || 1;
+
+  const totalFare = (baseFare + (costPerKm * distanceKm)) * surgeMultiplier;
+  return Math.round(totalFare);
+};
 
 // ─── Get Passenger History ────────────────────────────────────────────────────
 export const GetPassengerHistory = async (req, res) => {
@@ -77,21 +94,44 @@ export const GetDriverHistory = async (req, res) => {
   }
 };
 
+/**
+ * Get Fare Estimate based on distance and vehicle type
+ */
+export const GetFareEstimate = async (req, res) => {
+    try {
+        const { distanceKm, vehicleType } = req.query;
+        if (!distanceKm || !vehicleType) {
+            return res.status(400).json({ success: false, message: "Missing required parameters" });
+        }
+
+        const fare = await calculateFare(parseFloat(distanceKm), vehicleType);
+        res.status(200).json({ success: true, fare });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // ─── Create Demo Ride (For Seeding/Testing) ───────────────────────────────────
 export const CreateDemoRide = async (req, res) => {
   try {
-    const { passengerId, driverId, fare, status, pickupName, destName } = req.body;
+    const { passengerId, driverId, fare, status, pickupName, destName, vehicleType, distance } = req.body;
+
+    const vType = vehicleType || "sedan";
+    const distKm = parseFloat(distance?.replace(/[^\d.]/g, "")) || 5;
+
+    // Calculate fare dynamically if not provided
+    const calculatedFare = fare || await calculateFare(distKm, vType);
 
     const newRide = await RideModel.create({
       passenger: passengerId || req.user.id,
       driver: driverId,
-      fare: fare || 150,
+      fare: calculatedFare,
       status: status || "completed",
       pickup: { name: pickupName || "Central Park" },
       destination: { name: destName || "Times Square" },
-      vehicleType: "car",
+      vehicleType: vType,
       paymentMethod: "cash",
-      distance: "4.5 km",
+      distance: distance || `${distKm} km`,
       duration: "12 mins",
       rating: {
         passengerToDriver: 4.5,

@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import api from "../../services/api";
+import { useNotifications } from "../../context/NotificationContext";
 
 const SettingGroup = ({ title, desc, children }) => (
   <div className="space-y-6">
@@ -75,6 +76,7 @@ const ToggleInput = ({ label, desc, active, onToggle }) => (
 const SystemSettingsPage = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const { showNativeNotification } = useNotifications();
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -333,6 +335,29 @@ const SystemSettingsPage = () => {
                 active={config.enableCrypto}
                 onToggle={() => setConfig({...config, enableCrypto: !config.enableCrypto})}
               />
+           </div>
+        </SettingGroup>
+
+        <SettingGroup title="User Experience & Alerts" desc="Configure and test how notifications reach users.">
+           <div className="flex flex-col gap-4 p-4 rounded-3xl bg-primary/5 border border-primary/20">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-black text-(--text-main)">System Tray Notifications</p>
+                  <p className="text-[10px] text-(--text-dim) font-medium leading-relaxed max-w-xs">
+                    Test the "Real App" experience by triggering a desktop notification with sound.
+                  </p>
+                </div>
+                <button
+                  onClick={() => showNativeNotification({
+                    title: "Test Notification",
+                    message: "This is how users will see updates in the upper bar!",
+                    type: "success"
+                  })}
+                  className="px-4 py-2 rounded-xl bg-primary/20 text-primary border border-primary/30 text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all"
+                >
+                  Send Test Alert
+                </button>
+              </div>
            </div>
         </SettingGroup>
 

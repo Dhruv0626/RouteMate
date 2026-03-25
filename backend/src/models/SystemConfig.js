@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const settingsSchema = new mongoose.Schema(
+const systemConfigSchema = new mongoose.Schema(
   {
     // Specific Pricing for different vehicle categories (stored as strings with symbols)
     pricing: {
@@ -34,6 +34,6 @@ const settingsSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Settings = mongoose.model("Settings", settingsSchema);
+const SystemConfig = mongoose.model("SystemConfig", systemConfigSchema);
 
-export default Settings;
+export default SystemConfig;

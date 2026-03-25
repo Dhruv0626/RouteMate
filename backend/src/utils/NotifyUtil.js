@@ -227,37 +227,121 @@ export const notifyDriverRejected = async ({ driver, adminId, profileId }) => {
 };
 
 /**
- * EVENT: System settings updated (admin only)
+ * EVENT: System settings updated (admin only + targeted roles based on context)
  */
-export const notifySettingsUpdated = async ({ adminId, updatedKeys }) => {
+export const notifySettingsUpdated = async ({ adminId, updateData }) => {
+    // Human readable mappings
+    const keyMap = {
+        pricing: "Fare Pricing Models",
+        surgeMultiplier: "Surge Rate Multiplier",
+        commission: "Platform Fee Slice",
+        appName: "Application Branding",
+        supportEmail: "Support Email Address",
+        maintenanceMode: "System Maintenance Mode",
+        autoApproveDrivers: "Driver Auto-Approvals",
+        enableCrypto: "Crypto Payments Support",
+        realTimeTracking: "Real-time GPS Tracking",
+        maxRadius: "Maximum Ride Radius",
+    };
+    
+    const changedFields = Object.keys(updateData);
+    const readableChanges = changedFields.map(key => keyMap[key] || key);
+    
+    // 1. Notify Admins exactly what changed
     await notifyAdmins({
-        title: "System Settings Updated",
-        message: `Platform configuration has been updated. Changed sections: ${updatedKeys.join(", ")}.`,
+        title: "System Settings Adjusted ⚙️",
+        message: `Platform configuration updated. Changed sections: ${readableChanges.join(", ")}.`,
         senderId: adminId,
         type: "info",
-        link: "/admin/dashboard/settings",
-        metadata: { updatedKeys }
+        link: "/admin/dashboard/system-settings",
+        metadata: { changedFields }
     });
+
+    // 2. Target specific users based on what was modified
+    // Commission change -> Notify Drivers
+    if (updateData.commission !== undefined) {
+        await notifyDrivers({
+            title: "Platform Fee Updated",
+            message: `RouteMate's platform commission fee has been adjusted to ${updateData.commission}. Check your dashboard for more details.`,
+            senderId: adminId,
+            type: "info",
+            link: "/driver/dashboard",
+            metadata: { commission: updateData.commission }
+        });
+    }
+
+    // Maintenance Mode toggle -> Inform Users
+    if (updateData.maintenanceMode !== undefined) {
+        const on = updateData.maintenanceMode === true || String(updateData.maintenanceMode) === "true";
+        if (on) {
+            const msg = "RouteMate is entering Maintenance Mode briefly for essential upgrades. Ride booking may be temporarily paused.";
+            await notifyDrivers({ title: "System Maintenance 🛠️", message: msg, senderId: adminId, type: "warning" });
+            await notifyPassengers({ title: "System Maintenance 🛠️", message: msg, senderId: adminId, type: "warning" });
+        } else {
+            const msg = "Maintenance is complete! RouteMate is fully active and back online.";
+            await notifyDrivers({ title: "Services Restored ✅", message: msg, senderId: adminId, type: "success" });
+            await notifyPassengers({ title: "Services Restored ✅", message: msg, senderId: adminId, type: "success" });
+        }
+    }
+    
+    // Crypto payments toggle -> Inform Passengers
+    if (updateData.enableCrypto !== undefined) {
+        const on = updateData.enableCrypto === true || String(updateData.enableCrypto) === "true";
+        const msg = on ? "Exciting news! We now support Web3 Crypto Payments for all your rides." : "Crypto payments are temporarily disabled. Please rely on card or fiat.";
+        await notifyPassengers({ title: "Payment System 💳", message: msg, senderId: adminId, type: "info" });
+    }
+    
+    // Max radius change -> Inform Everyone
+    if (updateData.maxRadius !== undefined) {
+        await notifyDrivers({
+            title: "Ride Radius Updated 🗺️",
+            message: `Your active ride-catching boundary has been adjusted to ${updateData.maxRadius}.`,
+            senderId: adminId,
+            type: "info",
+            link: "/driver/dashboard",
+        });
+        await notifyPassengers({
+            title: "Ride Radius Updated 🗺️",
+            message: `We've updated our service boundaries. Maximum ride distance has changed to ${updateData.maxRadius}.`,
+            senderId: adminId,
+            type: "info",
+            link: "/passenger/dashboard",
+        });
+    }
 };
 
 /**
- * EVENT: Pricing updated — notify all drivers
+ * EVENT: Pricing updated — notify all drivers and admins (excluding passengers)
  */
-export const notifyPricingUpdated = async ({ adminId, newPricing, surgeMultiplier }) => {
+export const notifyPricingUpdated = async ({ adminId, newPricing, surgeMultiplier, isIncrease }) => {
+    let title = "Fare Rates Updated ⚙️";
+    let message = "RouteMate has updated its fare structure. Please review the new rates before accepting rides.";
+
+    if (isIncrease) {
+        title = "Fare Rates Increased 📈";
+        message = "Great news! RouteMate has increased the fare rates. You'll now earn more per ride.";
+    } else if (isIncrease === false) {
+        title = "Fare Rates Decreased 📉";
+        message = "Notice: RouteMate has lowered the fare rates to stay competitive in the market.";
+    }
+
+    // Notify drivers
     await notifyDrivers({
-        title: "Fare Rates Updated",
-        message: "RouteMate has updated its fare structure. Please review the new rates before accepting rides.",
+        title,
+        message,
         senderId: adminId,
-        type: "warning",
+        type: isIncrease ? "success" : "warning",
         link: "/driver/dashboard",
-        metadata: { newPricing, surgeMultiplier }
+        metadata: { newPricing, surgeMultiplier, isIncrease }
     });
-    await notifyPassengers({
-        title: "Pricing Update Notice",
-        message: "RouteMate has updated its fare rates. Prices may vary slightly on your next ride.",
+
+    // Notify admins
+    await notifyAdmins({
+        title: "Pricing Model Adjusted",
+        message: `Admin action: ${title}. New pricing models are now live on the platform.`,
         senderId: adminId,
         type: "info",
-        link: "/passenger/dashboard",
-        metadata: {}
+        link: "/admin/dashboard/system-settings",
+        metadata: { newPricing, surgeMultiplier, isIncrease }
     });
 };
