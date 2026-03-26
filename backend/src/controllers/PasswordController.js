@@ -22,12 +22,17 @@ export const ForgotPassword = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Email not found",
-                errors: [{ field: "email", message: "There is no account registered with this email." }]
+                errors: [{ field: "email", message: "Account not found." }]
             });
         }
 
+        // 🚨 SOCIAL ACCOUNT GATE
         if (user.provider !== "local") {
-            return res.status(400).json({ success: false, message: "Use social login instead." });
+            return res.status(400).json({ 
+                success: false, 
+                message: `This account was created via ${user.provider}. Please sign in using your social account directly.`,
+                errors: [{ field: "email", message: `Account is linked with ${user.provider}.` }]
+            });
         }
 
         // Generate 6 digit OTP string
