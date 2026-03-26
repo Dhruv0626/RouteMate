@@ -25,6 +25,9 @@ connectDB();
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 
+// ─── Health Check / Keep-Alive Endpoint ──────────────────────────────────────
+app.get("/ping", (req, res) => res.status(200).send("pong"));
+
 // Enable trust proxy for Render (behind a load balancer)
 if (isProduction) {
   app.set("trust proxy", 1);
@@ -105,8 +108,20 @@ app.use((err, req, res, next) => {
 
 // ─── 8. Start Server ──────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
   console.log(`✅ Server running on port ${PORT} [${process.env.NODE_ENV || "development"}]`);
   console.log(`🔒 Security: Helmet ✓ | CORS ✓ | Rate Limiting ✓ | Pure JWT ✓`);
   console.log(`⚡ Cache: Redis ${process.env.CACHE_ENABLED === "true" ? "✓" : "disabled"}`);
+
+  // 🚀 KEEP-ALIVE: Ping the server every 10 minutes to prevent Render sleep mode
+  const BACKEND_URL = process.env.BACKEND_URL;
+  if (BACKEND_URL && BACKEND_URL.includes("onrender.com")) {
+    const https = await import("https");
+    setInterval(() => {
+      https.get(`${BACKEND_URL}/ping`, (res) => {
+        if (res.statusCode === 200) console.log("💓 Keep-Alive: Ping successful");
+      }).on("error", (err) => console.error("💔 Keep-Alive Error:", err.message));
+    }, 10 * 60 * 1000); // 10 minutes
+    console.log(`💓 Keep-Alive system active for: ${BACKEND_URL}`);
+  }
 });
