@@ -50,7 +50,7 @@ const ForgotPassword = () => {
       const { data } = await api.post("/users/forgot-password", { email });
       if (data.success) {
         setStep(2);
-        setTimer(60);
+        setTimer(600);
         setMessage(data.message);
         setResetOTPTrigger((prev) => !prev);
       }

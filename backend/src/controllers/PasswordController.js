@@ -7,6 +7,15 @@ import { getEmailTemplate } from "../utils/emailTemplates.js";
 export const ForgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required.",
+                errors: [{ field: "email", message: "Please provide a valid email address." }]
+            });
+        }
+
         const user = await UserModel.findOne({ email });
 
         if (!user) {
@@ -27,7 +36,7 @@ export const ForgotPassword = async (req, res) => {
         // Hash OTP and set expire (1 min)
         user.otp = {
             code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 1 * 60 * 1000,
+            expiresAt: Date.now() + 10 * 60 * 1000,
             purpose: "reset"
         };
 
@@ -37,7 +46,7 @@ export const ForgotPassword = async (req, res) => {
             title: "Password Reset Request",
             message: "Verify your identity with the following OTP code to reset your password.",
             otp: otpStr,
-            expiry: 1
+            expiry: 10
         });
 
         try {
