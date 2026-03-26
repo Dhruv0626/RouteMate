@@ -1,6 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+
+// Initialize environment variables immediately before other imports
+dotenv.config();
+
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import connectDB from "./src/config/db.js";
@@ -11,9 +15,6 @@ import uploadRoutes from "./src/routes/Upload.js";
 import notificationRoutes from "./src/routes/Notification.js";
 import rideRoutes from "./src/routes/Ride.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
-
-// ─── Load Environment Variables ───────────────────────────────────────────────
-dotenv.config();
 
 // ─── Passport Configuration ───────────────────────────────────────────────────
 import passport from "./src/config/passport.js";

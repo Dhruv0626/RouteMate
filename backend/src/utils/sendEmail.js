@@ -1,4 +1,8 @@
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+
+// Load environment variables immediately to avoid "Missing Credentials" errors
+dotenv.config();
 
 // Initialize transporter ONCE outside the request to prevent connection overhead
 const transporter = nodemailer.createTransport({
