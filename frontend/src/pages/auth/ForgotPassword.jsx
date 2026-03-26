@@ -174,7 +174,7 @@ const ForgotPassword = () => {
                 className="h-12 text-sm"
                 disabled={loading}
               >
-                {loading ? "Sending OTP..." : "Send OTP"}
+                {loading ? "Sending OTP... Please wait" : "Send OTP"}
                 {!loading && <ArrowRight size={18} className="ml-2" />}
               </Button>
             </form>
@@ -251,7 +251,7 @@ const ForgotPassword = () => {
                 className="h-12 text-sm"
                 disabled={loading || (timer === 0 && !message.includes("successful"))}
               >
-                {loading ? "Resetting..." : "Reset Password"}
+                {loading ? "Resetting... Please wait" : "Reset Password"}
                 {!loading && <ShieldCheck size={18} className="ml-2" />}
               </Button>
 

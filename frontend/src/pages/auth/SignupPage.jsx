@@ -245,6 +245,15 @@ const SignupPage = () => {
                 </p>
               </div>
 
+              {(verifying || resending) && (
+                <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center gap-3 animate-pulse">
+                  <div className="h-2 w-2 rounded-full bg-primary animate-ping"></div>
+                  <p className="text-xs font-bold text-primary italic">
+                    Communicating with secure mail server... Please wait until the process is complete.
+                  </p>
+                </div>
+              )}
+
               {error && (
                 <div className={`rounded-xl border p-3 text-[11px] leading-tight font-bold ${
                   error.includes("sent") ? "border-green-500/20 bg-green-500/10 text-green-500" : "border-red-500/20 bg-red-500/10 text-red-500"
@@ -283,7 +292,7 @@ const SignupPage = () => {
                     onClick={() => handleVerifyOTP(otp)}
                     className="h-12 shadow-[0_4px_15px_-5px_rgba(255,204,0,0.4)] transition-all hover:scale-[1.02]"
                   >
-                    {verifying ? "Authorizing..." : "Verify & Sign Up"}
+                    {verifying ? "Authorizing & Verifying Code... Please wait" : "Verify & Sign Up"}
                     {!verifying && <ArrowRight size={18} className="ml-1" />}
                   </Button>
 
@@ -293,7 +302,7 @@ const SignupPage = () => {
                     disabled={resending || (timeLeft > 0)}
                     className="text-[10px] font-black tracking-widest text-primary uppercase transition-all hover:opacity-80 disabled:opacity-50"
                   >
-                    {resending ? "Verifying..." : timeLeft > 0 ? `Wait ${timeLeft}s to Resend` : "Resend Verification Code"}
+                    {resending ? "Resending OTP... Please wait" : timeLeft > 0 ? `Wait ${timeLeft}s to Resend` : "Resend Verification Code"}
                   </button>
                   
                   <button
@@ -316,6 +325,15 @@ const SignupPage = () => {
                   Create your account to get started.
                 </p>
               </div>
+
+              {loading && (
+                <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center gap-3 animate-pulse">
+                  <div className="h-2 w-2 rounded-full bg-primary animate-ping"></div>
+                  <p className="text-xs font-bold text-primary italic">
+                    Registering account & preparing OTP... Please wait until the process is complete.
+                  </p>
+                </div>
+              )}
 
               <div className="mb-6 flex rounded-xl border border-(--card-border) bg-(--card-bg) p-1.5">
                 <button
@@ -398,7 +416,7 @@ const SignupPage = () => {
                     disabled={loading}
                     className="py-3 shadow-md"
                   >
-                    {loading ? 'Creating Account...' : 'Continue'}
+                    {loading ? 'Creating Account & Sending OTP... Please wait' : 'Continue'}
                     {!loading && <ArrowRight size={16} />}
                   </Button>
                 </div>
