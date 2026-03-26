@@ -132,14 +132,14 @@ export const issueOAuthTokens = async (user, res) => {
     res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: isProduction,
-        sameSite: isProduction ? "Strict" : "Lax",
+        sameSite: isProduction ? "none" : "Lax",
         maxAge: 60 * 60 * 1000
     });
 
     res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: isProduction,
-        sameSite: isProduction ? "Strict" : "Lax",
+        sameSite: isProduction ? "none" : "Lax",
         path: "/api/users/refresh-token",
         maxAge: refreshMaxAge
     });

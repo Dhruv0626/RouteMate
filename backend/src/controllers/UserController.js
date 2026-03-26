@@ -43,14 +43,14 @@ const setTokenCookies = (res, accessToken, refreshToken, role) => {
     res.cookie("accessToken", accessToken, {
         httpOnly: true,                  // Not accessible via JS (XSS protection)
         secure: isProduction,            // HTTPS only in production
-        sameSite: isProduction ? "Strict" : "Lax", // CSRF protection
+        sameSite: isProduction ? "none" : "Lax", // Cross-site required for public suffixes
         maxAge: 60 * 60 * 1000           // 1 hour
     });
 
     res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: isProduction,
-        sameSite: isProduction ? "Strict" : "Lax",
+        sameSite: isProduction ? "none" : "Lax",
         path: "/api/users/refresh-token", // Only sent to refresh endpoint
         maxAge: refreshMaxAge
     });
