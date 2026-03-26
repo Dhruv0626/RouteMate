@@ -72,17 +72,8 @@ export const CreateUser = async (req, res) => {
             }
         }
 
-        // 1. Check for duplicate user
-        const existingUser = await UserModel.findOne({ email });
-        if (existingUser) {
-            return res.status(409).json({
-                success: false,
-                message: "User with this email already exists."
-            });
-        }
-
-        // 2. Hash password with bcrypt (cost factor 10)
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // 1. Hash password with bcrypt (cost factor 8 for speed)
+        const hashedPassword = await bcrypt.hash(password, 8);
 
         // 3. Prepare user data
         const userData = {
@@ -152,8 +143,8 @@ export const SignInUser = async (req, res) => {
         const { email, password, role } = req.body;
         // Note: Input validation is handled by ValidateMid.js middleware
 
-        // 1. Find user by email
-        const user = await UserModel.findOne({ email });
+        // 1. Find user by email (using .lean() for faster read)
+        const user = await UserModel.findOne({ email }).lean();
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -194,10 +185,10 @@ export const SignInUser = async (req, res) => {
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
-        // 5. Store latest hashed refresh token in DB
-        await UserModel.findByIdAndUpdate(user._id, {
+        // 5. Store latest hashed refresh token in DB (Don't await to speed up response)
+        UserModel.findByIdAndUpdate(user._id, {
             refreshToken: hashToken(refreshToken)
-        });
+        }).catch(err => console.error("Background Token Update Error:", err));
 
         // 6. Set tokens as secure HttpOnly cookies
         setTokenCookies(res, accessToken, refreshToken, user.role);
@@ -480,7 +471,7 @@ export const VerifyEmailOTP = async (req, res) => {
         }
 
         const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
-        const user = await UserModel.findOne({ email });
+        const user = await UserModel.findOne({ email }); // Non-lean because we call .save() later
 
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
@@ -628,7 +619,7 @@ export const GetProfile = async (req, res) => {
             });
         }
 
-        const user = await UserModel.findById(req.user._id).select("-password -refreshToken");
+        const user = await UserModel.findById(req.user._id).select("-password -refreshToken").lean();
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
         }

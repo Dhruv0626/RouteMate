@@ -125,7 +125,7 @@ export const ResetPassword = async (req, res) => {
             });
         }
 
-        user.password = await bcrypt.hash(newPassword, 10);
+        user.password = await bcrypt.hash(newPassword, 8);
         user.otp = { code: null, expiresAt: null, purpose: null };
         user.refreshToken = null;
 

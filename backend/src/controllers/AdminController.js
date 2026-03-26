@@ -24,22 +24,29 @@ export const GetDashboardStats = async (req, res) => {
             });
         }
 
-        // 1. User Counts
-        const totalUsers = await UserModel.countDocuments();
-        const passengers = await UserModel.countDocuments({ role: "passenger" });
-        const drivers = await UserModel.countDocuments({ role: "driver" });
-        const admins = await UserModel.countDocuments({ role: "admin" });
-
-        // 2. Driver Specifics
-        const approvedDrivers = await DriverProfileModel.countDocuments({ isApproved: true });
-        const pendingDrivers = drivers - approvedDrivers;
-        const onlineDrivers = await DriverProfileModel.countDocuments({ isOnline: true });
-
-        // 3. Business metrics (Demo logic since we don't have a RideModel yet)
-        const completionAggr = await DriverProfileModel.aggregate([
-            { $group: { _id: null, totalCompleted: { $sum: "$completedRides" } } }
+        // 1. Parallelize all counts to avoid sequential DB bottlenecks
+        const [
+            totalUsers,
+            passengers,
+            drivers,
+            admins,
+            approvedDrivers,
+            onlineDrivers,
+            completionAggr
+        ] = await Promise.all([
+            UserModel.countDocuments(),
+            UserModel.countDocuments({ role: "passenger" }),
+            UserModel.countDocuments({ role: "driver" }),
+            UserModel.countDocuments({ role: "admin" }),
+            DriverProfileModel.countDocuments({ isApproved: true }),
+            DriverProfileModel.countDocuments({ isOnline: true }),
+            DriverProfileModel.aggregate([
+                { $group: { _id: null, totalCompleted: { $sum: "$completedRides" } } }
+            ])
         ]);
+
         const totalCompletedRides = completionAggr[0]?.totalCompleted || 0;
+        const pendingDrivers = drivers - approvedDrivers;
 
         // Avg fare logic
         const estimatedRevenue = totalCompletedRides * 150;
