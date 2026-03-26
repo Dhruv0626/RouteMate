@@ -54,15 +54,13 @@ export const ForgotPassword = async (req, res) => {
             expiry: 10
         });
 
-        try {
-            await sendEmail({ email: user.email, subject: "RouteMate - OTP", html: htmlContent });
-            res.status(200).json({ success: true, message: "OTP sent to your email." });
-        } catch (emailErr) {
-            user.otp = { code: null, expiresAt: null, purpose: null };
-            await user.save({ validateBeforeSave: false });
-            console.error("Email Error:", emailErr);
-            return res.status(500).json({ success: false, message: "Email failure." });
-        }
+        // Send email in background without blocking response
+        sendEmail({ email: user.email, subject: "RouteMate - OTP", html: htmlContent })
+            .catch(emailErr => {
+                console.error("Background Reset Email Error:", emailErr);
+            });
+
+        res.status(200).json({ success: true, message: "OTP sent to your email. Check your inbox." });
     } catch (generalErr) {
         console.error("Forgot PW Error:", generalErr);
         res.status(500).json({ 
@@ -127,7 +125,7 @@ export const ResetPassword = async (req, res) => {
             });
         }
 
-        user.password = await bcrypt.hash(newPassword, 12);
+        user.password = await bcrypt.hash(newPassword, 10);
         user.otp = { code: null, expiresAt: null, purpose: null };
         user.refreshToken = null;
 

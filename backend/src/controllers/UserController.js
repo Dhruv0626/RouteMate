@@ -81,8 +81,8 @@ export const CreateUser = async (req, res) => {
             });
         }
 
-        // 2. Hash password with bcrypt (cost factor 12)
-        const hashedPassword = await bcrypt.hash(password, 12);
+        // 2. Hash password with bcrypt (cost factor 10)
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         // 3. Prepare user data
         const userData = {
@@ -108,23 +108,26 @@ export const CreateUser = async (req, res) => {
             expiry: 1
         });
 
-        try {
-            await sendEmail({ email: userData.email, subject: "RouteMate - Verify Your Email", html: htmlContent });
-            const user = await UserModel.create(userData);
-            const userResponse = user.toObject();
-            delete userResponse.password;
-            delete userResponse.refreshToken;
+        // 5. Save user first, then send email in background (don't await email)
+        const user = await UserModel.create(userData);
+        
+        // Trigger email sending without awaiting it to improve response time
+        sendEmail({ 
+            email: userData.email, 
+            subject: "RouteMate - Verify Your Email", 
+            html: htmlContent 
+        }).catch(err => console.error("Background Verification Email Error:", err));
 
-            return res.status(201).json({
-                success: true,
-                message: "Registration successful. Please verify your email.",
-                needsVerification: true,
-                user: userResponse
-            });
-        } catch (emailErr) {
-            console.error("Verification Email Error:", emailErr);
-            return res.status(500).json({ success: false, message: "Error sending verification email. Please try again." });
-        }
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        delete userResponse.refreshToken;
+
+        return res.status(201).json({
+            success: true,
+            message: "Registration successful. Please verify your email.",
+            needsVerification: true,
+            user: userResponse
+        });
 
     } catch (error) {
         // Handle Duplicate Key Error (MongoDB 11000)
@@ -563,7 +566,9 @@ export const ResendVerificationOTP = async (req, res) => {
             expiry: 1
         });
 
-        await sendEmail({ email: user.email, subject: "RouteMate Admin - New Verification OTP", html: htmlContent });
+        // Send email in background
+        sendEmail({ email: user.email, subject: "RouteMate Admin - New Verification OTP", html: htmlContent })
+            .catch(err => console.error("Background Resend OTP Error:", err));
 
         res.status(200).json({ success: true, message: "New verification OTP sent." });
     } catch (error) {
