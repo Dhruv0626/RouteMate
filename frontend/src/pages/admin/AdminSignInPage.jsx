@@ -101,14 +101,23 @@ const AdminSignInPage = () => {
         navigate(`/${response.data.user.role}/dashboard`);
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Verification failed. Please try again.");
+      if (err.response?.data?.errors?.length > 0) {
+        const backendErrors = {};
+        err.response.data.errors.forEach((e) => {
+          backendErrors[e.field] = e.message;
+        });
+        // Show otp error under the OTP input if possible, else show as general error
+        setError(backendErrors.otp || backendErrors.email || Object.values(backendErrors)[0]);
+      } else {
+        setError(err.response?.data?.message || "Verification failed. Check your OTP and try again.");
+      }
     } finally {
       setVerifying(false);
     }
   };
 
   const startTimer = useCallback(() => {
-    setTimeLeft(60);
+    setTimeLeft(600); // 10 minutes — matches the backend OTP expiry
   }, []);
 
   useEffect(() => {
@@ -135,7 +144,7 @@ const AdminSignInPage = () => {
         email: formData.email
       });
       if (response.data.success) {
-        setError("New OTP sent successfully.");
+        setError("✅ New verification code sent to your email!");
         startTimer();
         setResetOTPTrigger((prev) => !prev);
       }

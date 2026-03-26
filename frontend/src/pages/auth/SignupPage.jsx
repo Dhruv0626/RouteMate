@@ -125,18 +125,26 @@ const SignupPage = () => {
       });
       if (response.data.success) {
         setUser(response.data.user);
-        // After verification, go to complete-profile for mobile number as requested
         navigate("/complete-profile");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Verification failed. Please try again.");
+      if (err.response?.data?.errors?.length > 0) {
+        const backendErrors = {};
+        err.response.data.errors.forEach((e) => {
+          backendErrors[e.field] = e.message;
+        });
+        setFieldErrors(backendErrors);
+        setError("");
+      } else {
+        setError(err.response?.data?.message || "Verification failed. Incorrect or expired OTP.");
+      }
     } finally {
       setVerifying(false);
     }
   };
 
   const startTimer = useCallback(() => {
-    setTimeLeft(60);
+    setTimeLeft(600); // 10 minutes — matches the backend OTP expiry
   }, []);
 
   useEffect(() => {
@@ -163,12 +171,12 @@ const SignupPage = () => {
         email: formData.email
       });
       if (response.data.success) {
-        setError("New OTP sent successfully.");
+        setError("✅ New verification code sent to your email!");
         startTimer();
         setResetOTPTrigger((prev) => !prev);
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to resend OTP.");
+      setError(err.response?.data?.message || "Failed to resend OTP. Please try again.");
     } finally {
       setResending(false);
     }

@@ -51,11 +51,21 @@ const ForgotPassword = () => {
       if (data.success) {
         setStep(2);
         setTimer(600);
-        setMessage(data.message);
+        setMessage(`✅ OTP sent to ${email}. Check your inbox (and spam folder).`);
         setResetOTPTrigger((prev) => !prev);
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to send OTP.");
+      // Handle field-specific errors from backend
+      if (err.response?.data?.errors?.length > 0) {
+        const backendErrors = {};
+        err.response.data.errors.forEach((e) => {
+          backendErrors[e.field] = e.message;
+        });
+        setFieldErrors(backendErrors);
+      } else {
+        // General error message (e.g. social account / server error)
+        setError(err.response?.data?.message || "Failed to send OTP. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -68,7 +78,7 @@ const ForgotPassword = () => {
     setMessage("");
 
     const errors = {};
-    if (!otp) errors.otp = "OTP is required";
+    if (!otp || otp.length !== 6) errors.otp = "Please enter the complete 6-digit OTP.";
     const passwordError = validatePassword(newPassword);
     if (passwordError) errors.newPassword = passwordError;
 
@@ -85,11 +95,19 @@ const ForgotPassword = () => {
         newPassword,
       });
       if (data.success) {
-        setMessage("Password reset successful! Redirecting...");
-        setTimeout(() => navigate("/signin"), 2000);
+        setMessage("✅ Password reset successful! Redirecting to sign in...");
+        setTimeout(() => navigate("/signin"), 2500);
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to reset password.");
+      if (err.response?.data?.errors?.length > 0) {
+        const backendErrors = {};
+        err.response.data.errors.forEach((e) => {
+          backendErrors[e.field] = e.message;
+        });
+        setFieldErrors(backendErrors);
+      } else {
+        setError(err.response?.data?.message || "Failed to reset password. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -143,6 +161,12 @@ const ForgotPassword = () => {
                   if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: "" });
                 }}
               />
+
+              {error && (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-[11px] leading-snug font-bold text-red-500">
+                  {error}
+                </div>
+              )}
 
               <Button
                 type="submit"

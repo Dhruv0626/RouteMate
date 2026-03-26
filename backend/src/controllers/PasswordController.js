@@ -65,7 +65,10 @@ export const ForgotPassword = async (req, res) => {
         }
     } catch (generalErr) {
         console.error("Forgot PW Error:", generalErr);
-        res.status(500).json({ success: false, message: "Server error." });
+        res.status(500).json({ 
+            success: false, 
+            message: "The password recovery service is temporarily down. Please try again later." 
+        });
     }
 };
 

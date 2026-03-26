@@ -136,7 +136,10 @@ export const CreateUser = async (req, res) => {
             });
         }
         console.error("Create User Error:", error);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return res.status(500).json({ 
+            success: false, 
+            message: "A database error occurred while registering your account. Please try again soon." 
+        });
     }
 };
 
@@ -210,7 +213,10 @@ export const SignInUser = async (req, res) => {
 
     } catch (error) {
         console.error("Sign In Error:", error);
-        return res.status(500).json({ success: false, message: "Internal server error" });
+        return res.status(500).json({ 
+            success: false, 
+            message: "The authentication service is currently unavailable. Please try again later." 
+        });
     }
 };
 

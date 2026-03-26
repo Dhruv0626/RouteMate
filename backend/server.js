@@ -90,10 +90,15 @@ app.use("/api/rides", rideRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error("Unhandled Error:", err.message);
-  res.status(err.status || 500).json({
+  const status = err.status || 500;
+  const message = err.message || "An unexpected system error occurred.";
+  
+  console.error(`[${new Date().toISOString()}] ❌ ${status} - ${message}`);
+
+  res.status(status).json({
     success: false,
-    message: isProduction ? "Internal server error" : err.message
+    message: isProduction ? "RouteMate encountered a temporary server issue. Please try again later." : message,
+    ...(isProduction ? {} : { stack: err.stack })
   });
 });
 
