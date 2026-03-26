@@ -21,6 +21,7 @@ import { validateRegister, validateSignIn } from "../middlewares/ValidateMid.js"
 import passport, { issueOAuthTokens } from "../config/passport.js";
 
 const router = express.Router();
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 // ─── Public Routes (with auth rate limiter + input validation) ────────────────
 router.post("/register", authLimiter, validateRegister, CreateUser);
@@ -51,17 +52,17 @@ router.get(
     "/auth/google/callback",
     (req, res, next) => {
         passport.authenticate("google", { session: false }, async (err, user, info) => {
-            if (err) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+            if (err) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             // Role mismatch — user exists but belongs to a different portal
             if (!user && info?.message?.startsWith("role_mismatch")) {
                 const [, existingRole, requestedRole] = info.message.split(":");
                 return res.redirect(
-                    `http://localhost:5173/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
+                    `${FRONTEND_URL}/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
                 );
             }
 
-            if (!user) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+            if (!user) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             await issueOAuthTokens(user, res);
             
@@ -70,7 +71,7 @@ router.get(
                 ? "/complete-profile" 
                 : `/${user.role}/dashboard`;
                 
-            res.redirect(`http://localhost:5173${redirectPath}`);
+            res.redirect(`${FRONTEND_URL}${redirectPath}`);
         })(req, res, next);
     }
 );
@@ -87,17 +88,17 @@ router.get(
     "/auth/facebook/callback",
     (req, res, next) => {
         passport.authenticate("facebook", { session: false }, async (err, user, info) => {
-            if (err) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+            if (err) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             // Role mismatch — user exists but belongs to a different portal
             if (!user && info?.message?.startsWith("role_mismatch")) {
                 const [, existingRole, requestedRole] = info.message.split(":");
                 return res.redirect(
-                    `http://localhost:5173/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
+                    `${FRONTEND_URL}/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
                 );
             }
 
-            if (!user) return res.redirect("http://localhost:5173/signin?error=oauth_failed");
+            if (!user) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             await issueOAuthTokens(user, res);
             
@@ -106,7 +107,7 @@ router.get(
                 ? "/complete-profile" 
                 : `/${user.role}/dashboard`;
                 
-            res.redirect(`http://localhost:5173${redirectPath}`);
+            res.redirect(`${FRONTEND_URL}${redirectPath}`);
         })(req, res, next);
     }
 );
