@@ -24,6 +24,11 @@ connectDB();
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 
+// Enable trust proxy for Render (behind a load balancer)
+if (isProduction) {
+  app.set("trust proxy", 1);
+}
+
 // ─── 1. Helmet — Security HTTP Headers ───────────────────────────────────────
 app.use(
   helmet({
