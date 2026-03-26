@@ -327,10 +327,10 @@ const SignupPage = () => {
               </div>
 
               {loading && (
-                <div className="mb-6 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center gap-3 animate-pulse">
-                  <div className="h-2 w-2 rounded-full bg-primary animate-ping"></div>
-                  <p className="text-xs font-bold text-primary italic">
-                    Registering account & preparing OTP... Please wait until the process is complete.
+                <div className="mb-6 rounded-xl border-green-500/20 bg-green-500/5 p-4 flex items-center gap-3 animate-pulse">
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-ping"></div>
+                  <p className="text-xs font-bold text-green-500 italic">
+                    Account Created! Triggering OTP delivery... You'll be redirected now.
                   </p>
                 </div>
               )}

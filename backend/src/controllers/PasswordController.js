@@ -54,13 +54,11 @@ export const ForgotPassword = async (req, res) => {
             expiry: 10
         });
 
-        try {
-            await sendEmail({ email: user.email, subject: "RouteMate - OTP", html: htmlContent });
-            res.status(200).json({ success: true, message: "OTP sent to your email. Check your inbox." });
-        } catch (emailErr) {
-             console.error("Forgot Reset Email Error:", emailErr);
-             return res.status(500).json({ success: false, message: "Failed to send OTP email. Please try again." });
-        }
+        // Send email in background (eliminate network wait)
+        sendEmail({ email: user.email, subject: "RouteMate - OTP", html: htmlContent })
+            .catch(emailErr => console.error("Background Reset Email Error:", emailErr));
+
+        res.status(200).json({ success: true, message: "OTP sent to your email. Check your inbox." });
     } catch (generalErr) {
         console.error("Forgot PW Error:", generalErr);
         res.status(500).json({ 

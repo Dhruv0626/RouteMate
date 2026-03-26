@@ -108,32 +108,26 @@ export const CreateUser = async (req, res) => {
             expiry: 1
         });
 
-        // 5. Save user first, then send email (awaiting ensure delivery confirmation)
+        // 5. Save user first, then send email in background (eliminate network wait)
         const user = await UserModel.create(userData);
         
-        try {
-            await sendEmail({ 
-                email: userData.email, 
-                subject: "RouteMate - Verify Your Email", 
-                html: htmlContent 
-            });
+        // Trigger email in background without awaiting, preventing a 10s wait on Render
+        sendEmail({ 
+            email: userData.email, 
+            subject: "RouteMate - Verify Your Email", 
+            html: htmlContent 
+        }).catch(err => console.error("Background Verification Email Error:", err));
 
-            const userResponse = user.toObject();
-            delete userResponse.password;
-            delete userResponse.refreshToken;
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        delete userResponse.refreshToken;
 
-            return res.status(201).json({
-                success: true,
-                message: "Registration successful. Please verify your email.",
-                needsVerification: true,
-                user: userResponse
-            });
-        } catch (emailErr) {
-            // Clean up the created user if email fails to avoid "dead" accounts
-            await UserModel.findByIdAndDelete(user._id);
-            console.error("Verification Email Error:", emailErr);
-            return res.status(500).json({ success: false, message: "Failed to send verification email. Please check your address." });
-        }
+        return res.status(201).json({
+            success: true,
+            message: "Registration successful. Please verify your email.",
+            needsVerification: true,
+            user: userResponse
+        });
 
     } catch (error) {
         // Handle Duplicate Key Error (MongoDB 11000)
@@ -572,8 +566,9 @@ export const ResendVerificationOTP = async (req, res) => {
             expiry: 1
         });
 
-        // Send email and wait for confirmation
-        await sendEmail({ email: user.email, subject: "RouteMate Admin - New Verification OTP", html: htmlContent });
+        // Send email in background (no network wait for user)
+        sendEmail({ email: user.email, subject: "RouteMate Admin - New Verification OTP", html: htmlContent })
+            .catch(err => console.error("Background Resend OTP Error:", err));
 
         res.status(200).json({ success: true, message: "New verification OTP sent." });
     } catch (error) {
