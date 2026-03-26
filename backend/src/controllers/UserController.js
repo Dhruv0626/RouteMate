@@ -203,7 +203,7 @@ export const SignInUser = async (req, res) => {
         setTokenCookies(res, accessToken, refreshToken, user.role);
 
         // 7. Return user info without sensitive fields
-        const userResponse = user.toObject();
+        const userResponse = { ...user };
         delete userResponse.password;
         delete userResponse.refreshToken;
 
@@ -560,14 +560,14 @@ export const ResendVerificationOTP = async (req, res) => {
         await user.save();
 
         const htmlContent = getEmailTemplate({
-            title: "Admin Verification (New OTP)",
-            message: "You requested a new verification code for your RouteMate admin account. Please use the following code:",
+            title: "Verification Required",
+            message: "To complete your RouteMate registration, use the following OTP code to verify your email address.",
             otp: otpStr,
-            expiry: 1
+            expiry: 10
         });
 
         // Send email in background (no network wait for user)
-        sendEmail({ email: user.email, subject: "RouteMate Admin - New Verification OTP", html: htmlContent })
+        sendEmail({ email: user.email, subject: "RouteMate - New Verification OTP", html: htmlContent })
             .catch(err => console.error("Background Resend OTP Error:", err));
 
         res.status(200).json({ success: true, message: "New verification OTP sent." });
@@ -634,7 +634,7 @@ export const GetProfile = async (req, res) => {
         }
 
         // 📥 Store in Cache for 10 minutes (600 seconds)
-        await cacheService.set(cacheKey, user.toObject(), 600);
+        await cacheService.set(cacheKey, user, 600);
 
         return res.status(200).json({ 
             success: true, 
