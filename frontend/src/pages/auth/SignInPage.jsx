@@ -254,7 +254,7 @@ const SignInPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"
-                onClick={() => window.location.href = `http://localhost:5000/api/users/auth/google?role=${role}`}
+                onClick={() => window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/auth/google?role=${role}`}
                 className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
               >
                 <FcGoogle size={18} />
@@ -262,7 +262,7 @@ const SignInPage = () => {
               </button>
               <button
                 type="button"
-                onClick={() => window.location.href = `http://localhost:5000/api/users/auth/facebook?role=${role}`}
+                onClick={() => window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/auth/facebook?role=${role}`}
                 className="flex items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) py-3 text-sm font-bold text-(--text-main) transition-all hover:bg-(--bg-main) hover:border-primary/50"
               >
                 <FaFacebook size={18} className="text-[#1877F2]" />
