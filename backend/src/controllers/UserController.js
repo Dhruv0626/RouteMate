@@ -97,7 +97,7 @@ export const CreateUser = async (req, res) => {
         const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
         userData.otp = {
             code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 1 * 60 * 1000, // 1 min
+            expiresAt: Date.now() + 10 * 60 * 1000, // 10 mins (more stable for email delivery)
             purpose: "verification"
         };
 
@@ -289,9 +289,16 @@ export const LogoutUser = async (req, res) => {
             }
         }
 
-        // Clear cookies
-        res.clearCookie("accessToken");
-        res.clearCookie("refreshToken", { path: "/api/users/refresh-token" });
+        // Clear cookies with the same flags they were set with to ensure they are removed
+        const isProduction = process.env.NODE_ENV === "production";
+        const cookieOptions = {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "Lax"
+        };
+
+        res.clearCookie("accessToken", cookieOptions);
+        res.clearCookie("refreshToken", { ...cookieOptions, path: "/api/users/refresh-token" });
 
         return res.status(200).json({ success: true, message: "Signed out successfully." });
 
@@ -537,7 +544,7 @@ export const ResendVerificationOTP = async (req, res) => {
         const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
         user.otp = {
             code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 1 * 60 * 1000,
+            expiresAt: Date.now() + 10 * 60 * 1000,
             purpose: "verification"
         };
 
