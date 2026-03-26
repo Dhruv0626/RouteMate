@@ -72,7 +72,16 @@ export const CreateUser = async (req, res) => {
             }
         }
 
-        // 1. Hash password with bcrypt (cost factor 8 for speed)
+        // 1. Check for duplicate user (moved back for better UX and to avoid race conditions)
+        const existingUser = await UserModel.findOne({ email }).lean();
+        if (existingUser) {
+            return res.status(409).json({
+                success: false,
+                message: "User with this email already exists."
+            });
+        }
+
+        // 2. Hash password with bcrypt (cost factor 8)
         const hashedPassword = await bcrypt.hash(password, 8);
 
         // 3. Prepare user data
@@ -171,8 +180,8 @@ export const SignInUser = async (req, res) => {
             return res.status(401).json({ success: false, message: "Invalid email or password." });
         }
 
-        // 3.1 Check if admin is verified
-        if (user.role === "admin" && !user.isVerified) {
+        // 3.1 Check if user is verified
+        if (!user.isVerified) {
             return res.status(403).json({
                 success: false,
                 message: "Email verification required. Please check your inbox for the OTP.",
