@@ -43,7 +43,7 @@ const PassengerProfile = () => {
       setFormData({
         name: user.name || "",
         email: user.email || "",
-        phone: user.phone || "Not provided",
+        phone: user.Mobile_no || "Not provided",
         profileImage: user.profileImage || "",
       });
       if (user.profileImage) {
@@ -85,16 +85,15 @@ const PassengerProfile = () => {
     setSuccess("");
     
     try {
-      // In a real app, we'd call an API to update user info
-      // const response = await api.put("/users/profile", formData);
+      // Update Mobile_no in the backend
+      const response = await api.post("/users/update-mobile", { mobileNumber: formData.phone });
       
-      // Simulating API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setSuccess("Profile updated successfully!");
-      setIsEditing(false);
+      if (response.data.success) {
+        setSuccess("Profile updated successfully!");
+        setIsEditing(false);
+      }
     } catch (err) {
-      setError("Failed to update profile. Please try again.");
+      setError(err.response?.data?.message || "Failed to update profile. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -147,11 +146,11 @@ const PassengerProfile = () => {
               <div className="mt-8 grid grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-(--card-border) bg-black/5 p-3 dark:bg-black/20">
                   <p className="text-[10px] font-black text-(--text-dim) uppercase">Trips</p>
-                  <p className="text-lg font-black">42</p>
+                  <p className="text-lg font-black">0</p>
                 </div>
                 <div className="rounded-2xl border border-(--card-border) bg-black/5 p-3 dark:bg-black/20">
                   <p className="text-[10px] font-black text-(--text-dim) uppercase">Rating</p>
-                  <p className="text-lg font-black">4.9</p>
+                  <p className="text-lg font-black">--</p>
                 </div>
               </div>
             </div>
@@ -203,9 +202,8 @@ const PassengerProfile = () => {
                       <input 
                         type="text" 
                         value={formData.name} 
-                        readOnly={!isEditing}
-                        onChange={(e) => handleInputChange(e, "name")}
-                        className={`w-full rounded-2xl border border-(--card-border) bg-black/5 dark:bg-black/20 py-4 pl-12 pr-4 text-sm font-semibold outline-none transition-all ${isEditing ? 'focus:border-primary focus:bg-transparent' : 'cursor-default'}`}
+                        readOnly={true}
+                        className="w-full rounded-2xl border border-(--card-border) bg-black/5 dark:bg-black/20 py-4 pl-12 pr-4 text-sm font-semibold text-(--text-dim) outline-none cursor-not-allowed opacity-60"
                       />
                     </div>
                   </div>
@@ -250,7 +248,7 @@ const PassengerProfile = () => {
                   </div>
                 </div>
                 <h4 className="font-black text-(--text-main)">Payment Methods</h4>
-                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">Visa •••• 4521</p>
+                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">No methods added</p>
               </div>
               <div className="glass-card rounded-3xl p-6 border-(--card-border) group cursor-pointer hover:border-emerald-500/30 transition-all">
                 <div className="flex items-center justify-between mb-4">
@@ -259,7 +257,7 @@ const PassengerProfile = () => {
                   </div>
                 </div>
                 <h4 className="font-black text-(--text-main)">Saved Places</h4>
-                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">Home, Work, 3 more</p>
+                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">No places saved</p>
               </div>
             </div>
           </section>

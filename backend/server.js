@@ -96,7 +96,7 @@ app.use("/api/rides", rideRoutes);
 app.use((err, req, res, next) => {
   const status = err.status || 500;
   const message = err.message || "An unexpected system error occurred.";
-  
+
   console.error(`[${new Date().toISOString()}] ❌ ${status} - ${message}`);
 
   res.status(status).json({

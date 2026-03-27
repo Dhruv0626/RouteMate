@@ -58,7 +58,7 @@ const DriverProfile = () => {
           setProfile(response.data.data);
           setFormData({
             name: user?.name || "",
-            phone: user?.phone || "",
+            phone: user?.Mobile_no || "",
             licenseNumber: response.data.data.licenseNumber || "",
             aadharNumber: response.data.data.aadharNumber || "",
             vehicleType: response.data.data.vehicleType || "",
@@ -136,6 +136,9 @@ const DriverProfile = () => {
     setSaving(true);
 
     try {
+      // Update Mobile_no in the backend
+      const phoneResponse = await api.post("/users/update-mobile", { mobileNumber: formData.phone });
+      
       const response = await updateDriverProfile({
         licenseNumber: formData.licenseNumber.trim() || null,
         aadharNumber: formData.aadharNumber.trim() || null,
@@ -143,7 +146,7 @@ const DriverProfile = () => {
         vehicleNumber: formData.vehicleNumber.trim() || null,
       });
 
-      if (response.data.success) {
+      if (response.data.success && phoneResponse.data.success) {
         setProfile(response.data.data);
         setSuccess("Profile updated successfully!");
         setIsEditing(false);
@@ -159,7 +162,7 @@ const DriverProfile = () => {
     setIsEditing(false);
     setFormData({
       name: user?.name || "",
-      phone: user?.phone || "",
+      phone: user?.Mobile_no || "",
       licenseNumber: profile?.licenseNumber || "",
       aadharNumber: profile?.aadharNumber || "",
       vehicleType: profile?.vehicleType || "",
