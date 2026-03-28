@@ -133,13 +133,13 @@ const SchedulePage = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case "confirmed":
-        return "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300";
+        return "bg-emerald-100/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300";
       case "pending":
-        return "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300";
+        return "bg-amber-100/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300";
       case "completed":
-        return "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300";
+        return "bg-blue-100/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300";
       default:
-        return "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300";
+        return "bg-black/5 dark:bg-white/5 border-(--card-border) text-(--text-dim)";
     }
   };
 
@@ -164,9 +164,9 @@ const SchedulePage = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+    <div className="min-h-screen bg-(--bg-main) pb-20 transition-colors duration-500">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="sticky top-0 z-10 bg-(--card-bg) border-b border-(--card-border) backdrop-blur-md transition-all duration-500">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -176,10 +176,10 @@ const SchedulePage = () => {
               <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl font-bold text-(--text-main)">
                 My Schedule
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-(--text-dim)">
                 Manage your rides & availability
               </p>
             </div>
@@ -192,47 +192,47 @@ const SchedulePage = () => {
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <Calendar className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {scheduleStats.upcomingRides}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Upcoming Rides
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <Clock className="w-5 h-5 text-emerald-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {scheduleStats.hoursOnline}h
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Hours This Week
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <TrendingUp className="w-5 h-5 text-violet-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {scheduleStats.weekScheduled}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               This Week
             </p>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <AlertCircle className="w-5 h-5 text-orange-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {scheduleStats.cancellationRate}%
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Cancellation Rate
             </p>
           </div>
@@ -242,9 +242,9 @@ const SchedulePage = () => {
           {/* Today's Schedule */}
           <div className="lg:col-span-2 space-y-6">
             {/* Schedule Header */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                <h2 className="text-xl font-bold text-(--text-main)">
                   Today's Rides
                 </h2>
                 <div className="flex gap-2">
@@ -267,7 +267,7 @@ const SchedulePage = () => {
                   filteredRides.map((ride) => (
                     <div
                       key={ride.id}
-                      className="border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:shadow-lg transition-all overflow-hidden"
+                     className="border border-(--card-border) rounded-lg hover:shadow-md dark:hover:shadow-lg transition-all overflow-hidden"
                     >
                       <div
                         onClick={() =>
@@ -275,7 +275,7 @@ const SchedulePage = () => {
                             expandedRide === ride.id ? null : ride.id
                           )
                         }
-                        className="p-4 cursor-pointer bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="p-4 cursor-pointer bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10"
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -300,7 +300,7 @@ const SchedulePage = () => {
                             <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
                               <MapPin className="w-4 h-4 mt-1 flex-shrink-0 text-emerald-500" />
                               <div>
-                                <p className="font-medium text-gray-900 dark:text-white">
+                                <p className="font-medium text-(--text-main)">
                                   {ride.pickup}
                                 </p>
                                 <p className="text-sm mt-1 flex items-center gap-2">
@@ -311,10 +311,10 @@ const SchedulePage = () => {
                             </div>
                           </div>
                           <div className="text-right ml-4">
-                            <p className="font-semibold text-gray-900 dark:text-white">
+                            <p className="font-semibold text-(--text-main)">
                               {ride.distance}
                             </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                            <p className="text-xs text-(--text-dim) opacity-80">
                               {ride.estimatedDuration}
                             </p>
                           </div>
@@ -323,15 +323,15 @@ const SchedulePage = () => {
 
                       {/* Expanded Details */}
                       {expandedRide === ride.id && (
-                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 space-y-4">
+                        <div className="border-t border-(--card-border) p-4 bg-(--card-bg) space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div className="flex items-center gap-3">
                               <User className="w-5 h-5 text-gray-400" />
                               <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                <p className="text-xs text-(--text-dim)">
                                   Passenger
                                 </p>
-                                <p className="font-semibold text-gray-900 dark:text-white">
+                                <p className="font-semibold text-(--text-main)">
                                   {ride.passengerName}
                                 </p>
                               </div>
@@ -339,25 +339,25 @@ const SchedulePage = () => {
                             <div className="flex items-center gap-3">
                               <Phone className="w-5 h-5 text-gray-400" />
                               <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                <p className="text-xs text-(--text-dim)">
                                   Phone
                                 </p>
-                                <p className="font-semibold text-gray-900 dark:text-white">
+                                <p className="font-semibold text-(--text-main)">
                                   {ride.phone}
                                 </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="w-5 h-5 flex items-center justify-center">
-                                <span className="text-sm font-bold text-gray-400">
-                                  ★
-                                </span>
-                              </div>
+                                <span className="text-sm font-bold text-amber-500">
+                                   ★
+                                 </span>
+                               </div>
                               <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                <p className="text-xs text-(--text-dim)">
                                   Passenger Rating
                                 </p>
-                                <p className="font-semibold text-gray-900 dark:text-white">
+                                <p className="font-semibold text-(--text-main)">
                                   {ride.rating}
                                 </p>
                               </div>
@@ -365,10 +365,10 @@ const SchedulePage = () => {
                             <div className="flex items-center gap-3">
                               <Clock className="w-5 h-5 text-gray-400" />
                               <div>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                <p className="text-xs text-(--text-dim)">
                                   Booked
                                 </p>
-                                <p className="font-semibold text-gray-900 dark:text-white">
+                                <p className="font-semibold text-(--text-main)">
                                   {ride.bookingTime}
                                 </p>
                               </div>
@@ -388,8 +388,8 @@ const SchedulePage = () => {
                   ))
                 ) : (
                   <div className="py-12 text-center">
-                    <Calendar className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">
+                    <Calendar className="w-12 h-12 text-(--text-dim) opacity-30 mx-auto mb-4" />
+                    <p className="text-(--text-dim)">
                       No rides scheduled for this time
                     </p>
                   </div>
@@ -398,10 +398,10 @@ const SchedulePage = () => {
             </div>
 
             {/* Schedule Trend */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                Monthly Trend
-              </h3>
+            <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
+              <h3 className="text-lg font-bold text-(--text-main) mb-4">
+                 Monthly Trend
+               </h3>
               <div className="space-y-3">
                 {scheduleTrend.map((trend, idx) => (
                   <div key={idx} className="flex items-center gap-4">
@@ -419,10 +419,10 @@ const SchedulePage = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {trend.rides} rides
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <p className="text-sm font-semibold text-(--text-main)">
+                         {trend.rides} rides
+                       </p>
+                      <p className="text-xs text-(--text-dim)">
                         {trend.hours}h
                       </p>
                     </div>
@@ -437,7 +437,7 @@ const SchedulePage = () => {
             {/* Availability Status */}
             <div className="bg-gradient-to-br from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10 rounded-xl p-6 border border-primary/20 dark:border-primary/30">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-bold text-(--text-main)">
                   Availability
                 </h3>
                 <button
@@ -460,15 +460,15 @@ const SchedulePage = () => {
               >
                 {availabilityToggle ? "🟢 You are online" : "🔴 You are offline"}
               </p>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+              <p className="text-xs text-(--text-dim) mt-2">
                 Toggle to go online/offline and accept rides
               </p>
             </div>
 
             {/* Weekly Availability */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-bold text-(--text-main)">
                   Weekly Schedule
                 </h3>
                 <button
@@ -517,8 +517,8 @@ const SchedulePage = () => {
                       <p
                         className={`font-semibold text-sm ${
                           slot.active
-                            ? "text-emerald-900 dark:text-emerald-100"
-                            : "text-gray-700 dark:text-gray-300"
+                            ? "text-(--text-main)"
+                            : "text-(--text-dim)"
                         }`}
                       >
                         {slot.day}
@@ -526,8 +526,8 @@ const SchedulePage = () => {
                       <p
                         className={`text-xs ${
                           slot.active
-                            ? "text-emerald-700 dark:text-emerald-200"
-                            : "text-gray-500 dark:text-gray-400"
+                            ? "text-(--text-main) opacity-70"
+                            : "text-(--text-dim)"
                         }`}
                       >
                         {slot.active
@@ -555,32 +555,32 @@ const SchedulePage = () => {
             </div>
 
             {/* Schedule Stats */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+            <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
+              <h3 className="text-lg font-bold text-(--text-main) mb-4">
                 This Month
               </h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-sm text-(--text-dim)">
                     Total Rides
                   </span>
-                  <span className="font-bold text-gray-900 dark:text-white">
+                  <span className="font-bold text-(--text-main)">
                     {scheduleStats.monthScheduled}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-sm text-(--text-dim)">
                     Avg. Rides/Day
                   </span>
-                  <span className="font-bold text-gray-900 dark:text-white">
+                  <span className="font-bold text-(--text-main)">
                     2.2
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-sm text-(--text-dim)">
                     Cancellations
                   </span>
-                  <span className="font-bold text-gray-900 dark:text-white">
+                  <span className="font-bold text-(--text-main)">
                     1
                   </span>
                 </div>

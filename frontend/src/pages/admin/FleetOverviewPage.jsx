@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
+import FleetMap from "../../components/map/FleetMap";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const VEHICLE_STATUSES = {
@@ -19,13 +20,13 @@ const VEHICLE_STATUSES = {
 
 // ─── Dummy Data ───────────────────────────────────────────────────────────────
 const DUMMY_VEHICLES = [
-  { id: "VEH-101", driver: "Ravi Kumar", type: "Sedan", plate: "GJ-01-AX-4512", status: "active", fuel: "82%", area: "Satellite", trips: 14 },
-  { id: "VEH-204", driver: "Amit Shah", type: "Auto", plate: "GJ-01-BB-8801", status: "idle", fuel: "45%", area: "Drive In Road", trips: 22 },
-  { id: "VEH-309", driver: "Suresh P.", type: "SUV", plate: "GJ-01-CP-0092", status: "active", fuel: "90%", area: "Paldi", trips: 8 },
-  { id: "VEH-115", driver: "Kiran R.", type: "Sedan", plate: "GJ-01-DE-1122", status: "offline", fuel: "12%", area: "Bopal", trips: 10 },
-  { id: "VEH-402", driver: "Deepak S.", type: "Bike", plate: "GJ-01-QR-9900", status: "maint", fuel: "5%", area: "SG Highway", trips: 31 },
-  { id: "VEH-108", driver: "Arun V.", type: "Sedan", plate: "GJ-01-FF-4567", status: "idle", fuel: "68%", area: "Navrangpura", trips: 18 },
-  { id: "VEH-211", driver: "Vijay M.", type: "Auto", plate: "GJ-01-GZ-2233", status: "active", fuel: "55%", area: "Ellisbridge", trips: 25 },
+  { id: "VEH-101", driver: "Ravi Kumar", type: "Sedan", plate: "GJ-01-AX-4512", status: "active", fuel: "82%", area: "Satellite", trips: 14, lat: 23.030, lng: 72.535 },
+  { id: "VEH-204", driver: "Amit Shah", type: "Auto", plate: "GJ-01-BB-8801", status: "idle", fuel: "45%", area: "Drive In Road", trips: 22, lat: 23.048, lng: 72.525 },
+  { id: "VEH-309", driver: "Suresh P.", type: "SUV", plate: "GJ-01-CP-0092", status: "active", fuel: "90%", area: "Paldi", trips: 8, lat: 23.012, lng: 72.565 },
+  { id: "VEH-115", driver: "Kiran R.", type: "Sedan", plate: "GJ-01-DE-1122", status: "offline", fuel: "12%", area: "Bopal", trips: 10, lat: 23.035, lng: 72.485 },
+  { id: "VEH-402", driver: "Deepak S.", type: "Bike", plate: "GJ-01-QR-9900", status: "maint", fuel: "5%", area: "SG Highway", trips: 31, lat: 23.025, lng: 72.505 },
+  { id: "VEH-108", driver: "Arun V.", type: "Sedan", plate: "GJ-01-FF-4567", status: "idle", fuel: "68%", area: "Navrangpura", trips: 18, lat: 23.038, lng: 72.560 },
+  { id: "VEH-211", driver: "Vijay M.", type: "Auto", plate: "GJ-01-GZ-2233", status: "active", fuel: "55%", area: "Ellisbridge", trips: 25, lat: 23.018, lng: 72.575 },
 ];
 
 const FleetOverviewPage = () => {
@@ -35,6 +36,7 @@ const FleetOverviewPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [viewMode, setViewMode] = useState("list"); // "list" or "map"
 
   useEffect(() => {
     setLoading(false);
@@ -75,8 +77,16 @@ const FleetOverviewPage = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-             <button className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-black text-xs font-black shadow-lg shadow-primary/20 hover:scale-105 transition-all">
-               <Map size={14} /> Live View
+             <button 
+               onClick={() => setViewMode(viewMode === "list" ? "map" : "list")}
+               className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black shadow-lg transition-all ${
+                 viewMode === "map" 
+                 ? "bg-rose-500 text-white shadow-rose-500/20" 
+                 : "bg-primary text-black shadow-primary/20"
+               } hover:scale-105`}
+             >
+               {viewMode === "map" ? <ArrowRightLeft size={14} /> : <Map size={14} />} 
+               {viewMode === "map" ? "Show List" : "Live View"}
              </button>
             <ThemeToggle />
             <div className="h-8 w-8 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center font-black text-sm">
@@ -152,70 +162,76 @@ const FleetOverviewPage = () => {
           </div>
         </section>
 
-        {/* ── Vehicle Table ── */}
+        {/* ── Vehicle Table / Map ── */}
         <section className="glass-card rounded-4xl overflow-hidden shadow-xl border border-(--card-border)">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-black/5 dark:bg-black/20 border-b border-(--card-border)">
-                  <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Vehicle & Driver</th>
-                  <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Type</th>
-                  <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Current Zone</th>
-                  <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Fuel/Charge</th>
-                  <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Status</th>
-                  <th className="px-6 py-5 text-right text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-(--card-border)">
-                {filtered.map(v => {
-                  const s = VEHICLE_STATUSES[v.status];
-                  return (
-                    <tr key={v.id} className="group hover:bg-white/5 transition-all duration-300">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-4">
-                          <div className={`h-10 w-10 rounded-xl ${s.bg} ${s.color} flex items-center justify-center font-black text-xs`}>
-                            {v.type.charAt(0)}
+          {viewMode === "list" ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-black/5 dark:bg-black/20 border-b border-(--card-border)">
+                    <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Vehicle & Driver</th>
+                    <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Type</th>
+                    <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Current Zone</th>
+                    <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Fuel/Charge</th>
+                    <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Status</th>
+                    <th className="px-6 py-5 text-right text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-(--card-border)">
+                  {filtered.map(v => {
+                    const s = VEHICLE_STATUSES[v.status];
+                    return (
+                      <tr key={v.id} className="group hover:bg-white/5 transition-all duration-300">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className={`h-10 w-10 rounded-xl ${s.bg} ${s.color} flex items-center justify-center font-black text-xs`}>
+                              {v.type.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-(--text-main)">{v.driver}</p>
+                              <p className="text-[10px] font-bold text-(--text-dim) uppercase tracking-tighter">{v.id} · {v.plate}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-black text-(--text-main)">{v.driver}</p>
-                            <p className="text-[10px] font-bold text-(--text-dim) uppercase tracking-tighter">{v.id} · {v.plate}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                         <span className="px-2 py-0.5 rounded-full bg-black/10 border border-(--card-border) text-[9px] font-black text-(--text-dim) uppercase tracking-widest">
-                           {v.type}
-                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                         <div className="flex items-center gap-1.5 text-xs font-bold text-(--text-main)">
-                            <MapPin size={12} className="text-primary" /> {v.area}
-                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                         <div className="w-32 flex items-center gap-3">
-                           <div className="flex-1 h-1.5 bg-(--card-border) rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${parseInt(v.fuel) < 20 ? 'bg-rose-500' : 'bg-primary'}`} style={{ width: v.fuel }} />
+                        </td>
+                        <td className="px-6 py-4">
+                           <span className="px-2 py-0.5 rounded-full bg-black/10 border border-(--card-border) text-[9px] font-black text-(--text-dim) uppercase tracking-widest">
+                             {v.type}
+                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                           <div className="flex items-center gap-1.5 text-xs font-bold text-(--text-main)">
+                              <MapPin size={12} className="text-primary" /> {v.area}
                            </div>
-                           <span className="text-[10px] font-black text-(--text-main)">{v.fuel}</span>
-                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                         <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${s.color}`}>
-                           <Circle size={6} fill="currentColor" /> {s.label}
-                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                         <button className="p-2.5 rounded-xl border border-(--card-border) hover:bg-primary hover:text-black transition-all">
-                           <ArrowRightLeft size={16} />
-                         </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                           <div className="w-32 flex items-center gap-3">
+                             <div className="flex-1 h-1.5 bg-(--card-border) rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${parseInt(v.fuel) < 20 ? 'bg-rose-500' : 'bg-primary'}`} style={{ width: v.fuel }} />
+                             </div>
+                             <span className="text-[10px] font-black text-(--text-main)">{v.fuel}</span>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                           <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${s.color}`}>
+                             <Circle size={6} fill="currentColor" /> {s.label}
+                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                           <button className="p-2.5 rounded-xl border border-(--card-border) hover:bg-primary hover:text-black transition-all">
+                             <ArrowRightLeft size={16} />
+                           </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="h-[600px] w-full p-4">
+               <FleetMap vehicles={filtered} />
+            </div>
+          )}
         </section>
 
         {/* ── Visual Insight ── */}

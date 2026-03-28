@@ -148,22 +148,41 @@ const DriverProfileFormPage = () => {
     setFormData({ ...formData, [field]: "" });
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.vehicleType) newErrors.vehicleType = "Vehicle type is required";
+    if (!formData.vehicleName) newErrors.vehicleName = "Vehicle model is required";
+    if (!formData.licenseImage) newErrors.licenseImage = "Driving license is mandatory";
+    if (!formData.aadharImage) newErrors.aadharImage = "Aadhar card is mandatory";
+    if (!formData.vehicleImage) newErrors.vehicleImage = "Vehicle photo is mandatory";
+    if (!formData.rcbookimage) newErrors.rcbookimage = "RC Book is mandatory";
+    if (!formData.insuranceimage) newErrors.insuranceimage = "Insurance policy is mandatory";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
+    if (!validateForm()) {
+      setError("Please upload all mandatory documents and fill all fields.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await createDriverProfile({
-        vehicleType: formData.vehicleType.trim() || null,
-        vehicleName: formData.vehicleName.trim() || null,
-        licenseImage: formData.licenseImage || null,
-        aadharImage: formData.aadharImage || null,
-        vehicleImage: formData.vehicleImage || null,
-        rcbookimage: formData.rcbookimage || null,
-        insuranceimage: formData.insuranceimage || null,
+        vehicleType: formData.vehicleType.trim(),
+        vehicleName: formData.vehicleName.trim(),
+        licenseImage: formData.licenseImage,
+        aadharImage: formData.aadharImage,
+        vehicleImage: formData.vehicleImage,
+        rcbookimage: formData.rcbookimage,
+        insuranceimage: formData.insuranceimage,
       });
 
       if (response.data.success) {
@@ -328,7 +347,7 @@ const DriverProfileFormPage = () => {
                       Driving License Copy
                     </label>
                     <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
-                      formData.licenseImage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                      formData.licenseImage ? 'border-primary/50 bg-primary/5' : errors.licenseImage ? 'border-red-500/50 bg-red-500/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
                     }`}>
                       {formData.licenseImage ? (
                         <>
@@ -358,10 +377,12 @@ const DriverProfileFormPage = () => {
                           {uploading.license ? (
                             <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
                           ) : (
-                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                            <ImageIcon size={24} className={`${errors.licenseImage ? 'text-red-500' : 'text-(--text-dim)'} mx-auto mb-2 opacity-50`} />
                           )}
-                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload DL Photo</p>
-                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                          <p className={`text-[10px] font-bold ${errors.licenseImage ? 'text-red-500' : 'text-(--text-dim)'} mb-2`}>
+                            {errors.licenseImage ? errors.licenseImage : 'Upload DL Photo'}
+                          </p>
+                          <label className={`cursor-pointer ${errors.licenseImage ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'} px-3 py-1.5 rounded-lg text-[10px] font-black hover:opacity-80 transition-colors inline-block`}>
                             Select File
                             <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'licenseImage', 'license')} disabled={uploading.license} />
                           </label>
@@ -376,7 +397,7 @@ const DriverProfileFormPage = () => {
                       Aadhar Card Copy
                     </label>
                     <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
-                      formData.aadharImage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                      formData.aadharImage ? 'border-primary/50 bg-primary/5' : errors.aadharImage ? 'border-red-500/50 bg-red-500/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
                     }`}>
                       {formData.aadharImage ? (
                         <>
@@ -406,10 +427,12 @@ const DriverProfileFormPage = () => {
                           {uploading.aadhar ? (
                             <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
                           ) : (
-                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                            <ImageIcon size={24} className={`${errors.aadharImage ? 'text-red-500' : 'text-(--text-dim)'} mx-auto mb-2 opacity-50`} />
                           )}
-                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload Aadhar Photo</p>
-                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                          <p className={`text-[10px] font-bold ${errors.aadharImage ? 'text-red-500' : 'text-(--text-dim)'} mb-2`}>
+                            {errors.aadharImage ? errors.aadharImage : 'Upload Aadhar Photo'}
+                          </p>
+                          <label className={`cursor-pointer ${errors.aadharImage ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'} px-3 py-1.5 rounded-lg text-[10px] font-black hover:opacity-80 transition-colors inline-block`}>
                             Select File
                             <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'aadharImage', 'aadhar')} disabled={uploading.aadhar} />
                           </label>
@@ -424,7 +447,7 @@ const DriverProfileFormPage = () => {
                       Vehicle Photo (Front View)
                     </label>
                     <div className={`relative group aspect-video md:aspect-[21/9] rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
-                      formData.vehicleImage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                      formData.vehicleImage ? 'border-primary/50 bg-primary/5' : errors.vehicleImage ? 'border-red-500/50 bg-red-500/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
                     }`}>
                       {formData.vehicleImage ? (
                         <>
@@ -454,10 +477,12 @@ const DriverProfileFormPage = () => {
                           {uploading.vehicle ? (
                             <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
                           ) : (
-                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                            <ImageIcon size={24} className={`${errors.vehicleImage ? 'text-red-500' : 'text-(--text-dim)'} mx-auto mb-2 opacity-50`} />
                           )}
-                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload Vehicle Photo</p>
-                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                          <p className={`text-[10px] font-bold ${errors.vehicleImage ? 'text-red-500' : 'text-(--text-dim)'} mb-2`}>
+                            {errors.vehicleImage ? errors.vehicleImage : 'Upload Vehicle Photo'}
+                          </p>
+                          <label className={`cursor-pointer ${errors.vehicleImage ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'} px-3 py-1.5 rounded-lg text-[10px] font-black hover:opacity-80 transition-colors inline-block`}>
                             Select File
                             <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'vehicleImage', 'vehicle')} disabled={uploading.vehicle} />
                           </label>
@@ -472,7 +497,7 @@ const DriverProfileFormPage = () => {
                       RC Book Image (Registration Certificate)
                     </label>
                     <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
-                      formData.rcbookimage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                      formData.rcbookimage ? 'border-primary/50 bg-primary/5' : errors.rcbookimage ? 'border-red-500/50 bg-red-500/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
                     }`}>
                       {formData.rcbookimage ? (
                         <>
@@ -502,10 +527,12 @@ const DriverProfileFormPage = () => {
                           {uploading.rcbook ? (
                             <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
                           ) : (
-                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                            <ImageIcon size={24} className={`${errors.rcbookimage ? 'text-red-500' : 'text-(--text-dim)'} mx-auto mb-2 opacity-50`} />
                           )}
-                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload RC Book</p>
-                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                          <p className={`text-[10px] font-bold ${errors.rcbookimage ? 'text-red-500' : 'text-(--text-dim)'} mb-2`}>
+                            {errors.rcbookimage ? errors.rcbookimage : 'Upload RC Book'}
+                          </p>
+                          <label className={`cursor-pointer ${errors.rcbookimage ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'} px-3 py-1.5 rounded-lg text-[10px] font-black hover:opacity-80 transition-colors inline-block`}>
                             Select File
                             <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'rcbookimage', 'rcbook')} disabled={uploading.rcbook} />
                           </label>
@@ -520,7 +547,7 @@ const DriverProfileFormPage = () => {
                       Insurance Policy Image
                     </label>
                     <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
-                      formData.insuranceimage ? 'border-primary/50 bg-primary/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
+                      formData.insuranceimage ? 'border-primary/50 bg-primary/5' : errors.insuranceimage ? 'border-red-500/50 bg-red-500/5' : 'border-(--card-border) hover:border-primary/30 bg-(--card-bg)'
                     }`}>
                       {formData.insuranceimage ? (
                         <>
@@ -550,10 +577,12 @@ const DriverProfileFormPage = () => {
                           {uploading.insurance ? (
                             <Loader2 size={24} className="text-primary animate-spin mx-auto mb-2" />
                           ) : (
-                            <ImageIcon size={24} className="text-(--text-dim) mx-auto mb-2 opacity-50" />
+                            <ImageIcon size={24} className={`${errors.insuranceimage ? 'text-red-500' : 'text-(--text-dim)'} mx-auto mb-2 opacity-50`} />
                           )}
-                          <p className="text-[10px] font-bold text-(--text-dim) mb-2">Upload Insurance</p>
-                          <label className="cursor-pointer bg-primary/20 text-primary px-3 py-1.5 rounded-lg text-[10px] font-black hover:bg-primary/30 transition-colors inline-block">
+                          <p className={`text-[10px] font-bold ${errors.insuranceimage ? 'text-red-500' : 'text-(--text-dim)'} mb-2`}>
+                            {errors.insuranceimage ? errors.insuranceimage : 'Upload Insurance'}
+                          </p>
+                          <label className={`cursor-pointer ${errors.insuranceimage ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'} px-3 py-1.5 rounded-lg text-[10px] font-black hover:opacity-80 transition-colors inline-block`}>
                             Select File
                             <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, 'insuranceimage', 'insurance')} disabled={uploading.insurance} />
                           </label>

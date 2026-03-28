@@ -187,14 +187,14 @@ const DriverProfile = () => {
   }
 
   return (
-    <div className="mesh-bg flex min-h-screen items-center justify-center p-4 transition-colors duration-500">
+    <div className="mesh-bg flex min-h-screen items-start justify-center p-4 py-16 md:py-20 transition-colors duration-500 overflow-y-auto">
       <div className="absolute top-4 left-4 z-50">
         <Button 
           variant="secondary" 
           onClick={() => navigate("/driver/dashboard")}
-          className="rounded-xl border border-(--card-border) bg-(--card-bg) px-3 py-2 text-sm font-semibold text-(--text-dim) hover:text-(--text-main)"
+          className="rounded-xl border border-(--card-border) bg-(--card-bg)/50 backdrop-blur-md px-3 py-2 text-xs md:text-sm font-semibold text-(--text-dim) hover:text-(--text-main)"
         >
-          Back to Dashboard
+          Back
         </Button>
       </div>
       <div className="absolute top-4 right-4 z-50">
@@ -205,28 +205,31 @@ const DriverProfile = () => {
         {/* Header */}
         <div className="from-primary/10 border-b border-(--card-border) bg-linear-to-br to-transparent p-8">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-primary/20 rounded-xl">
-                <Car className="text-primary" size={24} />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-primary/20 rounded-xl shrink-0">
+                  <Car className="text-primary" size={24} />
+                </div>
+                <div>
+                  <h1 className="font-display text-xl md:text-2xl font-black tracking-tighter text-(--text-main)">
+                    My Driver Profile
+                  </h1>
+                  <p className="text-xs md:text-sm text-(--text-dim) mt-1">
+                    Manage your driving credentials
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="font-display text-2xl font-black tracking-tighter text-(--text-main)">
-                  My Driver Profile
-                </h1>
-                <p className="text-sm text-(--text-dim) mt-1">
-                  Manage your professional driving credentials
-                </p>
-              </div>
+              {!isEditing && (
+                <Button
+                  onClick={() => setIsEditing(true)}
+                  variant="secondary"
+                  icon={Edit2}
+                  className="w-full sm:w-auto"
+                >
+                  Edit
+                </Button>
+              )}
             </div>
-            {!isEditing && (
-              <Button
-                onClick={() => setIsEditing(true)}
-                variant="secondary"
-                icon={Edit2}
-              >
-                Edit
-              </Button>
-            )}
           </div>
 
           {/* Approval Status */}
@@ -256,8 +259,8 @@ const DriverProfile = () => {
         {/* Content */}
         <div className="p-8">
           {/* Basic User Info Header */}
-          <div className="flex items-center gap-6 mb-8 p-6 rounded-3xl bg-black/5 dark:bg-white/5 border border-(--card-border)">
-            <div className="relative h-20 w-20 group">
+          <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 mb-8 p-4 md:p-6 rounded-3xl bg-black/5 dark:bg-white/5 border border-(--card-border)">
+            <div className="relative h-20 w-20 shrink-0 group">
               <div className="h-full w-full rounded-2xl bg-primary flex items-center justify-center text-3xl font-black text-black shadow-lg overflow-hidden transition-transform group-hover:scale-105">
                 {profileImagePreview ? (
                   <img src={profileImagePreview} alt="Profile" className="h-full w-full object-cover" />
@@ -272,10 +275,10 @@ const DriverProfile = () => {
                 </label>
               )}
             </div>
-            <div>
+            <div className="text-center md:text-left">
               <h2 className="text-xl font-black text-(--text-main)">{user?.name}</h2>
               <p className="text-sm font-medium text-(--text-dim)">{user?.email}</p>
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex items-center justify-center md:justify-start gap-2">
                 <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">Verified Driver</span>
               </div>
             </div>

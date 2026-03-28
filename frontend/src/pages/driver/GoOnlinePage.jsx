@@ -14,9 +14,11 @@ import {
   Wifi,
   Eye,
   EyeOff,
+  Navigation,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import RideMap from "../../components/map/RideMap";
 import { getMyDriverProfile, updateDriverStatus } from "../../services/driverProfileService";
 
 const GoOnlinePage = () => {
@@ -36,6 +38,10 @@ const GoOnlinePage = () => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [tripDetails, setTripDetails] = useState({
+    pickup: { lat: null, lng: null, name: "" },
+    dropoff: { lat: null, lng: null, name: "" },
+  });
 
   // Ride type options
   const rideTypes = [
@@ -96,11 +102,37 @@ const GoOnlinePage = () => {
       }
     };
     fetchProfile();
+    updateLocation();
   }, []);
   const updateLocation = () => {
-    // In real app, use Geolocation API
-    // navigator.geolocation.getCurrentPosition(...)
-    alert("Location updated successfully!");
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocation({
+          ...location,
+          latitude,
+          longitude,
+          address: "Fetching current address...",
+          lastUpdated: "Just now",
+        });
+
+        if (!tripDetails.pickup.lat) {
+           setTripDetails(prev => ({
+             ...prev,
+             pickup: { ...prev.pickup, lat: latitude, lng: longitude, name: "My Current Position" }
+           }));
+        }
+      },
+      (error) => {
+        console.error("Location error:", error);
+        alert("Unable to retrieve your location");
+      }
+    );
   };
 
   // Handle go online/offline toggle
@@ -172,6 +204,7 @@ const GoOnlinePage = () => {
             </div>
           </div>
         )}
+
         {/* Online Status Card */}
         <div className="mb-8 overflow-hidden rounded-2xl border border-(--card-border) bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 p-8 backdrop-blur-sm transition-all hover:border-primary/40">
           <div className="flex flex-col items-center justify-center gap-6 text-center">
@@ -238,59 +271,85 @@ const GoOnlinePage = () => {
           </div>
         </div>
 
-        {/* Location Status */}
-        <div className="mb-8 rounded-xl border border-(--card-border) bg-(--card-bg) p-6 transition-all hover:border-primary/40">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-500/10 p-3">
-                <MapPin size={20} className="text-blue-500" />
+        {/* Map View for Online Drivers */}
+        {isOnline && (
+          <div className="mb-8 overflow-hidden rounded-2xl border border-(--card-border) bg-(--card-bg) shadow-2xl animate-in fade-in zoom-in-95 duration-500">
+            <div className="flex flex-col lg:flex-row h-[600px]">
+              {/* Trip Selection Sidebar */}
+              <div className="w-full lg:w-80 border-r border-(--card-border) p-6 flex flex-col gap-6 bg-(--bg-main)/50">
+                <div>
+                  <h3 className="text-lg font-bold text-(--text-main) flex items-center gap-2 mb-1">
+                    <Navigation size={20} className="text-primary" />
+                    Trip Setup
+                  </h3>
+                  <p className="text-xs text-(--text-dim)">Define your preferred route</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                    <input 
+                      type="text" 
+                      placeholder="Pickup Point"
+                      value={tripDetails.pickup.name}
+                      onChange={(e) => setTripDetails({...tripDetails, pickup: {...tripDetails.pickup, name: e.target.value}})}
+                      className="w-full pl-8 pr-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm focus:border-primary/50 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div>
+                    <input 
+                      type="text" 
+                      placeholder="Dropoff Point"
+                      value={tripDetails.dropoff.name}
+                      onChange={(e) => setTripDetails({...tripDetails, dropoff: {...tripDetails.dropoff, name: e.target.value}})}
+                      className="w-full pl-8 pr-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm focus:border-primary/50 outline-none transition-all"
+                    />
+                  </div>
+
+                  <button className="w-full py-3 bg-primary text-black font-black rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all text-xs uppercase tracking-widest mt-2">
+                    Search for Trips
+                  </button>
+                </div>
+
+                <div className="mt-auto p-4 rounded-xl bg-primary/5 border border-primary/10">
+                  <div className="flex justify-between text-[10px] font-bold text-(--text-dim) uppercase tracking-wider mb-2">
+                    <span>Active Zone</span>
+                    <span className="text-primary">Satellite</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-lg font-black text-(--text-main)">12</p>
+                      <p className="text-[10px] text-(--text-dim)">Total Trips Nearby</p>
+                    </div>
+                    <Zap size={24} className="text-amber-500 opacity-30" />
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-(--text-main)">
-                  Current Location
-                </h3>
-                <p className="text-sm text-(--text-dim)">Connected to GPS</p>
+
+              {/* Map Module */}
+              <div className="flex-1 relative">
+                <RideMap 
+                  pickup={tripDetails.pickup.lat ? tripDetails.pickup : null}
+                  dropoff={tripDetails.dropoff.lat ? tripDetails.dropoff : null}
+                  userLocation={{ lat: location.latitude, lng: location.longitude }}
+                  allRoutes={tripDetails.pickup.lat && tripDetails.dropoff.lat ? [{
+                    id: 1,
+                    label: "Preferred Route",
+                    coords: [
+                      [tripDetails.pickup.lat, tripDetails.pickup.lng],
+                      [tripDetails.dropoff.lat, tripDetails.dropoff.lng]
+                    ],
+                    color: "#ffcc00",
+                    distanceStr: "Calculated Route",
+                    durationMin: 15
+                  }] : []}
+                />
               </div>
             </div>
-            <span className="flex h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
-
-          <div className="space-y-3 mb-4">
-            <div className="rounded-lg bg-(--bg-main) p-3">
-              <p className="text-sm text-(--text-dim)">Address</p>
-              <p className="font-mono text-sm text-(--text-main)">
-                {location.address}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-(--bg-main) p-3">
-                <p className="text-sm text-(--text-dim)">Coordinates</p>
-                <p className="font-mono text-xs text-(--text-main)">
-                  {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
-                </p>
-              </div>
-              <div className="rounded-lg bg-(--bg-main) p-3">
-                <p className="text-sm text-(--text-dim)">Accuracy</p>
-                <p className="font-mono text-xs text-(--text-main)">
-                  ±{location.accuracy}m
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-(--bg-main) p-3">
-              <p className="text-sm text-(--text-dim)">Last Updated</p>
-              <p className="text-sm text-(--text-main)">{location.lastUpdated}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={updateLocation}
-            className="w-full rounded-lg bg-blue-500 py-2 text-sm font-semibold text-white transition-all hover:bg-blue-600 active:scale-95"
-          >
-            Update Location
-          </button>
-        </div>
+        )}
 
         {/* Select Ride Types */}
         <div className="mb-8 rounded-xl border border-(--card-border) bg-(--card-bg) p-6 transition-all hover:border-primary/40">

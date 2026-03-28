@@ -109,13 +109,13 @@ const ActiveRidesPage = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case "in-progress":
-        return "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300";
+        return "bg-blue-100/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300";
       case "waiting":
-        return "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300";
+        return "bg-amber-100/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300";
       case "completed":
-        return "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300";
+        return "bg-emerald-100/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300";
       default:
-        return "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300";
+        return "bg-black/5 dark:bg-white/5 border-(--card-border) text-(--text-dim)";
     }
   };
 
@@ -150,9 +150,9 @@ const ActiveRidesPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+    <div className="min-h-screen bg-(--bg-main) pb-20 transition-colors duration-500">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="sticky top-0 z-10 bg-(--card-bg) border-b border-(--card-border) backdrop-blur-md transition-all duration-500">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -162,10 +162,10 @@ const ActiveRidesPage = () => {
               <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl font-bold text-(--text-main)">
                 Active Rides
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-(--text-dim)">
                 Real-time trip details & navigation
               </p>
             </div>
@@ -178,62 +178,62 @@ const ActiveRidesPage = () => {
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <Zap className="w-5 h-5 text-blue-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {rideStats.activeRides}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Active Rides
             </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <TrendingUp className="w-5 h-5 text-emerald-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {rideStats.completedRides}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Completed Today
             </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <DollarSign className="w-5 h-5 text-violet-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 ${rideStats.totalEarningsToday}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Today's Earnings
             </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <Star className="w-5 h-5 text-amber-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {rideStats.averageRating}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Avg Rating
             </p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
               <Clock className="w-5 h-5 text-orange-500" />
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
+              <span className="text-2xl font-bold text-(--text-main)">
                 {rideStats.onlineHours}h
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-(--text-dim)">
               Online Hours
             </p>
           </div>
@@ -245,14 +245,14 @@ const ActiveRidesPage = () => {
             {activeRides.map((ride) => (
               <div
                 key={ride.id}
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                className="bg-(--card-bg) rounded-xl border border-(--card-border) overflow-hidden shadow-sm hover:shadow-md transition-all duration-500"
               >
                 {/* Ride Summary */}
                 <div
                   onClick={() =>
                     setExpandedRide(expandedRide === ride.id ? null : ride.id)
                   }
-                  className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+                  className="p-6 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
@@ -276,12 +276,12 @@ const ActiveRidesPage = () => {
                           {ride.passengerName.charAt(0)}
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900 dark:text-white">
+                          <p className="font-semibold text-(--text-main)">
                             {ride.passengerName}
                           </p>
                           <div className="flex items-center gap-1">
                             <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                            <span className="text-xs text-(--text-dim)">
                               {ride.rating}
                             </span>
                           </div>
@@ -292,13 +292,13 @@ const ActiveRidesPage = () => {
                       <div className="flex items-start gap-3 mb-4">
                         <MapPin className="w-5 h-5 text-emerald-500 mt-1 flex-shrink-0" />
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                          <p className="text-sm font-medium text-(--text-main)">
                             {ride.pickup}
                           </p>
                           <div className="flex items-center gap-1 my-1">
                             <div className="h-4 border-l-2 border-dashed border-gray-300 dark:border-gray-600 ml-0.5"></div>
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                          <p className="text-sm text-(--text-dim)">
                             {ride.dropoff}
                           </p>
                         </div>
@@ -307,10 +307,10 @@ const ActiveRidesPage = () => {
                       {/* Progress Bar */}
                       <div className="mb-4">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                          <span className="text-xs font-semibold text-(--text-dim)">
                             Trip Progress
                           </span>
-                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                          <span className="text-xs font-bold text-(--text-main)">
                             {Math.round(
                               calculateProgress(
                                 ride.duration.elapsed,
@@ -320,7 +320,7 @@ const ActiveRidesPage = () => {
                             %
                           </span>
                         </div>
-                        <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div className="w-full h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-primary to-primary-dark transition-all"
                             style={{
@@ -339,10 +339,10 @@ const ActiveRidesPage = () => {
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             Distance
                           </p>
-                          <p className="font-bold text-gray-900 dark:text-white">
+                          <p className="font-bold text-(--text-main)">
                             {ride.distance.remaining} km
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-(--text-dim)">
                             {ride.distance.total} km total
                           </p>
                         </div>
@@ -350,10 +350,10 @@ const ActiveRidesPage = () => {
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             Time Remaining
                           </p>
-                          <p className="font-bold text-gray-900 dark:text-white">
+                          <p className="font-bold text-(--text-main)">
                             {ride.duration.remaining} min
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <p className="text-xs text-(--text-dim)">
                             {ride.duration.elapsed} min elapsed
                           </p>
                         </div>
@@ -361,7 +361,7 @@ const ActiveRidesPage = () => {
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             Current Fare
                           </p>
-                          <p className="font-bold text-gray-900 dark:text-white">
+                          <p className="font-bold text-(--text-main)">
                             ${(
                               ride.fare.baseFare +
                               (ride.duration.elapsed / ride.duration.total) *
@@ -382,7 +382,7 @@ const ActiveRidesPage = () => {
 
                 {/* Expanded Details */}
                 {expandedRide === ride.id && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-700/30 space-y-6">
+                  <div className="border-t border-(--card-border) p-6 bg-black/5 dark:bg-white/5 space-y-6">
                     {/* Quick Actions */}
                     <div className="grid grid-cols-2 gap-3">
                       <button
