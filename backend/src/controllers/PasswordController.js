@@ -41,7 +41,7 @@ export const ForgotPassword = async (req, res) => {
         // Hash OTP and set expire (1 min)
         user.otp = {
             code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 10 * 60 * 1000,
+            expiresAt: Date.now() + 5 * 60 * 1000,
             purpose: "reset"
         };
 
@@ -51,7 +51,7 @@ export const ForgotPassword = async (req, res) => {
             title: "Password Reset Request",
             message: "Verify your identity with the following OTP code to reset your password.",
             otp: otpStr,
-            expiry: 10
+            expiry: 5
         });
 
         // Send email in background (eliminate network wait)

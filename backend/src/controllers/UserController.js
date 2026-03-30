@@ -97,7 +97,7 @@ export const CreateUser = async (req, res) => {
         const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
         userData.otp = {
             code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 10 * 60 * 1000, // 10 mins (more stable for email delivery)
+            expiresAt: Date.now() + 5 * 60 * 1000, // 5 mins (more stable for email delivery)
             purpose: "verification"
         };
 
@@ -105,7 +105,7 @@ export const CreateUser = async (req, res) => {
             title: "RouteMate Verification Required",
             message: `To complete your RouteMate ${userData.role} registration, use the following OTP code to verify your email address.`,
             otp: otpStr,
-            expiry: 1
+            expiry: 5
         });
 
         // 5. Save user first, then send email in background (eliminate network wait)
@@ -553,7 +553,7 @@ export const ResendVerificationOTP = async (req, res) => {
         const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
         user.otp = {
             code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 10 * 60 * 1000,
+            expiresAt: Date.now() + 5 * 60 * 1000,
             purpose: "verification"
         };
 
@@ -563,7 +563,7 @@ export const ResendVerificationOTP = async (req, res) => {
             title: "Verification Required",
             message: "To complete your RouteMate registration, use the following OTP code to verify your email address.",
             otp: otpStr,
-            expiry: 10
+            expiry: 5
         });
 
         // Send email in background (no network wait for user)
