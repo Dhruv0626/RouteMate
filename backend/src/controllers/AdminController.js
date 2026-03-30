@@ -1,6 +1,7 @@
-import UserModel from "../models/UserModel.js";
-import DriverProfileModel from "../models/DriverProfileModel.js";
-import NotificationModel from "../models/NotificationModel.js";
+import UserModel from "../models/User.js";
+import DriverProfileModel from "../models/DriverProfile.js";
+import NotificationModel from "../models/Notification.js";
+import SystemConfig from "../models/FareConfig.js";
 import cacheService from "../utils/redis.js";
 
 /**
@@ -41,7 +42,7 @@ export const GetDashboardStats = async (req, res) => {
             DriverProfileModel.countDocuments({ isApproved: true }),
             DriverProfileModel.countDocuments({ isOnline: true }),
             DriverProfileModel.aggregate([
-                { $group: { _id: null, totalCompleted: { $sum: "$completedRides" } } }
+                { $group: { _id: null, totalCompleted: { $sum: "$stats.completedRides" } } }
             ])
         ]);
 

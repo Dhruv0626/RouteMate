@@ -1,4 +1,4 @@
-import UserModel from "../models/UserModel.js";
+import UserModel from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -646,3 +646,33 @@ export const GetProfile = async (req, res) => {
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
+
+/**
+ * Update User Profile Image (Cloudinary)
+ */
+export const UpdateProfileImage = async (req, res) => {
+    try {
+        const { imageUrl } = req.body;
+        if (!imageUrl) {
+            return res.status(400).json({ success: false, message: "Image URL is required." });
+        }
+
+        const user = await UserModel.findById(req.user.id);
+        if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+        user.profileImage = imageUrl;
+        await user.save();
+
+        // 🧹 Invalidate Profile Cache
+        await cacheService.del(`user:profile:${user._id}`);
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Profile image updated successfully.",
+            profileImage: user.profileImage
+        });
+    } catch (error) {
+        console.error("Update Profile Image Error:", error.message);
+        res.status(500).json({ success: false, message: "Server error while updating profile image." });
+    }
+};

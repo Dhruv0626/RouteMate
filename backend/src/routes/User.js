@@ -10,7 +10,8 @@ import {
     UpdateUser,
     VerifyEmailOTP,
     ResendVerificationOTP,
-    UpdateMobileNumber
+    UpdateMobileNumber,
+    UpdateProfileImage
 } from "../controllers/UserController.js";
 import { GetSettings } from "../controllers/SystemSettingsController.js";
 import { ForgotPassword, ResetPassword } from "../controllers/PasswordController.js";
@@ -114,6 +115,7 @@ router.get(
 
 // ─── Protected Routes (JWT required) ─────────────────────────────────────────
 router.get("/profile", authMiddleware, GetProfile);
+router.post("/update-profile-image", authMiddleware, UpdateProfileImage);
 
 // ─── System Settings (Read-only for all authenticated users) ─────────────────
 router.get("/system-settings", authMiddleware, GetSettings);

@@ -1,4 +1,4 @@
-import NotificationModel from "../models/NotificationModel.js";
+import NotificationModel from "../models/Notification.js";
 
 /**
  * Get all notifications for the authenticated user

@@ -1,0 +1,84 @@
+# 🛡️ RouteMate: Schema Architecture & Workflow Guide
+
+This document explains the 9 core MongoDB collections and how they connect to power the RouteMate platform.
+
+---
+
+## 1. 📂 High-Level Relationship Map
+
+- **User**: The root identity for everyone (Passenger, Driver, or Admin).
+- **DriverProfile**: Extends 'User' when a user signs up to drive (`user_id` linkage).
+- **Trip**: The central hub. Links to `passenger` (User), `driver` (User), and `fareConfig` (via `vehicleType`).
+- **Review**: Links to a `trip`, a `reviewer` (User), and a `target` (User).
+- **SavedPlace**: Links to a `user` for quick destination setting.
+- **WalletTransaction**: Financial ledger linked to a `user`.
+- **SOS**: Emergency event linked to a `trip` and `user`.
+- **Notification**: Links to a `recipient` (User) for system/ride alerts.
+- **FareConfig**: Standalone pricing documents for dynamic calculation.
+
+---
+
+## 2. 🧩 Schema Breakdown
+
+### 👤 User (`models/User.js`)
+- **Primary Keys**: `_id`, `email`, `Mobile_no`.
+- **Role System**: `passenger`, `driver`, `admin`.
+- **Passenger Stats**: Embedded object inside the user to track travel history.
+- **Auth**: Preserves legacy OTP and provider fields for social logins.
+
+### 🚗 DriverProfile (`models/DriverProfile.js`)
+- **Compulsory Docs**: License, Aadhar, RC Book, Insurance. (Stored in Cloudinary).
+- **Vehicle Details**: Model, Type, Color, Number.
+- **Verification**: `isApproved` (Admin controlled).
+- **Live Status**: `isOnline` and `currentLocation` (GeoJSON).
+
+### 📍 Trip (`models/Trip.js`)
+- **Phase Lifecycle**: `searching` → `matched` → `ongoing` → `completed` / `cancelled`.
+- **Locations**: `source` and `destination` stored as GeoJSON Points.
+- **OTP**: Security code verified by driver to transition phase to `ongoing`.
+- **Fare**: Nested object with `baseFare`, `distanceFare`, and `total`.
+
+### 💰 FareConfig (`models/FareConfig.js`)
+- **Structure**: One document per `vehicleType` (Sedan, Bike, Auto, etc.).
+- **Dynamic Pricing**: `baseFare`, `perKmRate`, `surgeMultiplier`.
+
+### 🔔 Notification (`models/Notification.js`)
+- **Targeted**: Linked to a specific user.
+- **Types**: `ride_update`, `payment`, `promo`, `system`, `sos`.
+
+---
+
+## 3. 🔄 The Connection Workflow
+
+### A. 📝 Registration & Verification
+1.  **User** creates an account (default role = `passenger`).
+2.  If they apply to drive, a **DriverProfile** is created linked to their `User._id`.
+3.  Documents uploaded to **Cloudinary**; URLs saved in **DriverProfile**.
+4.  Admin sets `isApproved: true` in **DriverProfile**, role stays `driver`.
+
+### B. 🚕 Ride Booking Lifecycle
+1.  Passenger requests a ride; **Trip** document is created (phase: `searching`).
+2.  Nearby **DriverProfiles** (where `isOnline: true`) are notified via **Notification**.
+3.  Driver accepts; **Trip** transitions to `matched`, `driver_id` is assigned.
+4.  Driver meets Passenger; verifies **OTP** in **Trip** → phase: `ongoing`.
+5.  Ride ends; **Trip** phase: `completed`, updated with `distanceActual` and `fare.total`.
+
+### C. 💳 Payment & History
+1.  Payment processed; **WalletTransaction** recorded for both parties.
+2.  Passenger/Driver leaves a **Review** linked to that **Trip**.
+3.  Review ratings are aggregated back into **User.passengerStats** or **DriverProfile.averageRating**.
+
+---
+
+## 💾 Model Naming Convention (Mongoose)
+
+Use the following for all imports in controllers:
+- `UserModel` from `User.js`
+- `DriverProfileModel` from `DriverProfile.js`
+- `TripModel` from `Trip.js`
+- `ReviewModel` from `Review.js`
+- `SavedPlaceModel` from `SavedPlace.js`
+- `WalletTransactionModel` from `WalletTransaction.js`
+- `FareConfigModel` from `FareConfig.js`
+- `SOSModel` from `SOS.js`
+- `NotificationModel` from `Notification.js`

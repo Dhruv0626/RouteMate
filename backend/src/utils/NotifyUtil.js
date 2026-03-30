@@ -1,5 +1,5 @@
-import NotificationModel from "../models/NotificationModel.js";
-import UserModel from "../models/UserModel.js";
+import NotificationModel from "../models/Notification.js";
+import UserModel from "../models/User.js";
 
 // ─── Core Primitives ──────────────────────────────────────────────────────────
 

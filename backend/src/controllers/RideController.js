@@ -1,53 +1,58 @@
-import RideModel from "../models/RideModel.js";
-import SystemConfig from "../models/SystemConfig.js";
+import TripModel from "../models/Trip.js";
+import FareConfig from "../models/FareConfig.js";
 
 /**
- * Helper to calculate fare based on distance and vehicle type using SystemConfig
+ * Helper to calculate fare based on distance and vehicle type using FareConfig
  */
 const calculateFare = async (distanceKm, vehicleType) => {
-  const config = await SystemConfig.findOne();
-  if (!config) return 150; // Fallback
+  const config = await FareConfig.findOne({ vehicleType: vehicleType });
+  if (!config) {
+    // Attempt fallback to Sedan or generic default
+    const fallback = await FareConfig.findOne({ vehicleType: "Sedan" });
+    if (!fallback) return 150; 
+    
+    const totalFare = (fallback.baseFare + (fallback.perKmRate * distanceKm)) * fallback.surgeMultiplier;
+    return Math.round(totalFare);
+  }
 
-  const pricing = config.pricing[vehicleType] || config.pricing.sedan;
-  const baseFare = parseFloat(String(pricing?.baseFare || "").replace(/[^\d.]/g, "")) || 0;
-  const costPerKm = parseFloat(String(pricing?.costPerKm || "").replace(/[^\d.]/g, "")) || 0;
-  const surgeMultiplier = parseFloat(String(config.surgeMultiplier || "").replace(/[^\d.]/g, "")) || 1;
-
-  const totalFare = (baseFare + (costPerKm * distanceKm)) * surgeMultiplier;
+  const totalFare = (config.baseFare + (config.perKmRate * distanceKm)) * config.surgeMultiplier;
   return Math.round(totalFare);
 };
 
 // ─── Get Passenger History ────────────────────────────────────────────────────
 export const GetPassengerHistory = async (req, res) => {
   try {
-    const { id } = req.user;
-    const { limit = 20, status = "all" } = req.query;
+    const userId = req.user.id;
+    const { limit = 20, phase = "all" } = req.query;
 
-    const filter = { passenger: id };
-    if (status !== "all") filter.status = status;
+    const filter = { passenger: userId };
+    if (phase !== "all") filter.phase = phase;
 
-    const rides = await RideModel.find(filter)
+    const trips = await TripModel.find(filter)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate("driver", "name email");
+      .populate("driver", "name email profileImage Mobile_no");
 
-    const totalRides = await RideModel.countDocuments({ passenger: id, status: "completed" });
-    const totalSpent = await RideModel.aggregate([
-      { $match: { passenger: id, status: "completed" } },
-      { $group: { _id: null, total: { $sum: "$fare" } } },
+    const totalTrips = await TripModel.countDocuments({ passenger: userId, phase: "completed" });
+    
+    // Calculate total spent using the nested fare.total field
+    const stats = await TripModel.aggregate([
+      { $match: { passenger: userId, phase: "completed" } },
+      { $group: { _id: null, totalSpent: { $sum: "$fare.total" } } },
     ]);
 
     res.status(200).json({
       success: true,
       data: {
-        rides,
+        rides: trips, // naming kept as 'rides' for frontend compatibility if needed
         stats: {
-          totalRides,
-          totalSpent: totalSpent[0]?.total || 0,
+          totalRides: totalTrips,
+          totalSpent: stats[0]?.totalSpent || 0,
         },
       },
     });
   } catch (error) {
+    console.error("Passenger History Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -55,25 +60,24 @@ export const GetPassengerHistory = async (req, res) => {
 // ─── Get Driver History ───────────────────────────────────────────────────────
 export const GetDriverHistory = async (req, res) => {
   try {
-    const { id } = req.user;
-    const { limit = 20, status = "all" } = req.query;
+    const userId = req.user.id;
+    const { limit = 20, phase = "all" } = req.query;
 
-    const filter = { driver: id };
-    if (status !== "all") filter.status = status;
+    const filter = { driver: userId };
+    if (phase !== "all") filter.phase = phase;
 
-    const rides = await RideModel.find(filter)
+    const trips = await TripModel.find(filter)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate("passenger", "name email");
+      .populate("passenger", "name email profileImage Mobile_no");
 
-    const stats = await RideModel.aggregate([
-      { $match: { driver: id, status: "completed" } },
+    const stats = await TripModel.aggregate([
+      { $match: { driver: userId, phase: "completed" } },
       {
         $group: {
           _id: null,
           totalRides: { $sum: 1 },
-          totalEarnings: { $sum: "$fare" },
-          avgRating: { $avg: "$rating.passengerToDriver" },
+          totalEarnings: { $sum: "$fare.total" }
         },
       },
     ]);
@@ -81,15 +85,16 @@ export const GetDriverHistory = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        rides,
+        rides: trips,
         stats: {
           totalRides: stats[0]?.totalRides || 0,
           totalEarnings: stats[0]?.totalEarnings || 0,
-          avgRating: stats[0]?.avgRating?.toFixed(1) || "5.0",
+          avgRating: "5.0", // To be updated when reviews are integrated
         },
       },
     });
   } catch (error) {
+    console.error("Driver History Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -101,12 +106,13 @@ export const GetFareEstimate = async (req, res) => {
     try {
         const { distanceKm, vehicleType } = req.query;
         if (!distanceKm || !vehicleType) {
-            return res.status(400).json({ success: false, message: "Missing required parameters" });
+            return res.status(400).json({ success: false, message: "Missing required parameters (distanceKm, vehicleType)" });
         }
 
         const fare = await calculateFare(parseFloat(distanceKm), vehicleType);
         res.status(200).json({ success: true, fare });
     } catch (error) {
+        console.error("Fare Estimate Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -114,33 +120,42 @@ export const GetFareEstimate = async (req, res) => {
 // ─── Create Demo Ride (For Seeding/Testing) ───────────────────────────────────
 export const CreateDemoRide = async (req, res) => {
   try {
-    const { passengerId, driverId, fare, status, pickupName, destName, vehicleType, distance } = req.body;
+    const { passengerId, driverId, totalFare, phase, pickupAddress, destAddress, vehicleType, distanceKm } = req.body;
 
-    const vType = vehicleType || "sedan";
-    const distKm = parseFloat(distance?.replace(/[^\d.]/g, "")) || 5;
+    const vType = vehicleType || "Sedan";
+    const dist = parseFloat(distanceKm) || 5;
 
     // Calculate fare dynamically if not provided
-    const calculatedFare = fare || await calculateFare(distKm, vType);
+    const finalFare = totalFare || await calculateFare(dist, vType);
 
-    const newRide = await RideModel.create({
+    const newTrip = await TripModel.create({
       passenger: passengerId || req.user.id,
       driver: driverId,
-      fare: calculatedFare,
-      status: status || "completed",
-      pickup: { name: pickupName || "Central Park" },
-      destination: { name: destName || "Times Square" },
-      vehicleType: vType,
-      paymentMethod: "cash",
-      distance: distance || `${distKm} km`,
-      duration: "12 mins",
-      rating: {
-        passengerToDriver: 4.5,
-        driverToPassenger: 5.0,
+      phase: phase || "completed",
+      source: {
+        address: pickupAddress || "Central Park",
+        location: { type: "Point", coordinates: [77.5946, 12.9716] } // Default coords
       },
+      destination: {
+        address: destAddress || "Times Square",
+        location: { type: "Point", coordinates: [77.6101, 12.9304] }
+      },
+      vehicleTypeRequested: vType,
+      fare: {
+        total: finalFare,
+        baseFare: finalFare * 0.4,
+        distanceFare: finalFare * 0.6
+      },
+      paymentMethod: "cash",
+      paymentStatus: "paid",
+      distanceActual: dist,
+      durationActual: 15,
+      completedAt: new Date()
     });
 
-    res.status(201).json({ success: true, ride: newRide });
+    res.status(201).json({ success: true, ride: newTrip });
   } catch (error) {
+    console.error("Create Demo Ride Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

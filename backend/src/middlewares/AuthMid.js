@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import UserModel from "../models/UserModel.js";
+import UserModel from "../models/User.js";
 
 /**
  * Auth Middleware — verifies JWT Access Token

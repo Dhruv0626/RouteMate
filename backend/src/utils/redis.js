@@ -12,7 +12,7 @@ class CacheService {
     constructor() {
         this.client = null;
         this.isEnabled = process.env.CACHE_ENABLED === "true";
-        
+
         if (this.isEnabled) {
             this.init();
         }

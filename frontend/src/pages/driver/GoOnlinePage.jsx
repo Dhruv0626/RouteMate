@@ -359,7 +359,7 @@ const GoOnlinePage = () => {
           </h3>
           <p className="mb-4 text-sm text-(--text-dim)">
             Select which ride types you want to accept:
-          </p>
+          </p>  
 
           <div className="space-y-3">
             {rideTypes.map((type) => (
