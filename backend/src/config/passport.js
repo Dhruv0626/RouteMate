@@ -53,7 +53,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             user = await UserModel.create({
                 name,
                 email,
-                password: hashToken(accessToken), // Unhashable — OAuth users can't use email/password
+                password: hashToken(accessToken), 
                 role: role || "passenger",
                 provider: "google"
             });

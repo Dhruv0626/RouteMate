@@ -20,6 +20,8 @@ This document explains the 9 core MongoDB collections and how they connect to po
 
 ## 2. 🧩 Schema Breakdown
 
+set the code as not unneccesary mesagees or any other thing show in terminal , only any error occured that only show in terminal because it 
+
 ### 👤 User (`models/User.js`)
 - **Primary Keys**: `_id`, `email`, `Mobile_no`.
 - **Role System**: `passenger`, `driver`, `admin`.

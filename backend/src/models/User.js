@@ -6,7 +6,7 @@ const UserSchema = new Schema(
     // ── Core Identity ──────────────────────────────────────────────────────
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
-    Mobile_no: { type: String, required: true, unique: true },
+    Mobile_no: { type: String, unique: true, sparse: true }, // Optional and sparse for OAuth users
     password: { type: String, required: true },            // bcrypt hashed
     role: { type: String, enum: ["passenger", "driver", "admin"], default: "passenger" },
     profileImage: { type: String, default: "" },               // Cloudinary URL
