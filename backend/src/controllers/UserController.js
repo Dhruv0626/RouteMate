@@ -596,16 +596,14 @@ export const UpdateMobileNumber = async (req, res) => {
         // 🧹 Invalidate Profile Cache
         await cacheService.del(`user:profile:${user._id}`);
 
+        const updatedUser = user.toObject();
+        delete updatedUser.password;
+        delete updatedUser.refreshToken;
+
         res.status(200).json({ 
             success: true, 
             message: "Mobile number updated successfully.",
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                Mobile_no: user.Mobile_no
-            }
+            user: updatedUser
         });
     } catch (error) {
         console.error("Update Mobile Error:", error.message);
