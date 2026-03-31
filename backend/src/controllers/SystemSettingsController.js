@@ -1,4 +1,4 @@
-import SystemConfig from "../models/FareConfig.js";
+import SystemConfig from "../models/SystemConfig.js";
 import { notifySettingsUpdated, notifyPricingUpdated } from "../utils/NotifyUtil.js";
 
 /**

@@ -1,7 +1,7 @@
 import UserModel from "../models/User.js";
 import DriverProfileModel from "../models/DriverProfile.js";
 import NotificationModel from "../models/Notification.js";
-import SystemConfig from "../models/FareConfig.js";
+import SystemConfig from "../models/SystemConfig.js";
 import cacheService from "../utils/redis.js";
 
 /**
