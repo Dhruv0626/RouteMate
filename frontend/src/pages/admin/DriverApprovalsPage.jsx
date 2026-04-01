@@ -120,20 +120,20 @@ const DriverCard = ({ driver, onApprove, onReject, loading }) => {
         <div className="border-t border-(--card-border) bg-black/5 dark:bg-black/20 px-5 pb-5 pt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1"><Car size={9} /> Vehicle</p>
-            <p className="text-sm font-bold text-(--text-main)">{driver.vehicleName || "Not provided"}</p>
-            <VehicleBadge type={driver.vehicleType} />
+            <p className="text-sm font-bold text-(--text-main)">{driver.vehicle?.name || "Not provided"}</p>
+            <VehicleBadge type={driver.vehicle?.type} />
           </div>
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1"><FileText size={9} /> Reg. No.</p>
-            <p className="text-sm font-bold font-mono text-(--text-main)">{driver.vehicleNumber || "—"}</p>
+            <p className="text-sm font-bold font-mono text-(--text-main)">{driver.vehicle?.number || "—"}</p>
           </div>
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1"><IdCard size={9} /> License</p>
-            <p className="text-sm font-bold font-mono text-(--text-main)">{driver.licenseNumber || "—"}</p>
+            <p className="text-sm font-bold font-mono text-(--text-main)">{driver.license?.number || "—"}</p>
           </div>
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1"><Star size={9} /> Stats</p>
-            <p className="text-sm font-bold text-(--text-main)">{driver.totalRides || 0} Rides</p>
+            <p className="text-sm font-bold text-(--text-main)">{driver.stats?.totalRides || 0} Rides</p>
             <p className="text-[10px] text-(--text-dim)">Rating: {driver.averageRating?.toFixed(1) || "N/A"}</p>
           </div>
           <div className="space-y-1">
@@ -144,16 +144,16 @@ const DriverCard = ({ driver, onApprove, onReject, loading }) => {
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Aadhar</p>
             <p className="text-sm font-bold font-mono text-(--text-main)">
-              {driver.aadharNumber ? `XXXX-XXXX-${driver.aadharNumber.slice(-4)}` : "—"}
+              {driver.aadhar?.number ? `XXXX-XXXX-${driver.aadhar?.number.slice(-4)}` : "—"}
             </p>
           </div>
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Completed</p>
-            <p className="text-sm font-bold text-(--text-main)">{driver.completedRides || 0}</p>
+            <p className="text-sm font-bold text-(--text-main)">{driver.stats?.completedRides || 0}</p>
           </div>
           <div className="space-y-1">
             <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Cancelled</p>
-            <p className="text-sm font-bold text-(--text-main)">{driver.cancelledRides || 0}</p>
+            <p className="text-sm font-bold text-(--text-main)">{driver.stats?.cancelledRides || 0}</p>
           </div>
 
           {/* Document Images Section */}
@@ -163,11 +163,11 @@ const DriverCard = ({ driver, onApprove, onReject, loading }) => {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {[
-                { label: "License Document", img: driver.licenseImage, icon: IdCard },
-                { label: "Aadhar Document", img: driver.aadharImage, icon: FileText },
-                { label: "Vehicle Photos", img: driver.vehicleImage, icon: Car },
-                { label: "RC Book", img: driver.rcbookimage, icon: FileText },
-                { label: "Insurance", img: driver.insuranceimage, icon: ShieldCheck }
+                { label: "License Document", img: driver.license?.image, icon: IdCard },
+                { label: "Aadhar Document", img: driver.aadhar?.image, icon: FileText },
+                { label: "Vehicle Photos", img: driver.vehicle?.vehicleImage, icon: Car },
+                { label: "RC Book", img: driver.vehicle?.rcBookImage, icon: FileText },
+                { label: "Insurance", img: driver.vehicle?.insuranceImage, icon: ShieldCheck }
               ].map((doc, idx) => (
                 <div key={idx} className="space-y-2 group/img">
                   <div className="flex items-center justify-between px-1">

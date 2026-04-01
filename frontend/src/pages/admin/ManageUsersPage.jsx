@@ -55,7 +55,7 @@ const ManageUsersPage = () => {
         setUsers(data.users);
       }
     } catch (error) {
-      console.error("Failed to fetch users", error);
+      console.error("Failed to fetch users", error.message);
     } finally {
       setLoading(false);
     }

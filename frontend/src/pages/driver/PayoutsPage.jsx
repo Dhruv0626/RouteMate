@@ -8,7 +8,7 @@ import {
   Eye,
   EyeOff,
   Smartphone,
-  DollarSign,
+  IndianRupee,
   Download,
   Check,
   AlertCircle,
@@ -31,114 +31,19 @@ const PayoutsPage = () => {
   const [showCardNumbers, setShowCardNumbers] = useState({});
   const [expandedMethod, setExpandedMethod] = useState(null);
   const [activeTab, setActiveTab] = useState("methods");
-  const [paymentMethods, setPaymentMethods] = useState([
-    {
-      id: 1,
-      type: "bank",
-      name: "HDFC Bank",
-      accountNumber: "***4567",
-      accountHolder: "Indrajeet Kumar",
-      ifsc: "HDFC0001234",
-      isDefault: true,
-      verified: true,
-      addedDate: "Jan 15, 2026",
-      icon: "🏦",
-    },
-    {
-      id: 2,
-      type: "bank",
-      name: "Axis Bank",
-      accountNumber: "***8901",
-      accountHolder: "Indrajeet Kumar",
-      ifsc: "AXIS0005678",
-      isDefault: false,
-      verified: true,
-      addedDate: "Feb 20, 2026",
-      icon: "🏦",
-    },
-    {
-      id: 3,
-      type: "wallet",
-      name: "Google Pay",
-      accountNumber: "+91 944****567",
-      isDefault: false,
-      verified: true,
-      addedDate: "Mar 1, 2026",
-      icon: "📱",
-    },
-  ]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [showNotification, setShowNotification] = useState(null);
 
-  const paymentHistory = [
-    {
-      id: 1,
-      type: "withdrawal",
-      amount: 5000,
-      method: "HDFC Bank (**4567)",
-      date: "Mar 6, 2026",
-      time: "2:30 PM",
-      status: "completed",
-      transactionId: "TXN0001234",
-      earnings: 5850,
-    },
-    {
-      id: 2,
-      type: "withdrawal",
-      amount: 10000,
-      method: "HDFC Bank (**4567)",
-      date: "Feb 28, 2026",
-      time: "11:15 AM",
-      status: "completed",
-      transactionId: "TXN0001233",
-      earnings: 11200,
-    },
-    {
-      id: 3,
-      type: "refund",
-      amount: 150,
-      method: "Original Payment (Google Pay)",
-      date: "Feb 20, 2026",
-      time: "4:45 PM",
-      status: "completed",
-      transactionId: "REF0000456",
-      reason: "Cancelled Ride",
-    },
-    {
-      id: 4,
-      type: "withdrawal",
-      amount: 8500,
-      method: "Axis Bank (**8901)",
-      date: "Feb 10, 2026",
-      time: "9:00 AM",
-      status: "completed",
-      transactionId: "TXN0001232",
-      earnings: 9200,
-    },
-    {
-      id: 5,
-      type: "bonus",
-      amount: 500,
-      method: "Referral Bonus",
-      date: "Feb 5, 2026",
-      time: "3:20 PM",
-      status: "completed",
-      transactionId: "BON0000789",
-      reason: "Friend Signup",
-    },
-  ];
+  const paymentHistory = [];
 
   const walletStats = {
-    totalWithdrawn: 23500,
-    pendingWithdrawal: 850,
-    availableBalance: 2150,
-    nextPayoutDate: "Mar 10, 2026",
+    totalWithdrawn: 0,
+    pendingWithdrawal: 0,
+    availableBalance: 0,
+    nextPayoutDate: "N/A",
   };
 
-  const withdrawalStats = [
-    { month: "Jan", amount: 15000 },
-    { month: "Feb", amount: 18500 },
-    { month: "Mar", amount: 12150 },
-  ];
+  const withdrawalStats = [];
 
   const maxWithdrawal = Math.max(...withdrawalStats.map((s) => s.amount));
 

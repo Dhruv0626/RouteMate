@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
   Navigation, User as UserIcon, Loader2,
-  Play, Square, AlertCircle, CheckCircle2, Shuffle,
+  Play, Square, AlertCircle, CheckCircle2, Shuffle, MapPinOff, ChevronRight,
 } from "lucide-react";
 import { useAuth }          from "../context/AuthContext";
 import { useNavigate }      from "react-router-dom";
@@ -159,14 +159,20 @@ const RideMapPage = () => {
         const { data } = await api.get("/users/system-settings");
         if (data.success) setSystemConfig(data.settings);
       } catch (err) {
-        console.error("Failed to fetch system config:", err);
+        console.error("Failed to fetch system config:", err.message);
       }
     };
     fetchConfig();
   }, []);
 
-  // ─── GPS watch ────────────────────────────────────────────────────────────
+  // ─── GPS watch (respects locationTracking setting) ────────────────────────
+  const [locationBlocked, setLocationBlocked] = useState(false);
   useEffect(() => {
+    const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+    if (!appSettings.locationTracking) {
+      setLocationBlocked(true);
+      return;
+    }
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (p) => setUserLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
@@ -203,13 +209,21 @@ const RideMapPage = () => {
       const fetched = await getMultipleRoutes(from, to, systemConfig);
       setRoutes(fetched);
     } catch (e) {
-      console.error("[RideMapPage] fetchRoutes:", e);
+      console.error("[RideMapPage] fetchRoutes:", e.message);
     } finally {
       setIsLoadingRoutes(false);
     }
   };
 
+  const [showLocationPopup, setShowLocationPopup] = useState(false);
+
   const handlePickupSelect  = async (loc) => {
+    // Check location when user tries to set pickup
+    const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+    if (!appSettings.locationTracking) {
+      setShowLocationPopup(true);
+      return;
+    }
     setPickup(loc);
     if (loc && dropoff) await fetchRoutes(loc, dropoff);
     else { setRoutes([]); setTraffic(null); }
@@ -243,6 +257,38 @@ const RideMapPage = () => {
   return (
     <div className="relative flex flex-col min-h-screen overflow-hidden"
       style={{ background: "var(--bg-main)", color: "var(--text-main)" }}>
+
+      {/* Location Required Popup */}
+      {showLocationPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="glass-card w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-500 relative overflow-hidden border border-(--card-border)">
+            <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
+            <div className="mb-6 flex justify-center">
+              <div className="bg-red-500/20 p-4 rounded-full text-red-500">
+                <MapPinOff size={36} />
+              </div>
+            </div>
+            <h2 className="font-display text-xl font-black text-center text-(--text-main) mb-2">Location Required</h2>
+            <p className="text-sm font-medium text-center text-(--text-dim) mb-6">
+              You need to enable <strong>Location Tracking</strong> in your Settings to book rides and share your pickup location with drivers.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => { setShowLocationPopup(false); navigate('/passenger/dashboard/settings'); }}
+                className="w-full bg-primary text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-xl shadow-primary/20"
+              >
+                Open Settings <ChevronRight size={16} />
+              </button>
+              <button
+                onClick={() => setShowLocationPopup(false)}
+                className="w-full py-3 rounded-xl text-sm font-bold text-(--text-dim) hover:text-(--text-main) transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Arrival toast */}
       {showArrival && (

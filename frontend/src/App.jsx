@@ -44,6 +44,7 @@ import ReviewsPage from "./pages/ReviewsPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ReferralPage from "./pages/ReferralPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import SettingsPage from "./pages/SettingsPage";
 import { ShieldAlert } from "lucide-react";
 
 import { getMyDriverProfile } from "./services/driverProfileService";
@@ -438,6 +439,14 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/passenger/dashboard/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/driver/dashboard/profile-form"
@@ -526,6 +535,14 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <NotificationsPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/settings"
+          element={
+            <DriverProtectedRoute>
+              <SettingsPage />
             </DriverProtectedRoute>
           }
         />

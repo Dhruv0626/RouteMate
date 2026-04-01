@@ -4,13 +4,11 @@ const { Schema } = mongoose;
 const NotificationSchema = new Schema(
   {
     recipient: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    sender: { type: Schema.Types.ObjectId, ref: "User" }, // Admin or null
     title: { type: String, required: true },
     message: { type: String, required: true },
-    type: {
-      type: String,
-      enum: ["ride_update", "payment", "promo", "system", "sos"],
-      default: "system",
-    },
+    type: { type: String, default: "system" },
+    link: { type: String },
     metadata: { type: Schema.Types.Mixed },                   // e.g. { tripId, amount }
     isRead: { type: Boolean, default: false },
   },

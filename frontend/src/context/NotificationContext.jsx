@@ -46,12 +46,16 @@ export const NotificationProvider = ({ children }) => {
    * Triggers a browser native notification with sound
    */
   const showNativeNotification = useCallback((notification) => {
+    // Check App Settings Permission
+    const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{"pushNotifs":false}');
+    if (!appSettings.pushNotifs) return;
+
     // 1. Play Sound
     try {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(e => console.log("Audio play blocked by browser policy"));
+      audioRef.current.play().catch(() => {}); // Silent catch for browser policy
     } catch (err) {
-      console.error("Sound playback error:", err);
+      console.error("Sound playback error:", err.message);
     }
 
     // 2. Show System Notification (if permitted)
@@ -72,9 +76,10 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
-  // Request Notification Permission on mount
+  // Request Notification Permission only if user has push notifications enabled in settings
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
+    const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{"pushNotifs":false}');
+    if (appSettings.pushNotifs && "Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, []);
@@ -102,7 +107,7 @@ export const NotificationProvider = ({ children }) => {
         prevUnreadCountRef.current = newUnreadCount;
       }
     } catch (error) {
-      console.error("Failed to fetch notifications:", error);
+      console.error("Failed to fetch notifications:", error.message);
     }
   }, [user, showNativeNotification]);
 
@@ -136,7 +141,7 @@ export const NotificationProvider = ({ children }) => {
         prevUnreadCountRef.current = newCount;
       }
     } catch (error) {
-      console.error("Failed to mark notification as read:", error);
+      console.error("Failed to mark notification as read:", error.message);
     }
   };
 
@@ -149,7 +154,7 @@ export const NotificationProvider = ({ children }) => {
         prevUnreadCountRef.current = 0;
       }
     } catch (error) {
-      console.error("Failed to mark all notifications as read:", error);
+      console.error("Failed to mark all notifications as read:", error.message);
     }
   };
 
@@ -166,7 +171,7 @@ export const NotificationProvider = ({ children }) => {
         }
       }
     } catch (error) {
-      console.error("Failed to delete notification:", error);
+      console.error("Failed to delete notification:", error.message);
     }
   };
 

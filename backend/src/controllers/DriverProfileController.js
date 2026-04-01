@@ -9,7 +9,7 @@ export const CreateDriverProfile = async (req, res) => {
         const {
             licenseNumber, licenseExpiry, licenseImage,
             aadharNumber, aadharImage,
-            vehicleName, vehicleType, vehicleNumber, vehicleColor,
+            vehicleName, vehicleType, vehicleNumber,
             rcBookImage, insuranceExpiry, insuranceImage, vehicleImage,
             bio
         } = req.body;
@@ -18,9 +18,8 @@ export const CreateDriverProfile = async (req, res) => {
         const requiredFields = {
             licenseNumber, licenseExpiry, licenseImage,
             aadharNumber, aadharImage,
-            vehicleName, vehicleType, vehicleNumber, vehicleColor,
-            rcBookImage, insuranceExpiry, insuranceImage, vehicleImage,
-            bio
+            vehicleName, vehicleType, vehicleNumber,
+            rcBookImage, insuranceExpiry, insuranceImage, vehicleImage
         };
 
         const missingFields = Object.keys(requiredFields).filter(key => !requiredFields[key]);
@@ -59,7 +58,6 @@ export const CreateDriverProfile = async (req, res) => {
                 name: vehicleName || "",
                 type: vehicleType || "",
                 number: vehicleNumber || "",
-                color: vehicleColor || "",
                 rcBookImage: rcBookImage || "", // Cloudinary URL
                 insuranceExpiry: insuranceExpiry || null,
                 insuranceImage: insuranceImage || "", // Cloudinary URL
@@ -88,7 +86,7 @@ export const CreateDriverProfile = async (req, res) => {
             data: driverProfile
         });
     } catch (error) {
-        console.error("Create Driver Profile Error:", error);
+        console.error("Create Driver Profile Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to create driver profile.",
@@ -117,7 +115,7 @@ export const GetDriverProfile = async (req, res) => {
             data: driverProfile
         });
     } catch (error) {
-        console.error("Get Driver Profile Error:", error);
+        console.error("Get Driver Profile Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to retrieve driver profile.",
@@ -145,7 +143,7 @@ export const GetDriverProfileById = async (req, res) => {
             data: driverProfile
         });
     } catch (error) {
-        console.error("Get Driver Profile By ID Error:", error);
+        console.error("Get Driver Profile By ID Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to retrieve driver profile.",
@@ -161,7 +159,7 @@ export const UpdateDriverProfile = async (req, res) => {
         const {
             licenseNumber, licenseExpiry, licenseImage,
             aadharNumber, aadharImage,
-            vehicleName, vehicleType, vehicleNumber, vehicleColor,
+            vehicleName, vehicleType, vehicleNumber,
             rcBookImage, insuranceExpiry, insuranceImage, vehicleImage,
             bio, currentLocation
         } = req.body;
@@ -186,7 +184,6 @@ export const UpdateDriverProfile = async (req, res) => {
         if (vehicleName !== undefined) profile.vehicle.name = vehicleName;
         if (vehicleType !== undefined) profile.vehicle.type = vehicleType;
         if (vehicleNumber !== undefined) profile.vehicle.number = vehicleNumber;
-        if (vehicleColor !== undefined) profile.vehicle.color = vehicleColor;
         if (rcBookImage !== undefined) profile.vehicle.rcBookImage = rcBookImage;
         if (insuranceExpiry !== undefined) profile.vehicle.insuranceExpiry = insuranceExpiry;
         if (insuranceImage !== undefined) profile.vehicle.insuranceImage = insuranceImage;
@@ -219,7 +216,7 @@ export const UpdateDriverProfile = async (req, res) => {
             data: profile
         });
     } catch (error) {
-        console.error("Update Driver Profile Error:", error);
+        console.error("Update Driver Profile Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to update driver profile.",
@@ -268,7 +265,7 @@ export const UpdateDriverStatus = async (req, res) => {
             data: populatedProfile
         });
     } catch (error) {
-        console.error("Update Driver Status Error:", error);
+        console.error("Update Driver Status Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to update driver status.",
@@ -298,7 +295,7 @@ export const DeleteDriverProfile = async (req, res) => {
             message: "Driver profile deleted successfully."
         });
     } catch (error) {
-        console.error("Delete Driver Profile Error:", error);
+        console.error("Delete Driver Profile Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to delete driver profile.",
@@ -337,7 +334,7 @@ export const GetAllDriverProfiles = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error("Get All Driver Profiles Error:", error);
+        console.error("Get All Driver Profiles Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to retrieve driver profiles.",
@@ -398,7 +395,7 @@ export const ApproveDriverProfile = async (req, res) => {
             data: driverProfile
         });
     } catch (error) {
-        console.error("Approve Driver Profile Error:", error);
+        console.error("Approve Driver Profile Error:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to update driver profile approval status.",

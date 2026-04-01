@@ -80,7 +80,7 @@ export const GetDashboardStats = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Admin Stats Error:", error);
+        console.error("Admin Stats Error:", error.message);
         return res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
@@ -154,7 +154,7 @@ export const GetAuditLogs = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Audit Logs Error:", error);
+        console.error("Audit Logs Error:", error.message);
         res.status(500).json({ success: false, message: "Failed to fetch audit logs." });
     }
 };

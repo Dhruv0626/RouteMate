@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Mail, Lock, User, Car, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, Car, ArrowRight, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { FaFacebook } from "react-icons/fa";
@@ -18,6 +18,7 @@ const SignInPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [isSuspended, setIsSuspended] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -90,11 +91,23 @@ const SignInPage = () => {
         });
         setFieldErrors(backendErrors);
       } else {
-        setError(err.response?.data?.message || "Sign in failed.");
+        const msg = err.response?.data?.message || "Sign in failed.";
+        if (msg.toLowerCase().includes("blocked")) {
+          setIsSuspended(true);
+          setError(msg);
+        } else {
+          setIsSuspended(false);
+          setError(msg);
+        }
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEmailReset = () => {
+    setError("");
+    setIsSuspended(false);
   };
 
   return (
@@ -169,11 +182,21 @@ const SignInPage = () => {
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
-            {error && (
+            {isSuspended ? (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 space-y-2">
+                <div className="flex items-center gap-2 text-red-400">
+                  <ShieldAlert size={18} />
+                  <p className="text-sm font-black">Account Suspended</p>
+                </div>
+                <p className="text-xs text-red-400/80 leading-relaxed">
+                  For particular reasons your account has been suspended. Please <strong>check your Gmail inbox</strong> for a detailed explanation from our Trust &amp; Safety team.
+                </p>
+              </div>
+            ) : error ? (
               <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs leading-tight font-bold text-red-500">
                 {error}
               </div>
-            )}
+            ) : null}
 
             <Input
               label="Email Address"

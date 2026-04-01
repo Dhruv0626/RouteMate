@@ -12,7 +12,7 @@ export const GetSettings = async (req, res) => {
         }
         res.status(200).json({ success: true, settings });
     } catch (error) {
-        console.error("Get Settings Error:", error);
+        console.error("Get Settings Error:", error.message);
         res.status(500).json({ success: false, message: "Failed to retrieve settings." });
     }
 };
@@ -133,7 +133,7 @@ export const UpdateSettings = async (req, res) => {
 
         res.status(200).json({ success: true, message: "Settings updated successfully.", settings });
     } catch (error) {
-        console.error("Update Settings Error:", error);
+        console.error("Update Settings Error:", error.message);
         res.status(500).json({ success: false, message: "Failed to update settings." });
     }
 };

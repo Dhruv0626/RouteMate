@@ -7,13 +7,13 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUserState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [theme, setThemeState] = useState("dark");
+  const [theme, setThemeState] = useState("light");
 
   // Initialize theme and user — then verify session is still valid on server
   useEffect(() => {
     const initializeAuth = async () => {
       // Restore Theme first (no network needed)
-      const storedTheme = localStorage.getItem("theme") || "dark";
+      const storedTheme = localStorage.getItem("theme") || "light";
       setThemeState(storedTheme);
       applyTheme(storedTheme);
 

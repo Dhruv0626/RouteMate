@@ -17,7 +17,7 @@ import { useAuth } from "../context/AuthContext";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
-import { createDriverProfile } from "../services/driverProfileService";
+import { createDriverProfile, getMyDriverProfile, updateDriverProfile } from "../services/driverProfileService";
 
 const VEHICLE_TYPES = ["2-Wheeler", "3-Wheeler", "4-Wheeler"];
 
@@ -31,12 +31,18 @@ const DriverProfileFormPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [formData, setFormData] = useState({
+    bio: "",
+    licenseNumber: "",
+    licenseExpiry: "",
+    licenseImage: "",
+    aadharNumber: "",
+    aadharImage: "",
     vehicleType: "",
     vehicleName: "",
-    licenseImage: "",
-    aadharImage: "",
+    vehicleNumber: "",
     vehicleImage: "",
     rcbookimage: "",
+    insuranceExpiry: "",
     insuranceimage: "",
   });
   const [uploading, setUploading] = useState({
@@ -50,49 +56,54 @@ const DriverProfileFormPage = () => {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [vehicleModels, setVehicleModels] = useState([]);
-  const [showNewModel, setShowNewModel] = useState(false);
-  const [newModelName, setNewModelName] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  // Redirect if not a driver
+  // Redirect if not driver, or fetch existing profile if driver
   React.useEffect(() => {
     if (user && user.role !== "driver") {
       navigate("/home");
+      return;
     }
+
+    const fetchExistingProfile = async () => {
+      try {
+        const res = await getMyDriverProfile();
+        if (res.data.success && res.data.data) {
+          const profile = res.data.data;
+          setIsUpdating(true);
+          
+          setFormData((prev) => ({
+            ...prev,
+            bio: profile.bio || "",
+            licenseNumber: profile.license?.number || "",
+            licenseExpiry: profile.license?.expiry ? profile.license.expiry.split('T')[0] : "",
+            licenseImage: profile.license?.image || "",
+            aadharNumber: profile.aadhar?.number || "",
+            aadharImage: profile.aadhar?.image || "",
+            vehicleType: profile.vehicle?.type || "",
+            vehicleName: profile.vehicle?.name || "",
+            vehicleNumber: profile.vehicle?.number || "",
+            vehicleImage: profile.vehicle?.vehicleImage || "",
+            rcbookimage: profile.vehicle?.rcBookImage || "",
+            insuranceExpiry: profile.vehicle?.insuranceExpiry ? profile.vehicle.insuranceExpiry.split('T')[0] : "",
+            insuranceimage: profile.vehicle?.insuranceImage || "",
+          }));
+        }
+      } catch (err) {
+        console.error("Error fetching driver profile:", err);
+      }
+    };
+
+    fetchExistingProfile();
   }, [user, navigate]);
 
   const handleVehicleTypeChange = (e) => {
-    const selectedType = e.target.value;
     setFormData({
       ...formData,
-      vehicleType: selectedType,
-      vehicleName: "",
+      vehicleType: e.target.value,
     });
-
-    const models = VEHICLE_MODELS[selectedType] || [];
-    setVehicleModels(models);
-    setShowNewModel(false);
-    setNewModelName("");
-  };
-
-  const handleVehicleModelChange = (e) => {
-    const value = e.target.value;
-    if (value === "add-new") {
-      setShowNewModel(true);
-    } else {
-      setFormData({ ...formData, vehicleName: value });
-      setShowNewModel(false);
-      setNewModelName("");
-    }
-  };
-
-  const addNewModel = () => {
-    if (newModelName.trim()) {
-      const updatedModels = [...vehicleModels, newModelName.trim()];
-      setVehicleModels(updatedModels);
-      setFormData({ ...formData, vehicleName: newModelName.trim() });
-      setNewModelName("");
-      setShowNewModel(false);
+    if (errors.vehicleType) {
+      setErrors({ ...errors, vehicleType: "" });
     }
   };
 
@@ -120,7 +131,7 @@ const DriverProfileFormPage = () => {
       return;
     }
 
-    setUploading({ ...uploading, [type]: true });
+    setUploading((prev) => ({ ...prev, [type]: true }));
     setError("");
 
     const uploadData = new FormData();
@@ -134,13 +145,14 @@ const DriverProfileFormPage = () => {
       });
 
       if (response.data.success) {
-        setFormData({ ...formData, [field]: response.data.data.url });
+        setFormData((prev) => ({ ...prev, [field]: response.data.data.url }));
+        setErrors((prev) => ({ ...prev, [field]: "" }));
       }
     } catch (err) {
       setError("Failed to upload image. Please try again.");
       console.error("Upload error:", err);
     } finally {
-      setUploading({ ...uploading, [type]: false });
+      setUploading((prev) => ({ ...prev, [type]: false }));
     }
   };
 
@@ -152,10 +164,15 @@ const DriverProfileFormPage = () => {
     const newErrors = {};
     if (!formData.vehicleType) newErrors.vehicleType = "Vehicle type is required";
     if (!formData.vehicleName) newErrors.vehicleName = "Vehicle model is required";
+    if (!formData.vehicleNumber) newErrors.vehicleNumber = "Vehicle number is required";
+    if (!formData.licenseNumber) newErrors.licenseNumber = "License number is required";
+    if (!formData.licenseExpiry) newErrors.licenseExpiry = "License expiry date is required";
     if (!formData.licenseImage) newErrors.licenseImage = "Driving license is mandatory";
+    if (!formData.aadharNumber) newErrors.aadharNumber = "Aadhar number is required";
     if (!formData.aadharImage) newErrors.aadharImage = "Aadhar card is mandatory";
     if (!formData.vehicleImage) newErrors.vehicleImage = "Vehicle photo is mandatory";
     if (!formData.rcbookimage) newErrors.rcbookimage = "RC Book is mandatory";
+    if (!formData.insuranceExpiry) newErrors.insuranceExpiry = "Insurance expiry is required";
     if (!formData.insuranceimage) newErrors.insuranceimage = "Insurance policy is mandatory";
 
     setErrors(newErrors);
@@ -175,15 +192,28 @@ const DriverProfileFormPage = () => {
     setLoading(true);
 
     try {
-      const response = await createDriverProfile({
+      const payload = {
+        bio: formData.bio.trim(),
+        licenseNumber: formData.licenseNumber.trim(),
+        licenseExpiry: formData.licenseExpiry,
+        licenseImage: formData.licenseImage,
+        aadharNumber: formData.aadharNumber.trim(),
+        aadharImage: formData.aadharImage,
         vehicleType: formData.vehicleType.trim(),
         vehicleName: formData.vehicleName.trim(),
-        licenseImage: formData.licenseImage,
-        aadharImage: formData.aadharImage,
+        vehicleNumber: formData.vehicleNumber.trim(),
         vehicleImage: formData.vehicleImage,
-        rcbookimage: formData.rcbookimage,
-        insuranceimage: formData.insuranceimage,
-      });
+        rcBookImage: formData.rcbookimage,
+        insuranceExpiry: formData.insuranceExpiry,
+        insuranceImage: formData.insuranceimage,
+      };
+
+      let response;
+      if (isUpdating) {
+        response = await updateDriverProfile(payload);
+      } else {
+        response = await createDriverProfile(payload);
+      }
 
       if (response.data.success) {
         setSuccess("Driver profile submitted for approval!");
@@ -244,89 +274,69 @@ const DriverProfileFormPage = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Personal Information */}
+              <div className="pt-2 border-t border-(--card-border)/50">
+                <Input
+                  label="Short Bio"
+                  placeholder="E.g., Reliable driver with 5 years of experience"
+                  value={formData.bio}
+                  onChange={(e) => handleInputChange(e, 'bio')}
+                  error={errors.bio}
+                  disabled={loading}
+                />
+              </div>
 
               {/* Vehicle Information */}
-              <div className="pt-2 border-t border-(--card-border)/50">
+              <div className="pt-4 border-t border-(--card-border)/50">
                 {/* Vehicle Type Dropdown */}
-                <div className="mb-4">
-                  <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
-                    Vehicle Type
-                  </label>
-                  <select
-                    className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleType ? "border-red-500/50 ring-red-500/10" : ""}`}
-                    value={formData.vehicleType || ""}
-                    onChange={handleVehicleTypeChange}
-                    disabled={loading}
-                  >
-                    <option value="">Select vehicle type</option>
-                    {VEHICLE_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.vehicleType && (
-                    <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <AlertCircle size={12} className="text-red-500" />
-                      <span className="text-[10px] font-bold text-red-500">{errors.vehicleType}</span>
-                    </div>
-                  )}
-                  <p className="text-[10px] text-(--text-dim) mt-2 ml-1 opacity-70">
-                    Choose your vehicle type (2, 3, 4 wheeler)
-                  </p>
-                </div>
-
-                {/* Vehicle Model Dropdown */}
-                {formData.vehicleType && (
-                  <div className="mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
                     <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
-                      Vehicle Model/Name
+                      Vehicle Type
                     </label>
                     <select
-                      className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleName ? "border-red-500/50 ring-red-500/10" : ""}`}
-                      value={formData.vehicleName || ""}
-                      onChange={handleVehicleModelChange}
+                      className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleType ? "border-red-500/50 ring-red-500/10" : ""}`}
+                      value={formData.vehicleType || ""}
+                      onChange={handleVehicleTypeChange}
                       disabled={loading}
                     >
-                      <option value="">Select vehicle model</option>
-                      {vehicleModels.map((model) => (
-                        <option key={model} value={model}>
-                          {model}
+                      <option value="">Select vehicle type</option>
+                      {VEHICLE_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
                         </option>
                       ))}
-                      <option value="add-new">Add new model...</option>
                     </select>
-                    {errors.vehicleName && (
+                    {errors.vehicleType && (
                       <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
                         <AlertCircle size={12} className="text-red-500" />
-                        <span className="text-[10px] font-bold text-red-500">{errors.vehicleName}</span>
-                      </div>
-                    )}
-                    <p className="text-[10px] text-(--text-dim) mt-2 ml-1 opacity-70">
-                      Choose or add your vehicle model
-                    </p>
-                    {showNewModel && (
-                      <div className="flex gap-2 mt-2">
-                        <input
-                          className="w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none"
-                          type="text"
-                          placeholder="Enter new model name"
-                          value={newModelName}
-                          onChange={(e) => setNewModelName(e.target.value)}
-                          disabled={loading}
-                        />
-                        <Button
-                          type="button"
-                          variant="primary"
-                          onClick={addNewModel}
-                          disabled={loading || !newModelName.trim()}
-                        >
-                          Add
-                        </Button>
+                        <span className="text-[10px] font-bold text-red-500">{errors.vehicleType}</span>
                       </div>
                     )}
                   </div>
-                )}
+
+                  <Input
+                    label="Vehicle Model/Name"
+                    placeholder="e.g. Swift Dzire, Honda Activa"
+                    value={formData.vehicleName}
+                    onChange={(e) => handleInputChange(e, 'vehicleName')}
+                    error={errors.vehicleName}
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <Input
+                    label="Vehicle Registration Number"
+                    placeholder="e.g. GJ 01 AB 1234"
+                    value={formData.vehicleNumber}
+                    onChange={(e) => handleInputChange(e, 'vehicleNumber')}
+                    error={errors.vehicleNumber}
+                    disabled={loading}
+                  />
+
+                </div>
+              </div>
 
 
               {/* Document Uploads */}
@@ -341,9 +351,25 @@ const DriverProfileFormPage = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* License Upload */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                  {/* License Upload & Info */}
+                  <div className="space-y-4">
+                    <Input
+                      label="License Number"
+                      placeholder="e.g. MH14 20110012345"
+                      value={formData.licenseNumber}
+                      onChange={(e) => handleInputChange(e, 'licenseNumber')}
+                      error={errors.licenseNumber}
+                      disabled={loading}
+                    />
+                    <Input
+                      label="License Expiry Date"
+                      type="date"
+                      value={formData.licenseExpiry}
+                      onChange={(e) => handleInputChange(e, 'licenseExpiry')}
+                      error={errors.licenseExpiry}
+                      disabled={loading}
+                    />
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1 text-left">
                       Driving License Copy
                     </label>
                     <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
@@ -391,9 +417,17 @@ const DriverProfileFormPage = () => {
                     </div>
                   </div>
 
-                  {/* Aadhar Upload */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                  {/* Aadhar Upload & Info */}
+                  <div className="space-y-4">
+                    <Input
+                      label="Aadhar Number"
+                      placeholder="e.g. 1234 5678 9012"
+                      value={formData.aadharNumber}
+                      onChange={(e) => handleInputChange(e, 'aadharNumber')}
+                      error={errors.aadharNumber}
+                      disabled={loading}
+                    />
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1 text-left">
                       Aadhar Card Copy
                     </label>
                     <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
@@ -541,9 +575,17 @@ const DriverProfileFormPage = () => {
                     </div>
                   </div>
 
-                  {/* Insurance Upload */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1">
+                  {/* Insurance Upload & Info */}
+                  <div className="space-y-4">
+                    <Input
+                      label="Insurance Expiry Date"
+                      type="date"
+                      value={formData.insuranceExpiry}
+                      onChange={(e) => handleInputChange(e, 'insuranceExpiry')}
+                      error={errors.insuranceExpiry}
+                      disabled={loading}
+                    />
+                    <label className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest block ml-1 text-left">
                       Insurance Policy Image
                     </label>
                     <div className={`relative group aspect-video rounded-2xl border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center p-4 overflow-hidden ${
@@ -592,7 +634,6 @@ const DriverProfileFormPage = () => {
                   </div>
                 </div>
               </div>
-            </div>
 
             {/* Submit Button */}
             <div className="pt-4">
@@ -603,7 +644,7 @@ const DriverProfileFormPage = () => {
                 disabled={loading}
                 icon={loading ? null : ArrowRight}
               >
-                {loading ? "Submitting Profile..." : "Submit Driver Profile"}
+                {loading ? (isUpdating ? "Updating Profile..." : "Submitting Profile...") : (isUpdating ? "Update Driver Profile" : "Submit Driver Profile")}
               </Button>
             </div>
 

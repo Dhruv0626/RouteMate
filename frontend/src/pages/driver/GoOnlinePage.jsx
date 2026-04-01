@@ -4,7 +4,7 @@ import {
   MapPin,
   Zap,
   Clock,
-  DollarSign,
+  IndianRupee,
   Smartphone,
   AlertCircle,
   CheckCircle,
@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   Navigation,
+  ChevronRight,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
@@ -32,8 +33,11 @@ const GoOnlinePage = () => {
     accuracy: 10,
     lastUpdated: "Just now",
   });
-  const [batteryLevel, setBatteryLevel] = useState(85);
-  const [signalStrength, setSignalStrength] = useState(4);
+  const [batteryLevel, setBatteryLevel] = useState(null);
+  const [isCharging, setIsCharging] = useState(false);
+  const [signalStrength, setSignalStrength] = useState(null);
+  const [connectionType, setConnectionType] = useState("Unknown");
+  const [isOnlineNet, setIsOnlineNet] = useState(navigator.onLine);
   const [showDetails, setShowDetails] = useState(false);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -96,13 +100,55 @@ const GoOnlinePage = () => {
           setIsOnline(response.data.data.isOnline);
         }
       } catch (err) {
-        console.error("Fetch profile error:", err);
+        console.error("Fetch profile error:", err.message);
       } finally {
         setLoading(false);
       }
     };
     fetchProfile();
     updateLocation();
+
+    // ── Real Battery API ──
+    if ('getBattery' in navigator) {
+      navigator.getBattery().then(battery => {
+        setBatteryLevel(Math.round(battery.level * 100));
+        setIsCharging(battery.charging);
+        battery.addEventListener('levelchange', () => setBatteryLevel(Math.round(battery.level * 100)));
+        battery.addEventListener('chargingchange', () => setIsCharging(battery.charging));
+      }).catch(() => setBatteryLevel(null));
+    }
+
+    // ── Real Network Info API ──
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+      const mapSignal = () => {
+        const dl = conn.downlink || 0;
+        if (dl >= 10) return 5;
+        if (dl >= 5) return 4;
+        if (dl >= 2) return 3;
+        if (dl >= 0.5) return 2;
+        return 1;
+      };
+      setSignalStrength(mapSignal());
+      setConnectionType(conn.effectiveType?.toUpperCase() || conn.type || "Unknown");
+      conn.addEventListener('change', () => {
+        setSignalStrength(mapSignal());
+        setConnectionType(conn.effectiveType?.toUpperCase() || conn.type || "Unknown");
+      });
+    } else {
+      setSignalStrength(navigator.onLine ? 4 : 0);
+    }
+
+    // ── Online/Offline listener ──
+    const goOnline = () => setIsOnlineNet(true);
+    const goOffline = () => setIsOnlineNet(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
   }, []);
   const updateLocation = () => {
     if (!navigator.geolocation) {
@@ -129,14 +175,25 @@ const GoOnlinePage = () => {
         }
       },
       (error) => {
-        console.error("Location error:", error);
+        console.error("Location error:", error.message);
         alert("Unable to retrieve your location");
       }
     );
   };
 
   // Handle go online/offline toggle
+  const [showLocationPopup, setShowLocationPopup] = useState(false);
+
   const handleOnlineToggle = async () => {
+    // Check location setting before allowing go-online
+    if (!isOnline) {
+      const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
+      if (!appSettings.locationTracking) {
+        setShowLocationPopup(true);
+        return;
+      }
+    }
+
     if (!isOnline && selectedRideTypes.length === 0) {
       alert("Please select at least one ride type to go online");
       return;
@@ -160,6 +217,38 @@ const GoOnlinePage = () => {
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">
+
+      {/* Location Required Popup */}
+      {showLocationPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="glass-card w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-500 relative overflow-hidden border border-(--card-border)">
+            <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
+            <div className="mb-6 flex justify-center">
+              <div className="bg-red-500/20 p-4 rounded-full text-red-500">
+                <MapPinOff size={36} />
+              </div>
+            </div>
+            <h2 className="font-display text-xl font-black text-center text-(--text-main) mb-2">Location Required</h2>
+            <p className="text-sm font-medium text-center text-(--text-dim) mb-6">
+              You need to enable <strong>Location Tracking</strong> in your Settings before you can go online and accept rides.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => { setShowLocationPopup(false); navigate('/driver/dashboard/settings'); }}
+                className="w-full bg-primary text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-xl shadow-primary/20"
+              >
+                Open Settings <ChevronRight size={16} />
+              </button>
+              <button
+                onClick={() => setShowLocationPopup(false)}
+                className="w-full py-3 rounded-xl text-sm font-bold text-(--text-dim) hover:text-(--text-main) transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Header ── */}
       <header className="sticky top-0 z-50 border-b border-(--card-border) bg-(--bg-main)/80 backdrop-blur-md transition-all duration-500">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
@@ -389,11 +478,11 @@ const GoOnlinePage = () => {
                       </p>
                       <div className="text-xs text-(--text-dim) space-y-1">
                         <div>
-                          Base Fare: <span className="font-semibold">${type.baseFare}</span>
+                          Base Fare: <span className="font-semibold">₹{type.baseFare}</span>
                         </div>
                         <div>
-                          Per Mile: <span className="font-semibold">${type.perMile}</span> | Per Min:{" "}
-                          <span className="font-semibold">${type.perMinute}</span>
+                          Per Mile: <span className="font-semibold">₹{type.perMile}</span> | Per Min:{" "}
+                          <span className="font-semibold">₹{type.perMinute}</span>
                         </div>
                       </div>
                     </div>
@@ -438,25 +527,32 @@ const GoOnlinePage = () => {
                 <h4 className="font-semibold text-(--text-main)">Battery</h4>
               </div>
               <span className="text-lg font-bold text-(--text-main)">
-                {batteryLevel}%
+                {batteryLevel !== null ? `${batteryLevel}%` : "N/A"}
               </span>
             </div>
-            <div className="h-2 w-full rounded-full bg-(--bg-main) overflow-hidden">
-              <div
-                className={`h-full transition-all ${
-                  batteryLevel > 50
-                    ? "bg-emerald-500"
-                    : batteryLevel > 20
-                      ? "bg-amber-500"
-                      : "bg-red-500"
-                }`}
-                style={{ width: `${batteryLevel}%` }}
-              ></div>
-            </div>
-            {batteryLevel < 20 && (
-              <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                ⚠️ Low battery - Consider charging
-              </p>
+            {batteryLevel !== null ? (
+              <>
+                <div className="h-2 w-full rounded-full bg-(--bg-main) overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      batteryLevel > 50
+                        ? "bg-emerald-500"
+                        : batteryLevel > 20
+                          ? "bg-amber-500"
+                          : "bg-red-500"
+                    }`}
+                    style={{ width: `${batteryLevel}%` }}
+                  ></div>
+                </div>
+                {isCharging && (
+                  <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">⚡ Charging</p>
+                )}
+                {batteryLevel < 20 && !isCharging && (
+                  <p className="mt-2 text-xs text-red-600 dark:text-red-400">⚠️ Low battery - Consider charging</p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-(--text-dim)">Battery API not available on this browser</p>
             )}
           </div>
 
@@ -470,7 +566,7 @@ const GoOnlinePage = () => {
                 <h4 className="font-semibold text-(--text-main)">Signal</h4>
               </div>
               <span className="text-lg font-bold text-(--text-main)">
-                {signalStrength}/5
+                {signalStrength !== null ? `${signalStrength}/5` : "N/A"}
               </span>
             </div>
             <div className="flex gap-1">
@@ -494,18 +590,24 @@ const GoOnlinePage = () => {
           <div className="rounded-xl border border-(--card-border) bg-(--card-bg) p-6 transition-all hover:border-primary/40">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-emerald-500/10 p-2">
-                  <Zap size={20} className="text-emerald-500" />
+                <div className={`rounded-lg p-2 ${isOnlineNet ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+                  <Zap size={20} className={isOnlineNet ? 'text-emerald-500' : 'text-red-500'} />
                 </div>
                 <h4 className="font-semibold text-(--text-main)">Internet</h4>
               </div>
-              <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                Active
+              <span className={`text-lg font-bold ${isOnlineNet ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                {isOnlineNet ? 'Active' : 'Offline'}
               </span>
             </div>
-            <p className="text-sm text-(--text-dim)">Connected via WiFi</p>
-            <span className="mt-2 inline-block rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              ✓ Stable Connection
+            <p className="text-sm text-(--text-dim)">
+              {isOnlineNet ? `Connected via ${connectionType}` : 'No internet connection detected'}
+            </p>
+            <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+              isOnlineNet
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                : 'bg-red-500/10 text-red-500'
+            }`}>
+              {isOnlineNet ? '✓ Stable Connection' : '✗ Disconnected'}
             </span>
           </div>
         </div>
@@ -534,16 +636,24 @@ const GoOnlinePage = () => {
           {showDetails && (
             <div className="mt-4 space-y-3 border-t border-(--card-border) pt-4">
               <div className="rounded-lg bg-(--bg-main) p-3">
-                <p className="text-sm text-(--text-dim) mb-1">Min. Rating Required</p>
-                <p className="font-semibold text-(--text-main)">4.6 ⭐</p>
+                <p className="text-sm text-(--text-dim) mb-1">Average Rating</p>
+                <p className="font-semibold text-(--text-main)">{profile?.averageRating?.toFixed(1) || "0.0"} ⭐</p>
               </div>
               <div className="rounded-lg bg-(--bg-main) p-3">
-                <p className="text-sm text-(--text-dim) mb-1">Acceptance Rate</p>
-                <p className="font-semibold text-(--text-main)">87%</p>
+                <p className="text-sm text-(--text-dim) mb-1">Total Rides</p>
+                <p className="font-semibold text-(--text-main)">{profile?.stats?.totalRides || 0}</p>
               </div>
               <div className="rounded-lg bg-(--bg-main) p-3">
-                <p className="text-sm text-(--text-dim) mb-1">Cancellation Rate</p>
-                <p className="font-semibold text-(--text-main)">3%</p>
+                <p className="text-sm text-(--text-dim) mb-1">Completed Rides</p>
+                <p className="font-semibold text-(--text-main)">{profile?.stats?.completedRides || 0}</p>
+              </div>
+              <div className="rounded-lg bg-(--bg-main) p-3">
+                <p className="text-sm text-(--text-dim) mb-1">Cancelled Rides</p>
+                <p className="font-semibold text-(--text-main)">{profile?.stats?.cancelledRides || 0}</p>
+              </div>
+              <div className="rounded-lg bg-(--bg-main) p-3">
+                <p className="text-sm text-(--text-dim) mb-1">Trust Score</p>
+                <p className="font-semibold text-(--text-main)">{profile?.trustScore || 100}/100</p>
               </div>
               <div className="rounded-lg bg-(--bg-main) p-3">
                 <p className="text-sm text-(--text-dim) mb-1">Account Status</p>
@@ -551,6 +661,10 @@ const GoOnlinePage = () => {
                   <span className={`h-2 w-2 rounded-full ${profile?.isApproved ? "bg-emerald-500" : "bg-amber-500"}`}></span>
                   <p className="font-semibold text-(--text-main)">{profile?.isApproved ? "Verified & Approved" : "Pending Verification"}</p>
                 </div>
+              </div>
+              <div className="rounded-lg bg-(--bg-main) p-3">
+                <p className="text-sm text-(--text-dim) mb-1">Member Since</p>
+                <p className="font-semibold text-(--text-main)">{profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : "—"}</p>
               </div>
             </div>
           )}

@@ -32,11 +32,9 @@ class CacheService {
             });
 
             this.client.on("connect", () => {
-                console.log("⚡ [Redis] Connecting to cache server...");
             });
 
             this.client.on("ready", () => {
-                console.log("✅ [Redis] Cache server is ready and connected.");
             });
 
             this.client.on("error", (err) => {

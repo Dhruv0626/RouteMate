@@ -15,7 +15,7 @@ import {
   Eye,
   MoreVertical,
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   Fuel,
   Activity,
   AlertTriangle,
@@ -30,80 +30,14 @@ const ActiveRidesPage = () => {
   const [showNavigation, setShowNavigation] = useState(false);
 
   // Mock active rides data
-  const activeRides = [
-    {
-      id: 1,
-      status: "in-progress",
-      passengerName: "Sarah M.",
-      rating: 4.9,
-      phone: "+1 234-567-8901",
-      pickup: "Downtown Station, Main St",
-      dropoff: "International Airport Terminal 2",
-      distance: {
-        total: 25,
-        remaining: 8.5,
-      },
-      duration: {
-        total: 35,
-        elapsed: 18,
-        remaining: 17,
-      },
-      fare: {
-        baseFare: 25.0,
-        distanceFare: 12.5,
-        timeFare: 8.5,
-        surge: 1.2,
-        total: 57.6,
-      },
-      currentLocation: "Highway 101, Near Exit 5",
-      passengerLocation: "In vehicle",
-      rideType: "Premium",
-      bookingTime: "18 mins ago",
-      routeOptimized: true,
-      notes: "Passenger requested scenic route",
-      emergencyContact: "+1 234-567-8901",
-    },
-    {
-      id: 2,
-      status: "waiting",
-      passengerName: "John D.",
-      rating: 4.7,
-      phone: "+1 234-567-8902",
-      pickup: "City Hospital, 5th Ave",
-      dropoff: "Westside Mall",
-      distance: {
-        total: 12,
-        remaining: 12,
-      },
-      duration: {
-        total: 20,
-        elapsed: 0,
-        remaining: 20,
-      },
-      fare: {
-        baseFare: 15.0,
-        distanceFare: 6.0,
-        timeFare: 0,
-        surge: 1.0,
-        total: 21.0,
-      },
-      currentLocation: "Outside main entrance",
-      passengerLocation: "Not yet in vehicle",
-      rideType: "Standard",
-      bookingTime: "2 mins ago",
-      routeOptimized: false,
-      notes: "Waiting for passenger",
-      emergencyContact: "+1 234-567-8902",
-      waitTime: 2,
-    },
-  ];
+  const activeRides = [];
 
   const rideStats = {
-    activeRides: activeRides.length,
-    totalEarningsToday: 247.5,
-    completedRides: 7,
-    averageRating: 4.85,
-    onlineHours: 6.5,
+    activeRides: 0,
+    totalEarningsToday: 0,
+    completedRides: 0,
+    averageRating: 0,
+    onlineHours: 0,
   };
 
   const getStatusColor = (status) => {
@@ -204,9 +138,9 @@ const ActiveRidesPage = () => {
 
           <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
             <div className="flex items-center justify-between mb-4">
-              <DollarSign className="w-5 h-5 text-violet-500" />
+              <IndianRupee className="w-5 h-5 text-violet-500" />
               <span className="text-2xl font-bold text-(--text-main)">
-                ${rideStats.totalEarningsToday}
+                ₹{rideStats.totalEarningsToday}
               </span>
             </div>
             <p className="text-sm text-(--text-dim)">

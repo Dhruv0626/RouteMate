@@ -4,7 +4,7 @@ const { Schema } = mongoose;
 const DriverProfileSchema = new Schema(
   {
     user: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true },
-    bio:  { type: String, required: true },
+    bio:  { type: String, default: "" },
 
     // ── License ────────────────────────────────────────────────────────────
     // image = single collage: LEFT half = front side, RIGHT half = back side
@@ -24,13 +24,8 @@ const DriverProfileSchema = new Schema(
     // ── Vehicle ────────────────────────────────────────────────────────────
     vehicle: {
       name:             { type: String, required: true },         // e.g. "Swift Dzire"
-      type: {
-        type: String,
-        enum: ["Sedan", "SUV", "Hatchback", "Auto", "Bike"],
-        required: true,
-      },
+      type:             { type: String, required: true },
       number:           { type: String, required: true },         // Registration number
-      color:            { type: String, required: true },
       rcBookImage:      { type: String, required: true },         // Cloudinary URL
       insuranceExpiry:  { type: Date, required: true },
       insuranceImage:   { type: String, required: true },         // Cloudinary URL
@@ -58,7 +53,7 @@ const DriverProfileSchema = new Schema(
       cancelledRides: { type: Number, default: 0 },
     },
 
-    averageRating:        { type: Number, default: 5.0 },
+    averageRating:        { type: Number, default: 0.0 },
     totalRatingsReceived: { type: Number, default: 0 },
     trustScore:           { type: Number, default: 100 },
 

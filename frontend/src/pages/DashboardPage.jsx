@@ -25,6 +25,7 @@ import {
   Circle,
   FileCheck,
   User,
+  Mail,
 } from "lucide-react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
@@ -80,6 +81,7 @@ const ROLE_CARDS = {
       color: "violet",
       href: "/passenger/dashboard/profile",
     },
+
   ],
   driver: [
     {
@@ -138,6 +140,7 @@ const ROLE_CARDS = {
       color: "violet",
       href: "/driver/dashboard/profile",
     },
+
   ],
   admin: [
     {
@@ -185,72 +188,8 @@ const ROLE_CARDS = {
   ],
 };
 
-const MOCK_HISTORY = {
-  passenger: [
-    {
-      id: 1,
-      type: "Ride",
-      from: "Central Park",
-      to: "Times Square",
-      date: "Oct 12, 2023",
-      status: "Completed",
-      amount: "₹150",
-      icon: Navigation,
-    },
-    {
-      id: 2,
-      type: "Ride",
-      from: "JFK Airport",
-      to: "Brooklyn",
-      date: "Oct 10, 2023",
-      status: "Completed",
-      amount: "₹450",
-      icon: MapPin,
-    },
-  ],
-  driver: [
-    {
-      id: 1,
-      type: "Income",
-      from: "City Center",
-      to: "Green Valley",
-      date: "Oct 12, 2023",
-      status: "Completed",
-      amount: "+₹320",
-      icon: Wallet,
-    },
-    {
-      id: 2,
-      type: "Income",
-      from: "West End",
-      to: "North Gate",
-      date: "Oct 11, 2023",
-      status: "Completed",
-      amount: "+₹280",
-      icon: Car,
-    },
-  ],
-  admin: [
-    {
-      id: 1,
-      type: "Audit",
-      user: "John Doe",
-      action: "Account Verified",
-      date: "Oct 12, 2023",
-      status: "Success",
-      icon: UserCheck,
-    },
-    {
-      id: 2,
-      type: "Fleet",
-      user: "Cab #123",
-      action: "Maintenance Logged",
-      date: "Oct 12, 2023",
-      status: "Success",
-      icon: Shield,
-    },
-  ],
-};
+// Real history fetched from backend in useEffect
+const ACTIVITIES_INITIAL = [];
 
 const COLOR_MAP = {
   primary: {
@@ -315,6 +254,27 @@ const DashboardPage = () => {
   const [activities, setActivities] = useState([]);
   const role = user?.role || "passenger";
 
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [modalSettings, setModalSettings] = useState({
+    pushNotifs: false,
+    emailNotifs: false,
+    locationTracking: false,
+  });
+
+  useEffect(() => {
+    // Check if user has configured settings on first visit
+    const stored = localStorage.getItem("appSettings");
+    if (!stored) {
+      setShowSettingsModal(true);
+    }
+  }, []);
+
+  const saveModalSettings = () => {
+    const freshSettings = { ...modalSettings, hasConfigured: true };
+    localStorage.setItem("appSettings", JSON.stringify(freshSettings));
+    setShowSettingsModal(false);
+  };
+
   // Default fallback stats (demo)
   const defaultStats = {
     passenger: [
@@ -376,7 +336,7 @@ const DashboardPage = () => {
             } else {
               setStats([
                 { label: "Total Trips", value: s.totalRides.toString() },
-                { label: "Saved Places", value: "3" }, // Keep static or fetch if implemented
+                { label: "Saved Places", value: "0" }, 
                 { label: "Total Spent", value: `₹${s.totalSpent.toLocaleString()}` },
               ]);
             }
@@ -385,12 +345,12 @@ const DashboardPage = () => {
             const activityHistory = rides.map(ride => ({
               id: ride._id,
               type: "Ride",
-              from: ride.pickup.name?.split(',')[0] || "Unknown",
-              to: ride.destination.name?.split(',')[0] || "Unknown",
+              from: ride.source?.address?.split(',')[0] || "Unknown",
+              to: ride.destination?.address?.split(',')[0] || "Unknown",
               date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
               rawDate: new Date(ride.createdAt),
-              status: ride.status.charAt(0).toUpperCase() + ride.status.slice(1),
-              amount: `₹${ride.fare}`,
+              status: ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
+              amount: `₹${ride.fare?.total || 0}`,
               icon: Navigation
             }));
 
@@ -446,8 +406,6 @@ const DashboardPage = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <ThemeToggle />
-
             <div className="relative">
               <button 
                 onClick={() => navigate(`/${role}/dashboard/notifications`)}
@@ -481,10 +439,10 @@ const DashboardPage = () => {
             </div>
 
             <button
-              onClick={handleLogout}
-              className="ml-1 rounded-xl bg-red-500/10 p-2 text-red-500 transition-all hover:bg-red-500 hover:text-white"
+              onClick={() => navigate(`/${role}/dashboard/settings`)}
+              className="ml-1 rounded-xl bg-primary/10 p-2 text-primary transition-all hover:bg-primary hover:text-black"
             >
-              <LogOut size={18} />
+              <Settings size={18} />
             </button>
           </div>
         </div>
@@ -648,46 +606,82 @@ const DashboardPage = () => {
           </div>
         </section>
 
-        {/* Promotion */}
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="from-primary to-primary-dark group border-primary/20 relative overflow-hidden rounded-3xl border bg-linear-to-r p-8 shadow-lg lg:col-span-2">
-            <div className="translate-y--10 absolute top-0 right-0 h-64 w-64 translate-x-10 rounded-full bg-white/10 blur-3xl transition-transform duration-700 group-hover:scale-110 dark:bg-white/5" />
-            <div className="relative z-10 flex flex-col justify-between gap-6 md:flex-row md:items-center">
-              <div>
-                <h3 className="font-display mb-2 text-2xl font-black text-black">
-                  Upgrade to Plus
-                </h3>
-                <p className="mb-5 max-w-70 text-sm font-bold text-black/80">
-                  Get priority pickups and zero surge pricing.
-                </p>
-                <button className="rounded-xl bg-black px-6 py-2.5 text-xs font-black text-white transition-all hover:-translate-y-px">
-                  Explore Now
+      </main>
+
+      {/* Settings Permission Modal Workflow */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="glass-card w-full max-w-md rounded-3xl p-8 shadow-2xl animate-in zoom-in-95 duration-500 relative overflow-hidden border-(--card-border)">
+            <div className="absolute top-0 left-0 w-full h-2 from-primary to-primary-dark bg-linear-to-r" />
+            <div className="mb-6 flex justify-center">
+               <div className="bg-primary/20 p-4 rounded-full text-primary">
+                 <Settings size={36} />
+               </div>
+            </div>
+            <h2 className="font-display text-2xl font-black text-center text-(--text-main) mb-2">Enhance Your Experience</h2>
+            <p className="text-sm font-medium text-center text-(--text-dim) mb-8">
+              Enable the following settings manually to get real-time ride updates and the best driver matching.
+            </p>
+
+            <div className="space-y-4 mb-8">
+              <div className="flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                <div className="mr-4 flex items-start gap-3">
+                  <Bell className="text-primary mt-0.5" size={20} />
+                  <div>
+                    <p className="font-bold text-sm text-(--text-main)">Push Notifications</p>
+                    <p className="text-[10px] text-(--text-dim) mt-0.5">Alerts you about your ride status</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setModalSettings(prev => ({...prev, pushNotifs: !prev.pushNotifs}))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${modalSettings.pushNotifs ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${modalSettings.pushNotifs ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
-              <div className="hidden h-20 w-20 items-center justify-center rounded-full border-4 border-black/10 bg-black/10 md:flex">
-                <Shield size={36} className="text-black" />
-              </div>
-            </div>
-          </div>
 
-          <div className="glass-card border-primary/20 flex flex-col justify-between rounded-3xl p-8 shadow-sm">
-            <div className="space-y-3">
-              <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl">
-                <Star size={20} fill="currentColor" />
+              <div className="flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                <div className="mr-4 flex items-start gap-3">
+                  <Mail className="text-amber-500 mt-0.5" size={20} />
+                  <div>
+                    <p className="font-bold text-sm text-(--text-main)">Email Alerts</p>
+                    <p className="text-[10px] text-(--text-dim) mt-0.5">OTP verification and crucial updates</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setModalSettings(prev => ({...prev, emailNotifs: !prev.emailNotifs}))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${modalSettings.emailNotifs ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${modalSettings.emailNotifs ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
-              <h3 className="font-display text-base font-black text-(--text-main)">
-                Referral
-              </h3>
-              <p className="text-xs font-medium text-(--text-dim)">
-                Earn credit for every friend who joins.
-              </p>
+
+              <div className="flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                <div className="mr-4 flex items-start gap-3">
+                  <Navigation className="text-emerald-500 mt-0.5" size={20} />
+                  <div>
+                    <p className="font-bold text-sm text-(--text-main)">Location Tracking</p>
+                    <p className="text-[10px] text-(--text-dim) mt-0.5">Shows drivers your exact pickup spot</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setModalSettings(prev => ({...prev, locationTracking: !prev.locationTracking}))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${modalSettings.locationTracking ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${modalSettings.locationTracking ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
             </div>
-            <button className="text-primary hover:bg-primary mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-(--card-border) bg-(--card-bg) px-4 py-3 text-xs font-black transition-all hover:text-black">
-              Share Link <Plus size={14} />
+
+            <button 
+              onClick={saveModalSettings}
+              className="w-full bg-primary text-black font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-xl shadow-primary/20"
+            >
+              Continue to Dashboard <ChevronRight size={18} />
             </button>
           </div>
-        </section>
-      </main>
+        </div>
+      )}
 
       <footer className="mx-auto max-w-6xl border-t border-(--card-border) px-6 py-10 text-center">
         <p className="text-[9px] font-black tracking-[0.3em] text-(--text-dim) uppercase">

@@ -25,7 +25,7 @@ export async function searchLocation(query) {
       lng: parseFloat(item.lon),
     }));
   } catch (e) {
-    console.error("[geocode] searchLocation:", e);
+    console.error("[geocode] searchLocation:", e.message);
     return [];
   }
 }
@@ -263,7 +263,7 @@ export async function getRouteInfo(pickup, dropoff) {
     const r = data.routes[0];
     return { distance: `${(r.distance / 1000).toFixed(1)} km`, duration: Math.round(r.duration / 60) };
   } catch (e) {
-    console.error("[geocode] getRouteInfo:", e);
+    console.error("[geocode] getRouteInfo:", e.message);
     return null;
   }
 }

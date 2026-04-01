@@ -13,15 +13,9 @@ import {
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
-const MOCK_REVIEWS = [
-  { id: 1, driver: "Ravi Kumar", date: "Today", rating: 5, comment: "Excellent service! The car was clean and Ravi was very professional.", trip: "Maninagar to Iskon" },
-  { id: 2, driver: "Arjun Mehta", date: "Yesterday", rating: 4, comment: "Fairly good ride, though we hit some traffic in the end.", trip: "Bopal to SP Stadium" },
-  { id: 3, driver: "Kiran R.", date: "6 Mar", rating: 5, comment: "Very polite driver. Highly recommended.", trip: "Satellite to Prahlad Nagar" },
-];
+const MOCK_REVIEWS = [];
 
-const PENDING_REVIEWS = [
-  { id: 101, driver: "Deepak S.", date: "Yesterday, 4:20 PM", trip: "CEPT Uni to Bodakdev" },
-];
+const PENDING_REVIEWS = [];
 
 const ReviewsPage = () => {
   const navigate = useNavigate();

@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
-import { getEmailTemplate } from "../utils/emailTemplates.js";
+import { getEmailTemplate, getAccountStatusTemplate } from "../utils/emailTemplates.js";
 import cacheService from "../utils/redis.js";
 import { notifyUserBlocked, notifyUserUnblocked, notifyUserDeleted } from "../utils/NotifyUtil.js";
 
@@ -110,12 +110,12 @@ export const CreateUser = async (req, res) => {
 
         // 5. Save user first, then send email in background (eliminate network wait)
         const user = await UserModel.create(userData);
-        
+
         // Trigger email in background without awaiting, preventing a 10s wait on Render
-        sendEmail({ 
-            email: userData.email, 
-            subject: "RouteMate - Verify Your Email", 
-            html: htmlContent 
+        sendEmail({
+            email: userData.email,
+            subject: "RouteMate - Verify Your Email",
+            html: htmlContent
         }).catch(err => console.error("Background Verification Email Error:", err));
 
         const userResponse = user.toObject();
@@ -139,9 +139,9 @@ export const CreateUser = async (req, res) => {
             });
         }
         console.error("Create User Error:", error);
-        return res.status(500).json({ 
-            success: false, 
-            message: "A database error occurred while registering your account. Please try again soon." 
+        return res.status(500).json({
+            success: false,
+            message: "A database error occurred while registering your account. Please try again soon."
         });
     }
 };
@@ -216,9 +216,9 @@ export const SignInUser = async (req, res) => {
 
     } catch (error) {
         console.error("Sign In Error:", error);
-        return res.status(500).json({ 
-            success: false, 
-            message: "The authentication service is currently unavailable. Please try again later." 
+        return res.status(500).json({
+            success: false,
+            message: "The authentication service is currently unavailable. Please try again later."
         });
     }
 };
@@ -292,7 +292,7 @@ export const LogoutUser = async (req, res) => {
             const user = await UserModel.findById(req.user?._id);
             if (user) {
                 await UserModel.findByIdAndUpdate(req.user?._id, { refreshToken: null });
-                
+
                 // 🧹 Invalidate Profile Cache on logout
                 await cacheService.del(`user:profile:${req.user._id}`);
             }
@@ -378,7 +378,7 @@ export const DeleteUser = async (req, res) => {
 export const UpdateUser = async (req, res) => {
     try {
         const { userId } = req.params;
-        const { name, email, Mobile_no, role, isBlocked } = req.body;
+        const { name, email, Mobile_no, role, isBlocked, suspensionReason } = req.body;
 
         const user = await UserModel.findById(userId);
         if (!user) {
@@ -403,8 +403,24 @@ export const UpdateUser = async (req, res) => {
         if (typeof isBlocked === "boolean") {
             if (isBlocked) {
                 await notifyUserBlocked({ targetUser: user, adminId: req.user.id });
+                // Send suspension email with reason
+                const html = getAccountStatusTemplate({
+                    userName: user.name,
+                    type: "suspended",
+                    reason: suspensionReason || "Violation of RouteMate Community Guidelines and Terms of Service."
+                });
+                sendEmail({ email: user.email, subject: "RouteMate - Your Account Has Been Suspended", html })
+                    .catch(err => console.error("Suspension Email Error:", err));
             } else {
                 await notifyUserUnblocked({ targetUser: user, adminId: req.user.id });
+                // Send reinstatement email
+                const html = getAccountStatusTemplate({
+                    userName: user.name,
+                    type: "reinstated",
+                    reason: "Your appeal was reviewed and your account access has been restored."
+                });
+                sendEmail({ email: user.email, subject: "RouteMate - Your Account Has Been Reinstated", html })
+                    .catch(err => console.error("Reinstatement Email Error:", err));
             }
         }
 
@@ -492,7 +508,7 @@ export const VerifyEmailOTP = async (req, res) => {
 
         if (
             user.otp.purpose !== "verification" ||
-            user.otp.code !== hashedOtp || 
+            user.otp.code !== hashedOtp ||
             user.otp.expiresAt < Date.now()
         ) {
             return res.status(400).json({
@@ -600,8 +616,8 @@ export const UpdateMobileNumber = async (req, res) => {
         delete updatedUser.password;
         delete updatedUser.refreshToken;
 
-        res.status(200).json({ 
-            success: true, 
+        res.status(200).json({
+            success: true,
             message: "Mobile number updated successfully.",
             user: updatedUser
         });
@@ -634,8 +650,8 @@ export const GetProfile = async (req, res) => {
         // 📥 Store in Cache for 10 minutes (600 seconds)
         await cacheService.set(cacheKey, user, 600);
 
-        return res.status(200).json({ 
-            success: true, 
+        return res.status(200).json({
+            success: true,
             user,
             source: "db"
         });
@@ -664,8 +680,8 @@ export const UpdateProfileImage = async (req, res) => {
         // 🧹 Invalidate Profile Cache
         await cacheService.del(`user:profile:${user._id}`);
 
-        res.status(200).json({ 
-            success: true, 
+        res.status(200).json({
+            success: true,
             message: "Profile image updated successfully.",
             profileImage: user.profileImage
         });
@@ -673,4 +689,4 @@ export const UpdateProfileImage = async (req, res) => {
         console.error("Update Profile Image Error:", error.message);
         res.status(500).json({ success: false, message: "Server error while updating profile image." });
     }
-};
+};

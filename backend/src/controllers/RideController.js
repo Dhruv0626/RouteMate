@@ -52,7 +52,7 @@ export const GetPassengerHistory = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Passenger History Error:", error);
+    console.error("Passenger History Error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -89,12 +89,12 @@ export const GetDriverHistory = async (req, res) => {
         stats: {
           totalRides: stats[0]?.totalRides || 0,
           totalEarnings: stats[0]?.totalEarnings || 0,
-          avgRating: "5.0", // To be updated when reviews are integrated
+          avgRating: "0.0", // To be updated when reviews are integrated
         },
       },
     });
   } catch (error) {
-    console.error("Driver History Error:", error);
+    console.error("Driver History Error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -112,7 +112,7 @@ export const GetFareEstimate = async (req, res) => {
         const fare = await calculateFare(parseFloat(distanceKm), vehicleType);
         res.status(200).json({ success: true, fare });
     } catch (error) {
-        console.error("Fare Estimate Error:", error);
+        console.error("Fare Estimate Error:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -155,7 +155,7 @@ export const CreateDemoRide = async (req, res) => {
 
     res.status(201).json({ success: true, ride: newTrip });
   } catch (error) {
-    console.error("Create Demo Ride Error:", error);
+    console.error("Create Demo Ride Error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };

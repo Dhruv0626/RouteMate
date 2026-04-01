@@ -15,20 +15,13 @@ import {
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
-const MOCK_CARDS = [
-  { id: 1, type: "Visa", last4: "4521", expiry: "12/26", color: "bg-linear-to-br from-violet-600 to-indigo-700" },
-  { id: 2, type: "Mastercard", last4: "8894", expiry: "08/25", color: "bg-linear-to-br from-rose-600 to-orange-600" },
-];
+const MOCK_CARDS = [];
 
-const MOCK_TRANSACTIONS = [
-  { id: 1, type: "Debit", title: "Ride Payment", amount: "₹185.00", date: "Today, 3:14 PM", status: "success" },
-  { id: 2, type: "Credit", title: "Wallet Topup", amount: "₹500.00", date: "Yesterday, 11:30 AM", status: "success" },
-  { id: 3, type: "Debit", title: "Ride Payment", amount: "₹140.00", date: "Yesterday, 1:02 PM", status: "success" },
-];
+const MOCK_TRANSACTIONS = [];
 
 const PaymentsPage = () => {
   const navigate = useNavigate();
-  const balance = "₹1,240.50";
+  const balance = "₹0.00";
 
   return (
     <div className="mesh-bg min-h-screen font-sans text-(--text-main)">

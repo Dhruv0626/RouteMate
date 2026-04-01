@@ -24,10 +24,7 @@ const ReferralPage = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const RECENT_REFERRALS = [
-    { id: 1, name: "Aman Shah", status: "Joined", reward: "₹50", date: "2 days ago" },
-    { id: 2, name: "Krina Patel", status: "Pending", reward: "-", date: "Today" },
-  ];
+  const RECENT_REFERRALS = [];
 
   return (
     <div className="mesh-bg min-h-screen font-sans text-(--text-main)">
@@ -85,15 +82,15 @@ const ReferralPage = () => {
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
            <div className="glass-card rounded-[2rem] p-6 border border-(--card-border) text-center">
               <div className="bg-primary/10 text-primary mx-auto h-12 w-12 rounded-2xl flex items-center justify-center mb-4"><Users size={24} /></div>
-              <h4 className="text-xl font-black mt-1">12 Invites</h4>
+              <h4 className="text-xl font-black mt-1">0 Invites</h4>
            </div>
            <div className="glass-card rounded-[2rem] p-6 border border-(--card-border) text-center">
               <div className="bg-emerald-500/10 text-emerald-400 mx-auto h-12 w-12 rounded-2xl flex items-center justify-center mb-4"><TrendingUp size={24} /></div>
-              <h4 className="text-xl font-black mt-1">8 Joined</h4>
+              <h4 className="text-xl font-black mt-1">0 Joined</h4>
            </div>
            <div className="glass-card rounded-[2rem] p-6 border border-(--card-border) text-center">
               <div className="bg-violet-500/10 text-violet-400 mx-auto h-12 w-12 rounded-2xl flex items-center justify-center mb-4"><TrendingUp size={24} /></div>
-              <h4 className="text-xl font-black mt-1">₹400 Won</h4>
+              <h4 className="text-xl font-black mt-1">₹0 Won</h4>
            </div>
         </section>
       </main>

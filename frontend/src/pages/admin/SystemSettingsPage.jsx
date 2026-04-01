@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Settings, Save, ChevronLeft, Zap, DollarSign, Bell,
+  Settings, Save, ChevronLeft, Zap, IndianRupee, Bell,
   Shield, Globe, Smartphone, Database, RefreshCw, AlertTriangle,
   Info, CheckCircle2, Sliders, Server
 } from "lucide-react";
@@ -114,7 +114,7 @@ const SystemSettingsPage = () => {
           });
         }
       } catch (err) {
-        console.error("Failed to fetch settings", err);
+        console.error("Failed to fetch settings", err.message);
       } finally {
         setLoading(false);
       }
@@ -140,7 +140,7 @@ const SystemSettingsPage = () => {
         setTimeout(() => setSuccess(false), 3000);
       }
     } catch (err) {
-      console.error("Failed to save settings", err);
+      console.error("Failed to save settings", err.message);
       alert(err.response?.data?.message || "Cloud sync failed. Check connection.");
     } finally {
       setSaving(false);

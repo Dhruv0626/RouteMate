@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  TrendingUp, Users, Car, DollarSign, ChevronLeft,
+  TrendingUp, Users, Car, IndianRupee, ChevronLeft,
   Activity, Star, ArrowUpRight, ArrowDownRight, BarChart2,
   Calendar, RefreshCw, Zap, MapPin, Clock, Shield,
   Download, FileText, X
@@ -264,35 +264,16 @@ const AnalyticsPage = () => {
 
   // ── Dummy Data (for metrics that need rides/payments backend) ──
   const DUMMY = {
-    revenue:       { value: "₹1,24,520", change: "+18.2%", spark: [40, 60, 45, 80, 70, 90, 75, 110, 95, 130, 115, 140] },
-    rides:         { value: "3,847",     change: "+12.4%", spark: [30, 55, 40, 70, 65, 85, 60, 90, 80, 110, 95, 120] },
-    avgRating:     { value: "4.7 ★",    change: "+0.3",   spark: [80, 85, 78, 90, 92, 88, 95, 91, 96, 93, 97, 98] },
-    cancelRate:    { value: "4.2%",      change: "-1.1%",  changeType: "down" },
-    vehicleTypes:  [
-      { label: "Sedan",    value: 42, color: "primary" },
-      { label: "SUV",      value: 28, color: "violet" },
-      { label: "Auto",     value: 18, color: "emerald" },
-      { label: "Bike",     value: 12, color: "amber" },
-    ],
-    areaBreakdown: [
-      { label: "Paldi", value: 1240, color: "primary" },
-      { label: "Prahlad Nagar",  value: 870,  color: "violet" },
-      { label: "Maninagar",       value: 760,  color: "emerald" },
-      { label: "Science City",         value: 620,  color: "amber" },
-      { label: "Bodakdev",     value: 357,  color: "rose" },
-    ],
-    recentActivity: [
-      { icon: Car,      color: "primary", title: "New Driver Registered",        sub: "Ravi Kumar – CG Road",          time: "2 min ago",  badge: "Pending" },
-      { icon: MapPin,   color: "emerald", title: "Ride Completed",               sub: "#RM-7841 · ₹280 · 12 km",      time: "5 min ago",  badge: "Completed" },
-      { icon: Users,    color: "violet",  title: "Passenger Sign Up",            sub: "sneha.r@outlook.com",           time: "11 min ago", badge: null },
-      { icon: Star,     color: "amber",   title: "5-Star Rating Received",       sub: "Arjun Mehta → Driver #RM204",  time: "24 min ago", badge: "Completed" },
-      { icon: Shield,   color: "rose",    title: "Driver Rejection",             sub: "Mismatch – Satellite Zone",    time: "42 min ago", badge: "Rejected" },
-      { icon: Activity, color: "primary", title: "Peak Hour Surge Activated",   sub: "7× zone – Prahlad Nagar",      time: "1 hr ago",   badge: null },
-      { icon: Clock,    color: "cyan",    title: "Scheduled Maintenance",        sub: "Server batch job completed",   time: "2 hr ago",   badge: null },
-    ],
+    revenue:       { value: "₹0", change: "0%", spark: [] },
+    rides:         { value: "0",     change: "0%", spark: [] },
+    avgRating:     { value: "0.0 ★",    change: "0",   spark: [] },
+    cancelRate:    { value: "0.0%",      change: "0.0%",  changeType: "down" },
+    vehicleTypes:  [],
+    areaBreakdown: [],
+    recentActivity: [],
     weekDays: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
-    weekRides: [480, 620, 540, 710, 890, 1240, 963],
-    weeklyMax: 1240,
+    weekRides: [0, 0, 0, 0, 0, 0, 0],
+    weeklyMax: 100,
   };
 
   if (loading) return <Loader fullPage text="Compiling platform metrics..." />;
@@ -508,7 +489,7 @@ const AnalyticsPage = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <StatCard
-              icon={DollarSign} color="primary" label="Total Revenue" value={DUMMY.revenue.value}
+              icon={IndianRupee} color="primary" label="Total Revenue" value={DUMMY.revenue.value}
               change={DUMMY.revenue.change} changeType="up" spark={DUMMY.revenue.spark}
             />
             <StatCard

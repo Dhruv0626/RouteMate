@@ -26,27 +26,27 @@ const MyRatingPage = () => {
 
   // Mock data for demonstration
   const ratingStats = {
-    overallRating: 4.8,
-    totalRatings: 284,
-    twentyFour: 4.9,
-    sevenDay: 4.7,
-    thirtyDay: 4.6,
+    overallRating: 0.0,
+    totalRatings: 0,
+    twentyFour: 0.0,
+    sevenDay: 0.0,
+    thirtyDay: 0.0,
   };
 
   const ratingDistribution = [
-    { stars: 5, count: 198, percentage: 69.7 },
-    { stars: 4, count: 56, percentage: 19.7 },
-    { stars: 3, count: 18, percentage: 6.3 },
-    { stars: 2, count: 8, percentage: 2.8 },
-    { stars: 1, count: 4, percentage: 1.4 },
+    { stars: 5, count: 0, percentage: 0 },
+    { stars: 4, count: 0, percentage: 0 },
+    { stars: 3, count: 0, percentage: 0 },
+    { stars: 2, count: 0, percentage: 0 },
+    { stars: 1, count: 0, percentage: 0 },
   ];
 
   const ratingTrend = [
-    { week: "Week 1", rating: 4.5, reviews: 12 },
-    { week: "Week 2", rating: 4.6, reviews: 15 },
-    { week: "Week 3", rating: 4.8, reviews: 18 },
-    { week: "Week 4", rating: 4.7, reviews: 16 },
-    { week: "Week 5", rating: 4.9, reviews: 20 },
+    { week: "Week 1", rating: 0.0, reviews: 0 },
+    { week: "Week 2", rating: 0.0, reviews: 0 },
+    { week: "Week 3", rating: 0.0, reviews: 0 },
+    { week: "Week 4", rating: 0.0, reviews: 0 },
+    { week: "Week 5", rating: 0.0, reviews: 0 },
   ];
 
   const reviews = [
@@ -111,13 +111,13 @@ const MyRatingPage = () => {
     {
       icon: "⭐",
       label: "Excellent Rating",
-      description: "Maintained 4.8+ stars",
+      description: "Maintained 0.0+ stars",
       achieved: true,
     },
     {
       icon: "💎",
       label: "Premium Driver",
-      description: "50+ verified reviews",
+      description: "0+ verified reviews",
       achieved: true,
     },
     {

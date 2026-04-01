@@ -5,7 +5,7 @@ import {
   Calendar,
   Wallet,
   Clock,
-  DollarSign,
+  IndianRupee,
   Download,
   ChevronRight,
   MapPin,
@@ -27,106 +27,21 @@ const EarningsPage = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Mock data for demonstration
   const earningsStats = {
-    totalEarnings: 12450,
-    todayEarnings: 850,
-    weekEarnings: 4250,
-    thisMonthEarnings: 18500,
-    completedRides: 284,
-    cancelledRides: 8,
-    averageRating: 4.8,
+    totalEarnings: 0,
+    todayEarnings: 0,
+    weekEarnings: 0,
+    thisMonthEarnings: 0,
+    completedRides: 0,
+    cancelledRides: 0,
+    averageRating: 0.0,
   };
 
-  const rideBreakdown = [
-    {
-      type: "Standard Rides",
-      rides: 234,
-      earnings: 8450,
-      color: "from-primary to-primary-dark",
-      icon: "🚗",
-      percentage: 67.9,
-    },
-    {
-      type: "Premium Rides",
-      rides: 32,
-      earnings: 2850,
-      color: "from-violet-500 to-violet-600",
-      icon: "💎",
-      percentage: 22.9,
-    },
-    {
-      type: "Shared Rides",
-      rides: 18,
-      earnings: 1150,
-      color: "from-emerald-500 to-emerald-600",
-      icon: "👥",
-      percentage: 9.2,
-    },
-  ];
+  const rideBreakdown = [];
+  const dailyEarnings = [];
+  const recentTransactions = [];
 
-  const dailyEarnings = [
-    { day: "Mon", amount: 650, trips: 8 },
-    { day: "Tue", amount: 720, trips: 9 },
-    { day: "Wed", amount: 580, trips: 7 },
-    { day: "Thu", amount: 910, trips: 11 },
-    { day: "Fri", amount: 1100, trips: 13 },
-    { day: "Sat", amount: 1180, trips: 14 },
-    { day: "Sun", amount: 1100, trips: 13 },
-  ];
-
-  const recentTransactions = [
-    {
-      id: 1,
-      type: "ride",
-      from: "Downtown Station",
-      to: "Airport Terminal 2",
-      amount: 420,
-      date: "Today, 2:30 PM",
-      rating: 5,
-      distance: "28 km",
-    },
-    {
-      id: 2,
-      type: "ride",
-      from: "Shopping Mall",
-      to: "Central Park",
-      amount: 230,
-      date: "Today, 12:15 PM",
-      rating: 4,
-      distance: "12.5 km",
-    },
-    {
-      id: 3,
-      type: "ride",
-      from: "Hotel Grand",
-      to: "Railway Station",
-      amount: 200,
-      date: "Today, 9:45 AM",
-      rating: 5,
-      distance: "8.2 km",
-    },
-    {
-      id: 4,
-      type: "ride",
-      from: "Tech Park",
-      to: "Residential Area",
-      amount: 310,
-      date: "Yesterday, 5:20 PM",
-      rating: 4,
-      distance: "19 km",
-    },
-    {
-      id: 5,
-      type: "bonus",
-      description: "Referral Bonus",
-      amount: 500,
-      date: "3 days ago",
-      icon: "🎁",
-    },
-  ];
-
-  const maxDailyEarning = Math.max(...dailyEarnings.map((d) => d.amount));
+  const maxDailyEarning = dailyEarnings.length > 0 ? Math.max(...dailyEarnings.map((d) => d.amount)) : 100;
 
   const handleExport = () => {
     const today = new Date().toLocaleDateString("en-IN").replace(/\//g, "-");
@@ -605,7 +520,7 @@ const EarningsPage = () => {
                 </p>
                 <div className="rounded-2xl border-2 border-primary bg-primary/5 p-4 space-y-3">
                   <div className="flex items-center gap-3">
-                    <DollarSign size={24} className="text-primary" />
+                    <IndianRupee size={24} className="text-primary" />
                     <div>
                       <p className="text-sm font-bold text-(--text-main)">
                         Bank Account

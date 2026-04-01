@@ -56,11 +56,11 @@ export const ForgotPassword = async (req, res) => {
 
         // Send email in background (eliminate network wait)
         sendEmail({ email: user.email, subject: "RouteMate - OTP", html: htmlContent })
-            .catch(emailErr => console.error("Background Reset Email Error:", emailErr));
+            .catch(emailErr => console.error("Background Reset Email Error:", emailErr.message));
 
         res.status(200).json({ success: true, message: "OTP sent to your email. Check your inbox." });
     } catch (generalErr) {
-        console.error("Forgot PW Error:", generalErr);
+        console.error("Forgot PW Error:", generalErr.message);
         res.status(500).json({ 
             success: false, 
             message: "The password recovery service is temporarily down. Please try again later." 
@@ -130,7 +130,7 @@ export const ResetPassword = async (req, res) => {
         await user.save();
         res.status(200).json({ success: true, message: "Password updated successfully." });
     } catch (err) {
-        console.error("Reset PW Error:", err);
+        console.error("Reset PW Error:", err.message);
         res.status(500).json({ success: false, message: "Server error." });
     }
 };

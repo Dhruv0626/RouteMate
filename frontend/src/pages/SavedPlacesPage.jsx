@@ -15,11 +15,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
-const INITIAL_PLACES = [
-  { id: 1, title: "Home", address: "Sector 24, Gandhinagar, Gujarat", type: "home", icon: Home, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-  { id: 2, title: "Office", address: "Prahlad Nagar, Ahmedabad, Gujarat", type: "work", icon: Briefcase, color: "text-blue-400", bg: "bg-blue-500/10" },
-  { id: 3, title: "Gym (Gold's)", address: "Satellite, Ahmedabad", type: "favorite", icon: Heart, color: "text-rose-400", bg: "bg-rose-500/10" },
-];
+const INITIAL_PLACES = [];
 
 const SavedPlacesPage = () => {
   const navigate = useNavigate();

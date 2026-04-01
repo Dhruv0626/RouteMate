@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  DollarSign,
+  IndianRupee,
   Wallet,
   CheckCircle,
   AlertCircle,
@@ -24,9 +24,9 @@ const PayoutRequestPage = () => {
 
   // Mock data
   const driverBalance = {
-    available: 8715,
-    total: 12450,
-    pending: 625,
+    available: 0,
+    total: 0,
+    pending: 0,
   };
 
   const payoutMethods = [

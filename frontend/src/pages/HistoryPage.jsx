@@ -3,7 +3,7 @@ import {
   ArrowLeft,
   MapPin,
   Clock,
-  DollarSign,
+  IndianRupee,
   Star,
   Search,
   ChevronRight,
@@ -47,32 +47,33 @@ const HistoryPage = () => {
       try {
         setLoading(true);
         const fetchFn = role === "driver" ? getDriverHistory : getPassengerHistory;
-        const response = await fetchFn({ limit: 50, status: activeFilter });
+        const response = await fetchFn({ limit: 50, phase: activeFilter });
         
         if (response.data.success) {
           const { rides, stats: serverStats } = response.data.data;
           
-          // Map backend schema to frontend UI expectations
+          // Map backend Trip schema to frontend UI expectations
           const formattedRides = rides.map(ride => ({
             id: ride._id,
-            name: role === "driver" ? ride.passenger?.name : ride.driver?.name,
-            photo: role === "driver" ? "👤" : "🚕",
-            rating: role === "driver" ? ride.rating?.passengerToDriver : 4.8, // Fallback if no specific driver rating stored
-            pickup: ride.pickup?.name,
-            dropoff: ride.destination?.name,
-            distance: ride.distance,
-            duration: ride.duration,
-            amount: ride.fare,
-            baseFare: Math.floor(ride.fare * 0.2), // Approx breakdown for UI
-            distanceFare: Math.floor(ride.fare * 0.6),
-            timeFare: Math.floor(ride.fare * 0.2),
-            status: ride.status,
+            name: role === "driver" ? (ride.passenger?.name || "Passenger") : (ride.driver?.name || "Searching..."),
+            photo: role === "driver" ? (ride.passenger?.profileImage || "👤") : (ride.driver?.profileImage || "🚕"),
+            rating: role === "driver" ? (ride.rating?.passengerToDriver || 0.0) : (ride.rating?.driverToPassenger || 0.0), 
+            pickup: ride.source?.address || "Unknown Location",
+            dropoff: ride.destination?.address || "Unknown Location",
+            distance: ride.distanceActual || ride.distanceEstimate || 0,
+            duration: ride.durationActual || ride.durationEstimate || 0,
+            amount: ride.fare?.total || 0,
+            baseFare: ride.fare?.baseFare || 0,
+            distanceFare: ride.fare?.distanceFare || 0,
+            timeFare: ride.fare?.timeFare || 0,
+            surge: ride.fare?.surgeFare || 0,
+            status: ride.phase, // 'searching', 'matched', 'ongoing', 'completed', 'cancelled'
             date: new Date(ride.createdAt).toLocaleString('en-IN', { 
                 day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
             }),
-            rideType: ride.vehicleType.charAt(0).toUpperCase() + ride.vehicleType.slice(1),
-            paymentMethod: ride.paymentMethod,
-            cancelReason: ride.cancelReason
+            rideType: ride.vehicleTypeRequested ? (ride.vehicleTypeRequested.charAt(0).toUpperCase() + ride.vehicleTypeRequested.slice(1)) : "Standard",
+            paymentMethod: ride.paymentMethod?.toUpperCase() || "CASH",
+            cancelReason: ride.cancellationReason
           }));
 
           setRideHistory(formattedRides);
@@ -85,7 +86,7 @@ const HistoryPage = () => {
           });
         }
       } catch (err) {
-        console.error("Failed to load ride history:", err);
+        console.error("Failed to load ride history:", err.message);
       } finally {
         setLoading(false);
       }
@@ -201,9 +202,9 @@ const HistoryPage = () => {
               <h3 className="text-xs font-bold text-(--text-dim) uppercase tracking-wider">
                 {role === "driver" ? "Total Earnings" : "Total Spent"}
               </h3>
-              <DollarSign size={18} className={role === "driver" ? "text-emerald-500" : "text-violet-500"} />
+              <IndianRupee size={18} className={role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"} />
             </div>
-            <p className={`text-2xl font-black ${role === "driver" ? "text-emerald-500" : "text-violet-500"}`}>
+            <p className={`text-2xl font-black ${role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"}`}>
               ₹{stats.totalAmount.toLocaleString()}
             </p>
           </div>
@@ -311,8 +312,8 @@ const HistoryPage = () => {
                         <span className="flex items-center gap-1 text-(--text-dim)">
                           <Clock size={12} />{ride.date}
                         </span>
-                        <span className={`flex items-center gap-1 font-semibold ${role === "driver" ? "text-emerald-500" : "text-violet-500"}`}>
-                          <DollarSign size={12} />₹{ride.amount}
+                        <span className={`flex items-center gap-1 font-semibold ${role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"}`}>
+                          <IndianRupee size={12} />₹{ride.amount}
                         </span>
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full font-semibold ${getStatusColor(ride.status)}`}>
                           {getStatusIcon(ride.status)}
@@ -353,7 +354,7 @@ const HistoryPage = () => {
                     {ride.status === "completed" && (
                       <div className="bg-(--card-bg) rounded-xl p-4 space-y-2">
                         <h4 className="font-semibold text-(--text-main) mb-3 flex items-center gap-2">
-                          <DollarSign size={16} className={role === "driver" ? "text-emerald-500" : "text-violet-500"} />
+                          <IndianRupee size={16} className={role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"} />
                           {role === "driver" ? "Earnings Breakdown" : "Fare Breakdown"}
                         </h4>
                         <div className="flex justify-between text-sm">
@@ -376,7 +377,7 @@ const HistoryPage = () => {
                         )}
                         <div className="border-t border-(--card-border) pt-2 flex justify-between">
                           <span className="font-bold text-(--text-main)">Total</span>
-                          <span className={`font-black text-lg ${role === "driver" ? "text-emerald-500" : "text-violet-500"}`}>
+                          <span className={`font-black text-lg ${role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"}`}>
                             ₹{ride.amount}
                           </span>
                         </div>
