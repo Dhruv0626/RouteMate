@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
 import FleetMap from "../../components/map/FleetMap";
+import api from "../../services/api";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const VEHICLE_STATUSES = {
@@ -18,28 +19,44 @@ const VEHICLE_STATUSES = {
   maint:    { label: "Warning",  color: "text-rose-500",    bg: "bg-rose-500/10",    dot: "bg-rose-500" }
 };
 
-// ─── Dummy Data ───────────────────────────────────────────────────────────────
-const DUMMY_VEHICLES = [
-  { id: "VEH-101", driver: "Ravi Kumar", type: "Sedan", plate: "GJ-01-AX-4512", status: "active", fuel: "82%", area: "Satellite", trips: 14, lat: 23.030, lng: 72.535 },
-  { id: "VEH-204", driver: "Amit Shah", type: "Auto", plate: "GJ-01-BB-8801", status: "idle", fuel: "45%", area: "Drive In Road", trips: 22, lat: 23.048, lng: 72.525 },
-  { id: "VEH-309", driver: "Suresh P.", type: "SUV", plate: "GJ-01-CP-0092", status: "active", fuel: "90%", area: "Paldi", trips: 8, lat: 23.012, lng: 72.565 },
-  { id: "VEH-115", driver: "Kiran R.", type: "Sedan", plate: "GJ-01-DE-1122", status: "offline", fuel: "12%", area: "Bopal", trips: 10, lat: 23.035, lng: 72.485 },
-  { id: "VEH-402", driver: "Deepak S.", type: "Bike", plate: "GJ-01-QR-9900", status: "maint", fuel: "5%", area: "SG Highway", trips: 31, lat: 23.025, lng: 72.505 },
-  { id: "VEH-108", driver: "Arun V.", type: "Sedan", plate: "GJ-01-FF-4567", status: "idle", fuel: "68%", area: "Navrangpura", trips: 18, lat: 23.038, lng: 72.560 },
-  { id: "VEH-211", driver: "Vijay M.", type: "Auto", plate: "GJ-01-GZ-2233", status: "active", fuel: "55%", area: "Ellisbridge", trips: 25, lat: 23.018, lng: 72.575 },
-];
-
 const FleetOverviewPage = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
-  const [vehicles, setVehicles] = useState(DUMMY_VEHICLES);
+  const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [viewMode, setViewMode] = useState("list"); // "list" or "map"
 
+  const fetchVehicles = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/driver-profiles/admin/all-drivers");
+      if (data.success && data.data) {
+        // Map backend driverProfile to the format expected by the fleet UI
+        const mapped = data.data.map(d => ({
+          id: d._id,
+          driver: d.user?.name || "Unknown",
+          type: d.vehicle?.type || "Sedan",
+          plate: d.vehicle?.number || "—",
+          status: d.isOnline ? "active" : "offline", // Simplified mapping for now
+          fuel: d.isOnline ? "High" : "N/A",
+          area: d.isOnline ? "Live Area" : "Offline",
+          trips: d.stats?.totalRides || 0,
+          lat: d.currentLocation?.coordinates?.[1] || 23.0338,
+          lng: d.currentLocation?.coordinates?.[0] || 72.5850,
+        }));
+        setVehicles(mapped);
+      }
+    } catch (e) {
+      console.error("Failed to fetch fleet", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setLoading(false);
+    fetchVehicles();
   }, []);
 
   const filtered = vehicles.filter(v => {
@@ -234,27 +251,6 @@ const FleetOverviewPage = () => {
           )}
         </section>
 
-        {/* ── Visual Insight ── */}
-        <section className="bg-primary/5 border border-primary/20 rounded-4xl p-8 flex flex-col md:flex-row items-center gap-10">
-           <div className="h-40 w-40 rounded-full border-[10px] border-primary/20 border-t-primary flex items-center justify-center relative">
-              <div className="text-center">
-                <p className="text-4xl font-black text-primary">84%</p>
-                <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Efficiency</p>
-              </div>
-              <Zap className="absolute -top-2 left-1/2 -translate-x-1/2 text-primary fill-primary" size={20} />
-           </div>
-           <div className="flex-1 space-y-4 text-center md:text-left">
-              <h4 className="text-xl font-display font-black">Cluster Analysis: SG Highway Zone</h4>
-              <p className="text-sm text-(--text-dim) leading-relaxed">
-                Platform is experiencing high demand near SG Highway & Prahlad Nagar. Recommend dispatching 4 idle vehicles from 
-                the Paldi buffer Zone to maintain sub-5 minute wait times. 1 vehicle reported critical fuel levels.
-              </p>
-              <div className="flex flex-wrap gap-3 justify-center md:justify-start pt-2">
-                 <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase">Optimize Fleet</span>
-                 <span className="px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-[10px] font-black text-violet-400 uppercase">View Demand Heatmap</span>
-              </div>
-           </div>
-        </section>
 
       </main>
 

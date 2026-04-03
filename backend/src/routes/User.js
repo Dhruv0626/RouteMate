@@ -6,6 +6,7 @@ import {
     LogoutUser,
     GetProfile,
     DeleteUser,
+    DeleteUserForSelf,
     GetAllUsers,
     UpdateUser,
     VerifyEmailOTP,
@@ -116,6 +117,7 @@ router.get(
 // ─── Protected Routes (JWT required) ─────────────────────────────────────────
 router.get("/profile", authMiddleware, GetProfile);
 router.post("/update-profile-image", authMiddleware, UpdateProfileImage);
+router.delete("/delete-account", authMiddleware, DeleteUserForSelf);
 
 // ─── System Settings (Read-only for all authenticated users) ─────────────────
 router.get("/system-settings", authMiddleware, GetSettings);

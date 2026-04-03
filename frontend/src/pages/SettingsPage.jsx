@@ -21,6 +21,8 @@ import ThemeToggle from "../components/ui/ThemeToggle";
 const SettingsPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Local state for toggles
   const defaultSettings = JSON.parse(localStorage.getItem("appSettings") || '{"pushNotifs":false,"emailNotifs":false,"locationTracking":false}');
@@ -166,10 +168,27 @@ const SettingsPage = () => {
                 </div>
               </button>
               
-              <button className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-500/10 transition-colors text-left">
+              <button 
+                onClick={async () => {
+                   if (window.confirm("Are you absolutely sure you want to permanently delete your RouteMate account? This action cannot be undone.")) {
+                      setIsDeleting(true);
+                      try {
+                        await api.delete("/users/delete-account");
+                        await logout();
+                        navigate("/signin");
+                      } catch (err) {
+                        alert("Account deletion failed. Please try again later.");
+                      } finally {
+                        setIsDeleting(false);
+                      }
+                   }
+                }}
+                disabled={isDeleting}
+                className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-500/10 transition-colors text-left"
+              >
                 <div className="flex items-center gap-3 text-red-500">
                   <Trash2 size={18} />
-                  <p className="font-bold text-sm">Delete Account</p>
+                  <p className="font-bold text-sm">{isDeleting ? "Deleting..." : "Delete Account"}</p>
                 </div>
               </button>
             </div>

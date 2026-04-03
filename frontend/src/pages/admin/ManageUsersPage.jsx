@@ -51,7 +51,7 @@ const ManageUsersPage = () => {
     try {
       setLoading(true);
       const { data } = await api.get("/users/all");
-      if (data.success) {
+      if (data.success && data.users) {
         setUsers(data.users);
       }
     } catch (error) {

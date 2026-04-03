@@ -103,7 +103,7 @@ function DriverProtectedRoute({ children }) {
         setErrorStatus(null);
         const response = await getMyDriverProfile();
         
-        // If success:true but data:null, they haven't submitted the form yet
+        // Match the feature-based backend response: { success: true, data: profileObject }
         if (response.data.success) {
           if (response.data.data) {
             setHasProfile(true);
@@ -145,21 +145,27 @@ function DriverProtectedRoute({ children }) {
 
   // 4. API Error (Transient)?
   if (errorStatus && errorStatus !== 404) {
+    const isSuspended = errorStatus === 403;
+    
     return (
         <div className="mesh-bg min-h-screen flex items-center justify-center p-6 text-center">
             <div className="glass-card p-10 max-w-sm rounded-3xl border-(--card-border)">
                 <div className="bg-red-500/10 p-4 rounded-full w-fit mx-auto mb-6">
                     <ShieldAlert size={48} className="text-red-500" />
                 </div>
-                <h2 className="text-xl font-black mb-2">Connectivity Error</h2>
+                <h2 className="text-xl font-black mb-2">
+                    {isSuspended ? "Account Suspended" : "Connectivity Error"}
+                </h2>
                 <p className="text-sm text-(--text-dim) mb-6">
-                    We're having trouble reaching the server. Please check your connection and try again.
+                    {isSuspended 
+                        ? "Your account has been suspended. Please check your email for more details regarding the issue." 
+                        : "We're having trouble reaching the server. Please check your connection and try again."}
                 </p>
                 <button 
                   onClick={() => window.location.reload()}
                   className="w-full bg-primary text-black py-3 rounded-xl font-bold hover:scale-105 transition-all"
                 >
-                    Retry Connection
+                    {isSuspended ? "Reload Status" : "Retry Connection"}
                 </button>
             </div>
         </div>
@@ -568,11 +574,15 @@ function AppRoutes() {
   );
 }
 
+import { ToastProvider } from "./context/ToastContext";
+
 function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <AppRoutes />
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
       </NotificationProvider>
     </AuthProvider>
   );

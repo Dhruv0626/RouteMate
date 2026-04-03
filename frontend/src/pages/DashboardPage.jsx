@@ -299,17 +299,18 @@ const DashboardPage = () => {
       try {
         if (user?.role === "admin") {
           const statsRes = await api.get("/admin/dashboard-stats");
-          if (statsRes.data.success) {
+          if (statsRes.data.success && statsRes.data.stats) {
+            const adminStats = statsRes.data.stats;
             setStats([
-              { label: "Users", value: statsRes.data.stats.counts.total.toLocaleString() },
-              { label: "Active", value: statsRes.data.stats.drivers.online.toLocaleString() },
-              { label: "Revenue", value: `₹${(statsRes.data.stats.business.revenue / 1000).toFixed(1)}K` },
+              { label: "Users", value: adminStats.counts.total.toLocaleString() },
+              { label: "Active", value: adminStats.drivers.online.toLocaleString() },
+              { label: "Revenue", value: `₹${(adminStats.business.revenue / 1000).toFixed(1)}K` },
             ]);
           }
 
           // Fetch Recent Activity for Admin
           const logsRes = await api.get("/admin/audit-logs?limit=5");
-          if (logsRes.data.success) {
+          if (logsRes.data.success && logsRes.data.logs) {
             setActivities(logsRes.data.logs.map(log => ({
                 id: log.id,
                 action: log.action,
@@ -498,7 +499,7 @@ const DashboardPage = () => {
             </div>
 
             {/* Quick Stats */}
-            <div className={`grid grid-cols-3 gap-4 rounded-3xl border border-(--card-border) bg-black/5 p-6 shadow-sm backdrop-blur-md md:gap-8 dark:bg-black/20 transition-opacity ${loading ? "opacity-50" : "opacity-100"}`}>
+ <div className={`grid grid-cols-3 gap-4 rounded-3xl border border-(--card-border) bg-black/5 p-6 shadow-sm backdrop-blur-md md:gap-8 dark:bg-black/20 transition-opacity ${loading ? "opacity-50" : "opacity-100"}`}>
               {stats.map((s, i) => (
                 <div key={i} className="min-w-17.5 text-center">
                   <p className="mb-0.5 text-xl font-black text-(--text-main) md:text-2xl transition-all">
@@ -512,7 +513,6 @@ const DashboardPage = () => {
             </div>
           </div>
         </section>
-
         {/* Action Grid */}
         <section>
           <div className="mb-6 flex items-center justify-between px-1">

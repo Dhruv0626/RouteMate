@@ -1,15 +1,17 @@
 import UserModel from "../models/User.js";
 import DriverProfileModel from "../models/DriverProfile.js";
-import NotificationModel from "../models/Notification.js";
-import SystemConfig from "../models/SystemConfig.js";
+import TripModel from "../models/Trip.js";
+import ReviewModel from "../models/Review.js";
 import cacheService from "../utils/redis.js";
+import NotificationModel from "../models/Notification.js";
 
 /**
  * Get core statistics for the admin dashboard
  * Provides: 
  * - Total User Counts (Users, Passengers, Drivers)
  * - Platform Health (Active/Online Drivers)
- * - Financial Overview (Estimated Revenue based on completed rides - demo logic for now)
+ * - Financial Overview (Real Revenue from completed rides)
+ * - Operational Metrics (Rides, Ratings, Vehicle distribution)
  */
 export const GetDashboardStats = async (req, res) => {
     try {
@@ -21,62 +23,114 @@ export const GetDashboardStats = async (req, res) => {
             return res.status(200).json({
                 success: true,
                 stats: cachedData,
-                source: "cache" // Trace metadata for verification
+                source: "cache"
             });
         }
 
-        // 1. Parallelize all counts to avoid sequential DB bottlenecks
+        // 1. Parallelize all core counts & aggregations
         const [
             totalUsers,
             passengers,
             drivers,
-            admins,
             approvedDrivers,
             onlineDrivers,
-            completionAggr
+            tripStats,
+            revenueStats,
+            ratingStats,
+            vehicleBreakdown,
+            areaBreakdown
         ] = await Promise.all([
             UserModel.countDocuments(),
             UserModel.countDocuments({ role: "passenger" }),
             UserModel.countDocuments({ role: "driver" }),
-            UserModel.countDocuments({ role: "admin" }),
             DriverProfileModel.countDocuments({ isApproved: true }),
             DriverProfileModel.countDocuments({ isOnline: true }),
+            
+            // Trip phase counts
+            TripModel.aggregate([
+                { $group: { _id: "$phase", count: { $sum: 1 } } }
+            ]),
+            
+            // Revenue (Total of completed trips)
+            TripModel.aggregate([
+                { $match: { phase: "completed" } },
+                { $group: { _id: null, total: { $sum: "$fare.total" } } }
+            ]),
+
+            // Avg Rating
+            ReviewModel.aggregate([
+                { $group: { _id: null, avg: { $avg: "$rating" }, total: { $sum: 1 } } }
+            ]),
+
+            // Vehicle Type Breakdown (from approved drivers)
             DriverProfileModel.aggregate([
-                { $group: { _id: null, totalCompleted: { $sum: "$stats.completedRides" } } }
+                { $match: { isApproved: true } },
+                { $group: { _id: "$vehicle.type", count: { $sum: 1 } } }
+            ]),
+
+            // Geographic Breakdown (Top 5 pickup areas based on source address)
+            TripModel.aggregate([
+                { $limit: 1000 }, // Optimization: sample recent 1000 trips
+                { $group: { 
+                    _id: { $arrayElemAt: [{ $split: ["$source.address", ","] }, -2] }, // Grab city/area part
+                    count: { $sum: 1 } 
+                }},
+                { $sort: { count: -1 } },
+                { $limit: 5 }
             ])
         ]);
 
-        const totalCompletedRides = completionAggr[0]?.totalCompleted || 0;
-        const pendingDrivers = drivers - approvedDrivers;
+        // Process Trip Stats
+        const tripPhaseMap = tripStats.reduce((acc, curr) => {
+            acc[curr._id] = curr.count;
+            return acc;
+        }, {});
 
-        // Avg fare logic
-        const estimatedRevenue = totalCompletedRides * 150;
+        const totalCompletedRides = tripPhaseMap.completed || 0;
+        const totalCancelledRides = tripPhaseMap.cancelled || 0;
+        const totalRides = tripStats.reduce((a, b) => a + b.count, 0);
+        const cancellationRate = totalRides > 0 ? (totalCancelledRides / totalRides) * 100 : 0;
 
         const stats = {
             counts: {
                 total: totalUsers,
                 passengers,
                 drivers,
-                admins
+                online: onlineDrivers
             },
             drivers: {
                 approved: approvedDrivers,
-                pending: pendingDrivers,
-                online: onlineDrivers
+                pending: drivers - approvedDrivers,
+                online: onlineDrivers,
+                vehicleBreakdown: vehicleBreakdown.map(v => ({ 
+                    label: v._id || "Unknown", 
+                    value: v.count,
+                    color: v._id === "Sedan" ? "primary" : (v._id === "SUV" ? "violet" : (v._id === "Auto" ? "amber" : "emerald"))
+                }))
             },
             business: {
-                totalRides: totalCompletedRides,
-                revenue: estimatedRevenue
-            }
+                totalRides: totalRides,
+                completed: totalCompletedRides,
+                cancelled: totalCancelledRides,
+                cancellationRate: cancellationRate.toFixed(1) + "%",
+                revenue: revenueStats[0]?.total || 0,
+                avgRating: (ratingStats[0]?.avg || 0).toFixed(1) + " ★",
+                totalReviews: ratingStats[0]?.total || 0
+            },
+            geographic: areaBreakdown.map((a, i) => ({
+                label: a._id ? a._id.trim() : "Other Areas",
+                value: a.count,
+                color: ["primary", "emerald", "violet", "amber", "rose"][i] || "primary"
+            }))
         };
 
-        // 📥 Store in Cache for 5 minutes (300 seconds)
+        // 📥 Store in Cache for 5 minutes
         await cacheService.set(cacheKey, stats, 300);
 
         return res.status(200).json({
             success: true,
             stats,
-            source: "db" // Trace metadata for verification
+            source: "db"
         });
 
     } catch (error) {

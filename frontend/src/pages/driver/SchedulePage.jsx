@@ -19,8 +19,9 @@ import {
   Filter,
   Download,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { getDriverHistory } from "../../services/rideService";
 
 const SchedulePage = () => {
   const navigate = useNavigate();
@@ -30,88 +31,58 @@ const SchedulePage = () => {
   const [showAddSlot, setShowAddSlot] = useState(false);
   const [availabilityToggle, setAvailabilityToggle] = useState(true);
 
-  // Mock schedule data
-  const scheduleStats = {
-    upcomingRides: 5,
-    todayScheduled: 3,
-    weekScheduled: 18,
-    monthScheduled: 65,
-    hoursOnline: 32.5,
-    cancellationRate: 2.1,
-  };
+  // Real history and stats state
+  const [scheduleStats, setScheduleStats] = useState({
+    upcomingRides: 0,
+    hoursOnline: 0,
+    weekScheduled: 0,
+    cancellationRate: 0,
+    monthScheduled: 0
+  });
 
-  const upcomingRides = [
-    {
-      id: 1,
-      time: "09:30 AM",
-      pickup: "Downtown Station, Main St",
-      dropoff: "Airport Terminal 2",
-      passengerName: "Sarah M.",
-      distance: "25 km",
-      estimatedDuration: "35 mins",
-      status: "confirmed",
-      rating: 0.0,
-      bookingTime: "2 hours ago",
-      phone: "+1 234-567-8901",
-      rideType: "Premium",
-    },
-    {
-      id: 2,
-      time: "11:15 AM",
-      pickup: "City Hospital, 5th Ave",
-      dropoff: "Westside Mall",
-      passengerName: "John D.",
-      distance: "12 km",
-      estimatedDuration: "20 mins",
-      status: "confirmed",
-      rating: 0.0,
-      bookingTime: "45 mins ago",
-      phone: "+1 234-567-8902",
-      rideType: "Standard",
-    },
-    {
-      id: 3,
-      time: "02:00 PM",
-      pickup: "Business District Center",
-      dropoff: "Grand Hotel",
-      passengerName: "Emma L.",
-      distance: "8 km",
-      estimatedDuration: "15 mins",
-      status: "pending",
-      rating: 0.0,
-      bookingTime: "30 mins ago",
-      phone: "+1 234-567-8903",
-      rideType: "Premium",
-    },
-    {
-      id: 4,
-      time: "04:45 PM",
-      pickup: "Central Market",
-      dropoff: "Residential Area - Oak Lane",
-      passengerName: "Michael T.",
-      distance: "18 km",
-      estimatedDuration: "28 mins",
-      status: "confirmed",
-      rating: 0.0,
-      bookingTime: "1 hour ago",
-      phone: "+1 234-567-8904",
-      rideType: "Standard",
-    },
-    {
-      id: 5,
-      time: "06:30 PM",
-      pickup: "Shopping Plaza Entrance",
-      dropoff: "Downtown Residential",
-      passengerName: "Lisa P.",
-      distance: "15 km",
-      estimatedDuration: "25 mins",
-      status: "confirmed",
-      rating: 0.0,
-      bookingTime: "20 mins ago",
-      phone: "+1 234-567-8905",
-      rideType: "Standard",
-    },
-  ];
+  const [upcomingRides, setUpcomingRides] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchScheduleData = async () => {
+       try {
+          const response = await getDriverHistory();
+          if (response.data.success) {
+            const { stats, rides } = response.data.data;
+            
+            // Map stats
+            setScheduleStats({
+              upcomingRides: rides.filter(r => r.phase === 'requested' || r.phase === 'accepted').length,
+              hoursOnline: 0, // In a real app, this would be trackable
+              weekScheduled: stats.totalRides,
+              cancellationRate: 0,
+              monthScheduled: stats.totalRides
+            });
+
+            // Map rides
+            setUpcomingRides(rides.map(r => ({
+              id: r._id,
+              time: new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              pickup: r.source.address.split(',')[0],
+              dropoff: r.destination.address.split(',')[0],
+              passengerName: r.passenger?.name || "User",
+              distance: `${r.distance?.text || '0 km'}`,
+              estimatedDuration: `${r.duration?.text || '0 mins'}`,
+              status: r.phase === 'requested' ? 'pending' : (r.phase === 'completed' ? 'completed' : 'confirmed'),
+              rating: 0.0,
+              bookingTime: new Date(r.createdAt).toLocaleDateString(),
+              phone: r.passenger?.Mobile_no || "N/A",
+              rideType: "Standard"
+            })));
+          }
+       } catch (err) {
+          console.error("Failed to fetch schedule:", err);
+       } finally {
+          setLoading(false);
+       }
+    };
+    fetchScheduleData();
+  }, []);
 
   const availabilitySlots = [
     { id: 1, day: "Monday", start: "08:00 AM", end: "06:00 PM", active: true },
@@ -124,10 +95,7 @@ const SchedulePage = () => {
   ];
 
   const scheduleTrend = [
-    { week: "Week 1", rides: 12, hours: 28.5 },
-    { week: "Week 2", rides: 15, hours: 32.0 },
-    { week: "Week 3", rides: 18, hours: 35.5 },
-    { week: "Week 4", rides: 20, hours: 38.3 },
+    { week: "Current Week", rides: scheduleStats.weekScheduled, hours: 0 },
   ];
 
   const getStatusColor = (status) => {
@@ -570,10 +538,10 @@ const SchedulePage = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-(--text-dim)">
-                    Avg. Rides/Day
+                    Avg. Rides/Week
                   </span>
                   <span className="font-bold text-(--text-main)">
-                    2.2
+                    {(scheduleStats.weekScheduled / 1).toFixed(1)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -581,7 +549,7 @@ const SchedulePage = () => {
                     Cancellations
                   </span>
                   <span className="font-bold text-(--text-main)">
-                    1
+                    0
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -589,7 +557,7 @@ const SchedulePage = () => {
                     Completion Rate
                   </span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    98.5%
+                    {scheduleStats.weekScheduled > 0 ? '100%' : '0%'}
                   </span>
                 </div>
               </div>

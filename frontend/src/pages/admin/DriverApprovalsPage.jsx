@@ -237,7 +237,9 @@ const DriverApprovalsPage = () => {
     try {
       setLoading(true);
       const { data } = await api.get("/driver-profiles/admin/all-drivers");
-      if (data.success) setDrivers(data.data);
+      if (data.success && data.data) {
+        setDrivers(data.data);
+      }
     } catch (e) {
       console.error("Failed to fetch drivers", e);
     } finally {

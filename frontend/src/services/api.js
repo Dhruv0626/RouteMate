@@ -9,10 +9,6 @@ const api = axios.create({
 });
 
 // ─── Auto Token Refresh & Logout Logic ────────────────────────────────────────
-// On ANY 401 from a protected endpoint:
-//   1. Try to refresh the access token using the refresh cookie
-//   2. If refresh succeeds → retry the original request seamlessly
-//   3. If refresh fails → clear session and redirect to sign-in
 const AUTH_ENDPOINTS = ["/users/signin", "/users/register", "/users/refresh-token", "/users/logout"];
 let isRefreshing = false;
 let failedQueue = [];
@@ -46,18 +42,14 @@ api.interceptors.response.use(
 
     const isAuthEndpoint = AUTH_ENDPOINTS.some((url) => requestUrl.includes(url));
 
-    // Skip refresh logic for auth endpoints and already-retried requests
     if (status !== 401 || isAuthEndpoint || originalRequest._retry) {
-      // For non-retryable 401s that aren't auth endpoints, force logout
       if (status === 401 && !isAuthEndpoint && originalRequest._retry) {
         forceLogout();
       }
       return Promise.reject(error);
     }
 
-    // ── Attempt token refresh ───────────────────────────────────────────
     if (isRefreshing) {
-      // Another request is already refreshing — wait in queue
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       })
@@ -83,4 +75,3 @@ api.interceptors.response.use(
 );
 
 export default api;
-

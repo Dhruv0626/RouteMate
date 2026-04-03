@@ -38,7 +38,23 @@ const PassengerProfile = () => {
   });
   const [profileImagePreview, setProfileImagePreview] = useState("");
 
+  const [stats, setStats] = useState({ totalRides: 0, avgRating: "0.0" });
+  
   useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await api.get("/rides/passenger/history");
+        if (response.data.success && response.data.data?.stats) {
+          setStats({
+            totalRides: response.data.data.stats.totalRides,
+            avgRating: response.data.data.stats.avgRating || "0.0",
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch passenger stats", err);
+      }
+    };
+
     if (user) {
       setFormData({
         name: user.name || "",
@@ -49,6 +65,7 @@ const PassengerProfile = () => {
       if (user.profileImage) {
         setProfileImagePreview(user.profileImage);
       }
+      fetchStats();
       setLoading(false);
     }
   }, [user]);
@@ -85,7 +102,7 @@ const PassengerProfile = () => {
     setSuccess("");
     
     try {
-      // Update Mobile_no in the backend
+      // Update User profile using the new feature-based REST endpoint
       const response = await api.post("/users/update-mobile", { mobileNumber: formData.phone });
       
       if (response.data.success) {
@@ -146,11 +163,11 @@ const PassengerProfile = () => {
               <div className="mt-8 grid grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-(--card-border) bg-black/5 p-3 dark:bg-black/20">
                   <p className="text-[10px] font-black text-(--text-dim) uppercase">Trips</p>
-                  <p className="text-lg font-black">0</p>
+                  <p className="text-lg font-black">{stats.totalRides}</p>
                 </div>
                 <div className="rounded-2xl border border-(--card-border) bg-black/5 p-3 dark:bg-black/20">
                   <p className="text-[10px] font-black text-(--text-dim) uppercase">Rating</p>
-                  <p className="text-lg font-black">--</p>
+                  <p className="text-lg font-black">{stats.avgRating}</p>
                 </div>
               </div>
             </div>

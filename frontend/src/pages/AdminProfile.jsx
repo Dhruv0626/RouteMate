@@ -17,6 +17,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ui/ThemeToggle";
+import api from "../services/api";
 
 const AdminProfile = () => {
   const navigate = useNavigate();
@@ -25,12 +26,34 @@ const AdminProfile = () => {
   const [profileImage, setProfileImage] = useState("");
   const [preview, setPreview] = useState("");
   const [saving, setSaving] = useState(false);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [systemHealth, setSystemHealth] = useState({ status: "Loading...", uptime: 0 });
 
   useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        const [statsRes, healthRes] = await Promise.all([
+          api.get("/admin/dashboard-stats"),
+          api.get("/admin/system-health")
+        ]);
+
+        if (statsRes.data.success && statsRes.data.stats) {
+          setTotalUsers(statsRes.data.stats.counts.total);
+        }
+        if (healthRes.data.success && healthRes.data.system) {
+          setSystemHealth(healthRes.data.system);
+        }
+      } catch (err) {
+        console.error("Failed to fetch admin statistics", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (user) {
       setProfileImage(user.profileImage || "");
       setPreview(user.profileImage || "");
-      setLoading(false);
+      fetchAdminData();
     }
   }, [user]);
 
@@ -60,9 +83,9 @@ const AdminProfile = () => {
   if (loading) return null;
 
   const adminStats = [
-    { label: "Level", value: "Super Admin", icon: Shield, color: "text-violet-400", bg: "bg-violet-500/10" },
-    { label: "Managed", value: "1.2k Users", icon: Activity, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-    { label: "Uptime", value: "99.9%", icon: Cpu, color: "text-primary", bg: "bg-primary/10" },
+    { label: "Identity", value: "Super Admin", icon: Shield, color: "text-violet-400", bg: "bg-violet-500/10" },
+    { label: "Managed", value: `${totalUsers.toLocaleString()} Users`, icon: Activity, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    { label: "Node Status", value: systemHealth.status || "Operational", icon: Cpu, color: "text-primary", bg: "bg-primary/10" },
   ];
 
   return (

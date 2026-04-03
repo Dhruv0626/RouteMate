@@ -70,6 +70,13 @@ const DriverProfileFormPage = () => {
         const res = await getMyDriverProfile();
         if (res.data.success && res.data.data) {
           const profile = res.data.data;
+
+          // If profile is already approved, just go to dashboard
+          if (profile.isApproved) {
+            navigate("/driver/dashboard");
+            return;
+          }
+
           setIsUpdating(true);
           
           setFormData((prev) => ({

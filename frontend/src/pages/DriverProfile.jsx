@@ -20,6 +20,7 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import { getMyDriverProfile, updateDriverProfile } from "../services/driverProfileService";
+import api from "../services/api";
 
 const DriverProfile = () => {
   const navigate = useNavigate();
@@ -54,15 +55,16 @@ const DriverProfile = () => {
     const fetchProfile = async () => {
       try {
         const response = await getMyDriverProfile();
-        if (response.data.success) {
-          setProfile(response.data.data);
+        if (response.data.success && response.data.data) {
+          const profileData = response.data.data;
+          setProfile(profileData);
           setFormData({
             name: user?.name || "",
             phone: user?.Mobile_no || "",
-            licenseNumber: response.data.data.licenseNumber || "",
-            aadharNumber: response.data.data.aadharNumber || "",
-            vehicleType: response.data.data.vehicleType || "",
-            vehicleNumber: response.data.data.vehicleNumber || "",
+            licenseNumber: profileData.license?.number || "",
+            aadharNumber: profileData.aadhar?.number || "",
+            vehicleType: profileData.vehicle?.type || "",
+            vehicleNumber: profileData.vehicle?.number || "",
             profileImage: user?.profileImage || "",
           });
           if (user?.profileImage) {
@@ -136,7 +138,7 @@ const DriverProfile = () => {
     setSaving(true);
 
     try {
-      // Update Mobile_no in the backend
+      // Update User profile using the new feature-based REST endpoint
       const phoneResponse = await api.post("/users/update-mobile", { mobileNumber: formData.phone });
       
       const response = await updateDriverProfile({
@@ -147,7 +149,7 @@ const DriverProfile = () => {
       });
 
       if (response.data.success && phoneResponse.data.success) {
-        setProfile(response.data.data);
+        setProfile(response.data.data.profile);
         setSuccess("Profile updated successfully!");
         setIsEditing(false);
       }
@@ -160,15 +162,15 @@ const DriverProfile = () => {
 
   const handleCancel = () => {
     setIsEditing(false);
-    setFormData({
-      name: user?.name || "",
-      phone: user?.Mobile_no || "",
-      licenseNumber: profile?.licenseNumber || "",
-      aadharNumber: profile?.aadharNumber || "",
-      vehicleType: profile?.vehicleType || "",
-      vehicleNumber: profile?.vehicleNumber || "",
-      profileImage: user?.profileImage || "",
-    });
+      setFormData({
+        name: user?.name || "",
+        phone: user?.Mobile_no || "",
+        licenseNumber: profile?.license?.number || "",
+        aadharNumber: profile?.aadhar?.number || "",
+        vehicleType: profile?.vehicle?.type || "",
+        vehicleNumber: profile?.vehicle?.number || "",
+        profileImage: user?.profileImage || "",
+      });
     setProfileImagePreview(user?.profileImage || "");
     setErrors({});
   };
@@ -431,7 +433,7 @@ const DriverProfile = () => {
                       Driving License Number
                     </p>
                     <p className="text-sm text-(--text-main) font-semibold mt-1 wrap-break-word">
-                      {profile?.licenseNumber || "Not provided"}
+                      {profile?.license?.number || "Not provided"}
                     </p>
                   </div>
                 </div>
@@ -448,7 +450,7 @@ const DriverProfile = () => {
                       Aadhar Number
                     </p>
                     <p className="text-sm text-(--text-main) font-semibold mt-1 wrap-break-word">
-                      {profile?.aadharNumber ? `****-****-${profile.aadharNumber.slice(-4)}` : "Not provided"}
+                      {profile?.aadhar?.number ? `****-****-${profile.aadhar.number.slice(-4)}` : "Not provided"}
                     </p>
                   </div>
                 </div>
@@ -465,7 +467,7 @@ const DriverProfile = () => {
                       Vehicle Type
                     </p>
                     <p className="text-sm text-(--text-main) font-semibold mt-1">
-                      {profile?.vehicleType || "Not provided"}
+                      {profile?.vehicle?.type || "Not provided"}
                     </p>
                   </div>
                 </div>
@@ -482,7 +484,7 @@ const DriverProfile = () => {
                       Vehicle Registration Number
                     </p>
                     <p className="text-sm text-(--text-main) font-semibold mt-1">
-                      {profile?.vehicleNumber || "Not provided"}
+                      {profile?.vehicle?.number || "Not provided"}
                     </p>
                   </div>
                 </div>
@@ -496,7 +498,7 @@ const DriverProfile = () => {
                       Total Rides
                     </p>
                     <p className="text-2xl font-black text-(--text-main) mt-2">
-                      {profile.totalRides || 0}
+                      {profile.stats?.totalRides || 0}
                     </p>
                   </div>
                   <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">

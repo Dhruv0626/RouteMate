@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Settings, Save, ChevronLeft, Zap, IndianRupee, Bell,
   Shield, Globe, Smartphone, Database, RefreshCw, AlertTriangle,
-  Info, CheckCircle2, Sliders, Server
+  Info, CheckCircle2, Sliders, Server, LogOut, Trash2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -75,15 +75,27 @@ const ToggleInput = ({ label, desc, active, onToggle }) => (
 
 const SystemSettingsPage = () => {
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout } = useAuth();
   const { showNativeNotification } = useNotifications();
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const [loading, setLoading] = useState(true);
 
-  // Configuration State - Start empty to ensure data source is DB
-  const [config, setConfig] = useState(null);
+  // Configuration State
+  const [config, setConfig] = useState({
+    commission: "15%",
+    maxRadius: "50km",
+    surgeMultiplier: "1.0x",
+    pricing: {
+       Bike: { baseFare: "₹20", costPerKm: "₹5" },
+       Auto: { baseFare: "₹30", costPerKm: "₹8" },
+       Sedan: { baseFare: "₹50", costPerKm: "₹12" },
+       SUV: { baseFare: "₹80", costPerKm: "₹18" },
+       Hatchback: { baseFare: "₹40", costPerKm: "₹10" }
+    }
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Helper to strip symbols for editing
   const strip = (val) => {
@@ -99,18 +111,16 @@ const SystemSettingsPage = () => {
         const { data } = await api.get("/admin/system-settings");
         if (data.success && data.settings) {
           const s = data.settings;
-          // Sync with local state, stripping symbols for clean input
+          // Ensure we preserve the structure and defaults
           setConfig({
             ...s,
             pricing: {
-              bike: { baseFare: strip(s.pricing?.bike?.baseFare), costPerKm: strip(s.pricing?.bike?.costPerKm) },
-              auto: { baseFare: strip(s.pricing?.auto?.baseFare), costPerKm: strip(s.pricing?.auto?.costPerKm) },
-              sedan: { baseFare: strip(s.pricing?.sedan?.baseFare), costPerKm: strip(s.pricing?.sedan?.costPerKm) },
-              suv: { baseFare: strip(s.pricing?.suv?.baseFare), costPerKm: strip(s.pricing?.suv?.costPerKm) }
-            },
-            surgeMultiplier: strip(s.surgeMultiplier),
-            commission: strip(s.commission),
-            maxRadius: strip(s.maxRadius)
+              Bike: s.pricing?.Bike || { baseFare: "₹20", costPerKm: "₹5" },
+              Auto: s.pricing?.Auto || { baseFare: "₹30", costPerKm: "₹8" },
+              Sedan: s.pricing?.Sedan || { baseFare: "₹50", costPerKm: "₹12" },
+              SUV: s.pricing?.SUV || { baseFare: "₹80", costPerKm: "₹18" },
+              Hatchback: s.pricing?.Hatchback || { baseFare: "₹40", costPerKm: "₹10" },
+            }
           });
         }
       } catch (err) {
@@ -207,13 +217,13 @@ const SystemSettingsPage = () => {
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.bike.baseFare} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, bike: {...config.pricing.bike, baseFare: v}}})}
+                 value={strip(config.pricing.Bike.baseFare)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Bike: {...config.pricing.Bike, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.bike.costPerKm} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, bike: {...config.pricing.bike, costPerKm: v}}})}
+                 value={strip(config.pricing.Bike.costPerKm)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Bike: {...config.pricing.Bike, costPerKm: v}}})}
                />
              </div>
            </div>
@@ -226,13 +236,13 @@ const SystemSettingsPage = () => {
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.auto.baseFare} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, auto: {...config.pricing.auto, baseFare: v}}})}
+                 value={strip(config.pricing.Auto.baseFare)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Auto: {...config.pricing.Auto, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.auto.costPerKm} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, auto: {...config.pricing.auto, costPerKm: v}}})}
+                 value={strip(config.pricing.Auto.costPerKm)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Auto: {...config.pricing.Auto, costPerKm: v}}})}
                />
              </div>
            </div>
@@ -245,13 +255,13 @@ const SystemSettingsPage = () => {
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.sedan.baseFare} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, sedan: {...config.pricing.sedan, baseFare: v}}})}
+                 value={strip(config.pricing.Sedan.baseFare)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Sedan: {...config.pricing.Sedan, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.sedan.costPerKm} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, sedan: {...config.pricing.sedan, costPerKm: v}}})}
+                 value={strip(config.pricing.Sedan.costPerKm)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Sedan: {...config.pricing.Sedan, costPerKm: v}}})}
                />
              </div>
            </div>
@@ -264,13 +274,32 @@ const SystemSettingsPage = () => {
              <div className="grid grid-cols-2 gap-4">
                <ConfigInput
                  label="Base Fare" desc="Start price" 
-                 value={config.pricing.suv.baseFare} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, suv: {...config.pricing.suv, baseFare: v}}})}
+                 value={strip(config.pricing.SUV.baseFare)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, SUV: {...config.pricing.SUV, baseFare: v}}})}
                />
                <ConfigInput
                  label="Cost Per KM" desc="Rate/KM"
-                 value={config.pricing.suv.costPerKm} prefix="₹"
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, suv: {...config.pricing.suv, costPerKm: v}}})}
+                 value={strip(config.pricing.SUV.costPerKm)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, SUV: {...config.pricing.SUV, costPerKm: v}}})}
+               />
+             </div>
+           </div>
+
+           {/* Hatchback Pricing */}
+           <div className="space-y-4 p-4 rounded-3xl bg-amber-500/5 border border-amber-500/20">
+             <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+               🚕 4-Wheeler (Hatchback)
+             </h4>
+             <div className="grid grid-cols-2 gap-4">
+               <ConfigInput
+                 label="Base Fare" desc="Start price" 
+                 value={strip(config.pricing.Hatchback.baseFare)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Hatchback: {...config.pricing.Hatchback, baseFare: v}}})}
+               />
+               <ConfigInput
+                 label="Cost Per KM" desc="Rate/KM"
+                 value={strip(config.pricing.Hatchback.costPerKm)}
+                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Hatchback: {...config.pricing.Hatchback, costPerKm: v}}})}
                />
              </div>
            </div>
@@ -379,6 +408,69 @@ const SystemSettingsPage = () => {
            >
              Push to Production
            </button>
+        </section>
+
+        {/* ── Personal Account Section ── */}
+        <section className="pt-10 border-t border-(--card-border) space-y-6">
+           <div>
+              <h3 className="h3-display text-xl font-display font-black text-(--text-main)">Personal Account</h3>
+              <p className="text-xs text-(--text-dim) font-semibold">Manage your administrative access and security.</p>
+           </div>
+           
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Logout Button */}
+              <button 
+                onClick={async () => {
+                  try {
+                    await logout();
+                    navigate("/signin");
+                  } catch (err) {
+                    console.error("Logout failed", err);
+                  }
+                }}
+                className="group flex items-center justify-between p-5 rounded-3xl bg-black/5 dark:bg-white/5 border border-(--card-border) hover:border-primary/40 transition-all hover:-translate-y-1"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-primary text-black rounded-2xl group-hover:scale-110 transition-all">
+                    <LogOut size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-black uppercase tracking-widest text-(--text-main)">Secure Sign Out</p>
+                    <p className="text-[10px] text-(--text-dim) font-bold">Terminate current session</p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Delete Account Button */}
+              <button 
+                onClick={async () => {
+                  if (window.confirm("FATAL ACTION: Are you sure you want to PERMANENTLY delete your Admin account? This action is irreversible.")) {
+                    setIsDeleting(true);
+                    try {
+                      await api.delete("/users/delete-account");
+                      await logout();
+                      navigate("/signin");
+                    } catch (err) {
+                      alert("Deletion failed: " + (err.response?.data?.message || "Server Error"));
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }
+                }}
+                disabled={isDeleting}
+                className="group flex items-center justify-between p-5 rounded-3xl bg-rose-500/5 border border-rose-500/20 hover:bg-rose-500/10 transition-all hover:-translate-y-1"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-rose-500 text-white rounded-2xl group-hover:scale-110 transition-all shadow-lg shadow-rose-500/20">
+                    <Trash2 size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-black uppercase tracking-widest text-rose-500">{isDeleting ? "Processing..." : "Purge Account"}</p>
+                    <p className="text-[10px] text-rose-500/60 font-bold">Permanent destructive deletion</p>
+                  </div>
+                </div>
+              </button>
+           </div>
         </section>
 
       </main>

@@ -35,7 +35,7 @@ const CompleteProfilePage = () => {
     setLoading(true);
 
     try {
-      const response = await api.post("/users/update-mobile", { mobileNumber });
+      const response = await api.post("/users/update-mobile", { mobileNumber: mobileNumber });
       if (response.data.success) {
         setUser(response.data.user);
         navigate(`/${response.data.user.role}/dashboard`);

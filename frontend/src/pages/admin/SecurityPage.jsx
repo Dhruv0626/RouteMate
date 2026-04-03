@@ -8,25 +8,30 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
-
-// ─── Dummy Audit Logs ──────────────────────────────────────────────────────────
-const DUMMY_LOGS = [
-  { id: "LOG-001", action: "Admin Login", actor: "Dhruv", target: "System Dashboard", status: "success", time: "2 mins ago", ip: "192.168.1.56", color: "emerald" },
-  { id: "LOG-002", action: "User Blocked", actor: "System Agent", target: "id_7841 (Driver)", status: "enforced", time: "14 mins ago", ip: "Server-Node-01", color: "rose" },
-  { id: "LOG-003", action: "Config Change", actor: "Dhruv", target: "Base Fare (₹45 → ₹50)", status: "success", time: "1 hr ago", ip: "192.168.1.56", color: "violet" },
-  { id: "LOG-004", action: "Security Breach Attempt", actor: "Unknown", target: "API Endpoints", status: "blocked", time: "3 hrs ago", ip: "103.44.2.11", color: "rose" },
-  { id: "LOG-005", action: "Key Rotation", actor: "Cron Job", target: "JWT RSA Bundle", status: "success", time: "5 hrs ago", ip: "Internal", color: "emerald" },
-  { id: "LOG-006", action: "Password Reset", actor: "user_119", target: "Passenger Account", status: "success", time: "6 hrs ago", ip: "44.52.1.200", color: "primary" },
-];
+import api from "../../services/api";
 
 const SecurityPage = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [logs, setLogs] = useState([]);
+
+  const fetchLogs = async () => {
+    try {
+      const { data } = await api.get("/admin/audit-logs?limit=20");
+      if (data.success && data.logs) {
+        setLogs(data.logs);
+      }
+    } catch (e) {
+      console.error("Failed to fetch security logs", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setLoading(false);
+    fetchLogs();
   }, []);
 
   const runVulnerabilityScan = () => {
@@ -133,31 +138,33 @@ const SecurityPage = () => {
                     <button className="p-2.5 rounded-2xl border border-(--card-border) text-(--text-dim) hover:bg-black/5"><Filter size={16} /></button>
                  </div>
                  <div className="divide-y divide-(--card-border)">
-                    {DUMMY_LOGS.map(log => {
+                    {logs.map(log => {
                        const colorMap = {
-                         emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                         rose: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-                         violet: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+                         driver: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                         security: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+                         system: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+                         auth: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
                          primary: "bg-primary/10 text-primary border-primary/20"
                        };
+                       const color = log.category || "primary";
                        return (
-                          <div key={log.id} className="p-5 flex items-center gap-4 hover:bg-white/5 transition-colors group">
-                             <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${colorMap[log.color]}`}>
-                                {log.action.includes("Security") ? <AlertTriangle size={18} /> : 
-                                 log.action.includes("Key") ? <Lock size={18} /> : <Terminal size={18} />}
+                          <div key={log._id} className="p-5 flex items-center gap-4 hover:bg-white/5 transition-colors group">
+                             <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border ${colorMap[color] || colorMap.primary}`}>
+                                {log.category === "security" ? <AlertTriangle size={18} /> : 
+                                 log.category === "auth" ? <Lock size={18} /> : <Terminal size={18} />}
                              </div>
                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                    <p className="text-sm font-black text-(--text-main)">{log.action}</p>
-                                   <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border ${colorMap[log.color]}`}>{log.status}</span>
+                                   <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full border ${colorMap[color] || colorMap.primary}`}>Success</span>
                                 </div>
                                 <p className="text-[10px] font-medium text-(--text-dim) truncate mt-0.5">
-                                   <span className="text-secondary">{log.actor}</span> interacted with <span className="italic">{log.target}</span> from IP {log.ip}
+                                   <span className="text-secondary">{log.actor}</span> performed action in category <span className="italic">{log.category}</span>
                                 </p>
                              </div>
                              <div className="text-right shrink-0">
-                                <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">{log.time}</p>
-                                <p className="text-[8px] font-bold text-(--text-dim) group-hover:text-primary transition-colors cursor-pointer mt-1">Details</p>
+                                <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">{new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                <p className="text-[8px] font-bold text-(--text-dim) group-hover:text-primary transition-colors cursor-pointer mt-1">{new Date(log.date).toLocaleDateString()}</p>
                              </div>
                           </div>
                        )

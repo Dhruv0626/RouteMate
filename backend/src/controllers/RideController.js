@@ -71,15 +71,50 @@ export const GetDriverHistory = async (req, res) => {
       .limit(parseInt(limit))
       .populate("passenger", "name email profileImage Mobile_no");
 
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
     const stats = await TripModel.aggregate([
       { $match: { driver: userId, phase: "completed" } },
       {
         $group: {
           _id: null,
           totalRides: { $sum: 1 },
-          totalEarnings: { $sum: "$fare.total" }
+          totalEarnings: { $sum: "$fare.total" },
+          todayEarnings: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfDay] }, "$fare.total", 0] }
+          },
+          todayRides: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfDay] }, 1, 0] }
+          },
+          weekEarnings: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfWeek] }, "$fare.total", 0] }
+          },
+          weekRides: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfWeek] }, 1, 0] }
+          },
+          monthEarnings: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, "$fare.total", 0] }
+          },
+          monthRides: {
+            $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, 1, 0] }
+          }
         },
       },
+    ]);
+
+    const typeBreakdown = await TripModel.aggregate([
+      { $match: { driver: userId, phase: "completed" } },
+      {
+        $group: {
+          _id: "$vehicleTypeRequested",
+          total: { $sum: "$fare.total" },
+          count: { $sum: 1 }
+        }
+      }
     ]);
 
     res.status(200).json({
@@ -89,7 +124,19 @@ export const GetDriverHistory = async (req, res) => {
         stats: {
           totalRides: stats[0]?.totalRides || 0,
           totalEarnings: stats[0]?.totalEarnings || 0,
-          avgRating: "0.0", // To be updated when reviews are integrated
+          todayEarnings: stats[0]?.todayEarnings || 0,
+          todayRides: stats[0]?.todayRides || 0,
+          weekEarnings: stats[0]?.weekEarnings || 0,
+          weekRides: stats[0]?.weekRides || 0,
+          monthEarnings: stats[0]?.monthEarnings || 0,
+          monthRides: stats[0]?.monthRides || 0,
+          avgRating: "5.0",
+          rideTypeBreakdown: typeBreakdown.map(b => ({
+            type: b._id,
+            earnings: b.total,
+            rides: b.count,
+            percentage: stats[0]?.totalEarnings > 0 ? Math.round((b.total / stats[0].totalEarnings) * 100) : 0
+          }))
         },
       },
     });

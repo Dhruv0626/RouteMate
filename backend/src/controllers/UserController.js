@@ -370,6 +370,50 @@ export const DeleteUser = async (req, res) => {
     }
 };
 
+// ─── Delete My Own Account (Self) ──────────────────────────────────────────────
+export const DeleteUserForSelf = async (req, res) => {
+    try {
+        const userId = req.user.id; // From authMiddleware
+
+        // 1. Verify user exists
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        // 2. Invalidate session (logout logic)
+        await UserModel.findByIdAndUpdate(userId, { refreshToken: null });
+
+        // 🧹 Clear Redis Cache
+        await cacheService.del(`user:profile:${userId}`);
+        await cacheService.del("admin:dashboard-stats");
+
+        // 3. Delete the user document
+        await UserModel.findByIdAndDelete(userId);
+
+        // Notify admins that a user deleted their own account
+        await notifyUserDeleted({
+            targetUser: user,
+            adminId: null, // Self-initiated
+            isSelfDelete: true
+        });
+
+        // 4. Clear cookies on response
+        const isProduction = process.env.NODE_ENV === "production";
+        res.clearCookie("accessToken", { httpOnly: true, secure: isProduction });
+        res.clearCookie("refreshToken", { httpOnly: true, secure: isProduction, path: "/api/users/refresh-token" });
+
+        return res.status(200).json({
+            success: true,
+            message: "Your RouteMate account has been permanently deleted."
+        });
+
+    } catch (error) {
+        console.error("Delete Self Error:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
 // ─── Update User (Admin only) ─────────────────────────────────────────────────
 /**
  * Updates user details like name, email, mobile_no, role, or block status.
