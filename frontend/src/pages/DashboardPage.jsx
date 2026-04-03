@@ -41,8 +41,15 @@ const ROLE_CARDS = {
     },
     {
       icon: Clock,
-      title: "My Trips",
-      desc: "View your ride history",
+      title: "My Rides",
+      desc: "Live track upcoming bookings",
+      color: "amber",
+      href: "/passenger/dashboard/my-rides",
+    },
+    {
+      icon: Clock,
+      title: "History",
+      desc: "View your past trips",
       color: "violet",
       href: "/passenger/dashboard/history",
     },
@@ -323,29 +330,52 @@ const DashboardPage = () => {
         } else {
           // Fetch Real Stats and Activity for Passenger/Driver
           const fetchFn = user.role === "driver" ? getDriverHistory : getPassengerHistory;
-          const historyRes = await fetchFn({ limit: 5 });
+          const liveEndpoint = user.role === "driver" ? "/published-rides/my-published" : "/published-rides/my-booked";
+          
+          const [historyRes, liveRes] = await Promise.all([
+            fetchFn({ limit: 10 }),
+            api.get(liveEndpoint).catch(() => ({ data: { data: [] } }))
+          ]);
           
           if (historyRes.data.success) {
             const { stats: s, rides } = historyRes.data.data;
+            const liveRides = liveRes.data?.data || [];
             
+            // Adjust stats to include live rides if needed
             if (user.role === "driver") {
               setStats([
-                { label: "Total Rides", value: s.totalRides.toString() },
+                { label: "Total Rides", value: (s.totalRides + liveRides.filter(r => r.status === 'completed').length).toString() },
                 { label: "Earnings", value: `₹${s.totalEarnings.toLocaleString()}` },
-                { label: "Rating", value: s.avgRating },
+                { label: "Published", value: liveRides.filter(r => r.status === 'open' || r.status === 'active').length.toString() },
               ]);
             } else {
               setStats([
                 { label: "Total Trips", value: s.totalRides.toString() },
-                { label: "Saved Places", value: "0" }, 
+                { label: "Active", value: liveRides.filter(r => r.status === 'active').length.toString() }, 
                 { label: "Total Spent", value: `₹${s.totalSpent.toLocaleString()}` },
               ]);
             }
 
-            // For Activity, we'll use a mix of recent rides and notifications for a truly "live" feel
+            // Map live rides to activity format
+            const activeActivities = liveRides
+              .filter(r => r.status !== 'completed' && r.status !== 'cancelled')
+              .map(ride => ({
+                id: ride._id,
+                type: "Live Ride",
+                from: ride.source?.address?.split(',')[0] || "Unknown",
+                to: ride.destination?.address?.split(',')[0] || "Unknown",
+                date: "Now",
+                rawDate: new Date(ride.departureTime),
+                status: ride.status.toUpperCase(),
+                amount: ride.vehicleType || "Ride",
+                icon: Car,
+                isLive: true
+            }));
+
+            // For Activity, we'll use a mix of recent rides and live ones
             const activityHistory = rides.map(ride => ({
               id: ride._id,
-              type: "Ride",
+              type: "Trip",
               from: ride.source?.address?.split(',')[0] || "Unknown",
               to: ride.destination?.address?.split(',')[0] || "Unknown",
               date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
@@ -355,7 +385,7 @@ const DashboardPage = () => {
               icon: Navigation
             }));
 
-            setActivities(activityHistory);
+            setActivities([...activeActivities, ...activityHistory].slice(0, 8));
           }
         }
       } catch (err) {

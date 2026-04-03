@@ -88,8 +88,9 @@ function RouteCard({ route, isSelected, onClick }) {
   );
 }
 
-// ─── Vehicle / Fare Card ──────────────────────────────────────────────────────
-function FareCard({ tier, isSelected, onClick }) {
+// ─── Published Ride Card ──────────────────────────────────────────────────────
+function PublishedRideCard({ ride, isSelected, onClick }) {
+  const dep = new Date(ride.departureTime);
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -101,20 +102,34 @@ function FareCard({ tier, isSelected, onClick }) {
       boxShadow: isSelected ? "0 0 0 3px rgba(99,102,241,0.12)" : "none",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        <span style={{ fontSize: "22px", lineHeight: 1 }}>{tier.emoji}</span>
+        <div style={{
+          width: 38, height: 38, borderRadius: "50%", background: "var(--primary-color, #6366f1)",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: "bold",
+          color: "#fff"
+        }}>
+          {ride.driver?.profileImage ? <img src={ride.driver.profileImage} alt="" style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover'}} /> : (ride.driver?.name?.[0] || 'D')}
+        </div>
         <div>
           <p style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
-            {tier.label}
+            {ride.driver?.name || "Driver"} · {ride.vehicleType || "Car"}
           </p>
-          <p style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)" }}>{tier.capacity}</p>
+          <p style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
+            {ride.status === 'active' ? (
+                <span style={{ color: "#4ade80", fontWeight: 700 }}>● LIVE</span>
+            ) : ride.status === 'full' ? (
+                <span style={{ color: "#ef4444", fontWeight: 700 }}>● FULL</span>
+            ) : (
+                <span>{ride.availableSeats} seats</span>
+            )}
+            • <span>{dep.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}</span>
+          </p>
         </div>
       </div>
-      {/* Fixed fare */}
       <div style={{ textAlign: "right" }}>
         <p style={{ margin: 0, fontSize: "16px", fontWeight: 900, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
-          {tier.fareStr}
+          {ride.distanceKm ? `~${ride.distanceKm}km` : "Live"}
         </p>
-        <p style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)" }}>fixed fare</p>
+        <p style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)" }}>distance</p>
       </div>
     </button>
   );
@@ -142,8 +157,8 @@ const RideMapPage = () => {
   const [isLoadingRoutes,  setIsLoadingRoutes]  = useState(false);
   const [traffic,          setTraffic]          = useState(null);
 
-  // Vehicle / fare selection (default: Mini = idx 2)
-  const [selectedFareIdx, setSelectedFareIdx] = useState(2);
+  const [availableRides, setAvailableRides] = useState([]);
+  const [selectedRideIdx, setSelectedRideIdx] = useState(0);
 
   // Simulation mode
   const [simulateMode, setSimulateMode] = useState(false);
@@ -151,6 +166,9 @@ const RideMapPage = () => {
   // Always-on GPS dot
   const [userLocation, setUserLocation] = useState(null);
   const [systemConfig, setSystemConfig] = useState(null);
+  const [fareEstimate, setFareEstimate] = useState(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(null);
 
   // Fetch system config on mount
   useEffect(() => {
@@ -193,7 +211,7 @@ const RideMapPage = () => {
   const routeInfo     = selectedRoute
     ? { distance: selectedRoute.distanceStr, duration: selectedRoute.durationMin }
     : { distance: "", duration: null };
-  const selectedFare  = selectedRoute?.fares?.[selectedFareIdx] ?? null;
+  const selectedPublishedRide = availableRides?.[selectedRideIdx] ?? null;
 
   // ─── Navigation hook ──────────────────────────────────────────────────────
   const nav = useGeoNavigation({ routeCoords, pickup, dropoff, simulate: simulateMode });
@@ -204,12 +222,21 @@ const RideMapPage = () => {
     setIsLoadingRoutes(true);
     setRoutes([]);
     setSelectedRouteIdx(0);
-    try {
-      setTraffic(getTrafficCondition());
-      const fetched = await getMultipleRoutes(from, to, systemConfig);
-      setRoutes(fetched);
-    } catch (e) {
-      console.error("[RideMapPage] fetchRoutes:", e.message);
+      try {
+        setTraffic(getTrafficCondition());
+        
+        // Fetch ALL currently active rides to ensure we show them on the map
+        const [fetchedRides, fetchedRoutes] = await Promise.all([
+          api.get("/published-rides/available").catch(() => ({ data: { success: true, data: [] } })),
+          getMultipleRoutes(from, to, systemConfig)
+        ]);
+        
+        if (fetchedRides.data?.success) {
+            setAvailableRides(fetchedRides.data.data || []);
+        }
+        setRoutes(fetchedRoutes);
+      } catch (e) {
+      console.error("[RideMapPage] fetch data error:", e.message);
     } finally {
       setIsLoadingRoutes(false);
     }
@@ -239,6 +266,60 @@ const RideMapPage = () => {
   const handleToggleNavigation = () => nav.isNavigating ? nav.stopNavigation() : nav.startNavigation();
 
   // ─── Arrived toast ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectedPublishedRide && pickup && dropoff) {
+      const fetchFare = async () => {
+        try {
+          const { data } = await api.get("/published-rides/fare-estimate", {
+            params: {
+              rideId: selectedPublishedRide._id,
+              passengerLat: pickup.lat,
+              passengerLng: pickup.lng,
+              destLat: dropoff.lat,
+              destLng: dropoff.lng,
+              bookingType: "shared",
+              seats: 1,
+              distanceKm: selectedRoute?.distanceKm
+            }
+          });
+          if (data.success) setFareEstimate(data.data);
+        } catch (err) {
+          console.error("Fare estimate error:", err.message);
+        }
+      };
+      fetchFare();
+    } else {
+      setFareEstimate(null);
+    }
+  }, [selectedPublishedRide, pickup, dropoff]);
+
+  const handleProceed = async () => {
+    if (!selectedPublishedRide || !pickup || !dropoff) return;
+    setBookingLoading(true);
+    try {
+      const res = await api.post(`/published-rides/book/${selectedPublishedRide._id}`, {
+        bookingType: "shared",
+        requestedSeats: 1,
+        distanceKm: selectedRoute?.distanceKm,
+        passengerSource: {
+          address: pickup.name,
+          location: { type: "Point", coordinates: [pickup.lng, pickup.lat] }
+        },
+        passengerDestination: {
+          address: dropoff.name,
+          location: { type: "Point", coordinates: [dropoff.lng, dropoff.lat] }
+        }
+      });
+      if (res.data.success) {
+        setBookingSuccess("Booking request sent! Driver will be notified.");
+        setTimeout(() => navigate("/passenger/dashboard"), 2500);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Booking failed.");
+    } finally {
+      setBookingLoading(false);
+    }
+  };
   const [showArrival, setShowArrival] = useState(false);
   useEffect(() => {
     if (!nav.arrived) return;
@@ -391,48 +472,74 @@ const RideMapPage = () => {
             )}
           </div>
 
-
-
-          {/* ── Fare Selector ── */}
+          {/* ── Driver Selector ── */}
           {selectedRoute && !nav.isNavigating && (
             <div className="rounded-2xl p-4 flex flex-col gap-3"
               style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
 
               <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em", margin: 0 }}>
-                🧾 Select Vehicle &amp; Fare
+                🧾 Available Drivers
               </p>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
-                {selectedRoute.fares.map((tier, idx) => (
-                  <FareCard
-                    key={tier.id}
-                    tier={tier}
-                    isSelected={idx === selectedFareIdx}
-                    onClick={() => setSelectedFareIdx(idx)}
-                  />
-                ))}
-              </div>
+              {availableRides.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "10px 0", color: "var(--text-dim)", fontSize: "13px" }}>
+                  No published rides match your route right now.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+                  {availableRides.map((ride, idx) => (
+                    <PublishedRideCard
+                      key={ride._id}
+                      ride={ride}
+                      isSelected={idx === selectedRideIdx}
+                      onClick={() => setSelectedRideIdx(idx)}
+                    />
+                  ))}
+                </div>
+              )}
 
               {/* Summary strip */}
-              {selectedFare && (
+              {selectedPublishedRide && (
                 <div style={{
                   borderRadius: "12px", padding: "11px 14px",
                   background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)",
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
                 }}>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <p style={{ margin: 0, fontSize: "11px", fontWeight: 600, color: "var(--text-dim)" }}>
-                      {selectedFare.emoji} {selectedFare.label} · {selectedRoute.label}
+                      Driving {selectedPublishedRide.vehicleType} {selectedPublishedRide.status === 'active' ? '● LIVE' : ''}
                     </p>
                     <p style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)", marginTop: "2px" }}>
-                      {selectedRoute.distanceStr} · ~{selectedRoute.durationMin} min
+                       {selectedPublishedRide.driver?.name} is on this route
                     </p>
+                    {bookingSuccess && (
+                        <p style={{ margin: 0, fontSize: "11px", color: "#4ade80", fontWeight: 700, marginTop: "4px" }}>
+                          {bookingSuccess}
+                        </p>
+                    )}
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <p style={{ margin: 0, fontSize: "20px", fontWeight: 900, color: "#a5b4fc", lineHeight: 1 }}>
-                      {selectedFare.fareStr}
-                    </p>
-                    <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>fixed fare</p>
+                  <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    {fareEstimate && (
+                        <div>
+                            <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#a5b4fc", lineHeight: 1 }}>
+                                ₹{fareEstimate.sharedTotal}
+                            </p>
+                            <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>approx fare</p>
+                        </div>
+                    )}
+                    <button
+                        onClick={handleProceed}
+                        disabled={bookingLoading || !!bookingSuccess}
+                        style={{
+                        background: "var(--primary-color, #6366f1)", color: "#000", border: "none",
+                        padding: "10px 18px", borderRadius: "8px", fontSize: "13px", fontWeight: 800,
+                        cursor: (bookingLoading || bookingSuccess) ? "not-allowed" : "pointer", 
+                        transition: "all 0.15s ease",
+                        opacity: (bookingLoading || bookingSuccess) ? 0.6 : 1,
+                        display: 'flex', alignItems: 'center', gap: '8px'
+                        }}>
+                        {bookingLoading ? <Loader2 size={14} className="animate-spin" /> : 'Proceed'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -525,9 +632,9 @@ const RideMapPage = () => {
                 <p style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#4ade80" }}>Arrived at destination!</p>
               </div>
               <p style={{ margin: 0, fontSize: "12px", color: "var(--text-dim)" }}>{dropoff?.name}</p>
-              {selectedFare && (
+              {selectedPublishedRide && (
                 <p style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "#4ade80", marginTop: "4px" }}>
-                  {selectedFare.emoji} {selectedFare.label} — Final Fare: {selectedFare.fareStr}
+                  Completed Ride with {selectedPublishedRide.driver?.name}
                 </p>
               )}
             </div>
@@ -544,6 +651,7 @@ const RideMapPage = () => {
               driverLocation={null}
               userLocation={userLocation}
               allRoutes={routes}
+              availableRides={availableRides}
               selectedRouteIdx={selectedRouteIdx}
               onRouteSelect={null}   // Route is locked by driver
               isNavigating={nav.isNavigating}

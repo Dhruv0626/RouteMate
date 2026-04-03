@@ -33,7 +33,11 @@ import SchedulePage from "./pages/driver/SchedulePage";
 import MyRatingPage from "./pages/driver/MyRatingPage";
 import PayoutsPage from "./pages/driver/PayoutsPage";
 import GoOnlinePage from "./pages/driver/GoOnlinePage";
+import DriverBookingsPage from "./pages/driver/DriverBookingsPage";
 import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
+import AvailableRidesPage from "./pages/passenger/AvailableRidesPage";
+import PassengerBookingsPage from "./pages/passenger/PassengerBookingsPage";
+import LiveTrackingPage from "./pages/LiveTrackingPage";
 import HistoryPage from "./pages/HistoryPage";
 import AdminHistoryPage from "./pages/admin/AdminHistoryPage";
 import Loader from "./components/ui/Loader";
@@ -390,6 +394,14 @@ function AppContent() {
           }
         />
         <Route
+          path="/live-tracking/:rideId"
+          element={
+            <ProtectedRoute>
+              <LiveTrackingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/passenger/dashboard/profile"
           element={
             <ProtectedRoute>
@@ -450,6 +462,24 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── Passenger: Find & Book Rides ── */}
+        <Route
+          path="/passenger/dashboard/find-rides"
+          element={
+            <ProtectedRoute>
+              <AvailableRidesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/my-rides"
+          element={
+            <ProtectedRoute>
+              <PassengerBookingsPage />
             </ProtectedRoute>
           }
         />
@@ -533,6 +563,15 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <GoOnlinePage />
+            </DriverProtectedRoute>
+          }
+        />
+        {/* ── Driver: Booking Requests ── */}
+        <Route
+          path="/driver/dashboard/bookings"
+          element={
+            <DriverProtectedRoute>
+              <DriverBookingsPage />
             </DriverProtectedRoute>
           }
         />

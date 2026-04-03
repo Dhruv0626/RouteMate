@@ -1,4 +1,6 @@
 import express from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
 
@@ -14,6 +16,7 @@ import adminRoutes from "./src/routes/Admin.js";
 import uploadRoutes from "./src/routes/Upload.js";
 import notificationRoutes from "./src/routes/Notification.js";
 import rideRoutes from "./src/routes/Ride.js";
+import publishedRideRoutes from "./src/routes/PublishedRide.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 
 // ─── Passport Configuration ───────────────────────────────────────────────────
@@ -91,6 +94,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rides", rideRoutes);
+app.use("/api/published-rides", publishedRideRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {
@@ -108,13 +112,38 @@ app.use((err, req, res, next) => {
 
 // ─── 8. Start Server ──────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", async () => {
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+// Socket.io namespaces or rooms logic
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("join_ride", (rideId) => {
+    socket.join(rideId);
+    console.log(`Socket ${socket.id} joined ride ${rideId}`);
+  });
+
+  socket.on("driver_location_update", (data) => {
+    // broadcast driver location to all passengers in the ride room
+    socket.to(data.rideId).emit("location_update", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
+
+httpServer.listen(PORT, "0.0.0.0", async () => {
   // 🚀 KEEP-ALIVE: Ping the server every 10 minutes to prevent Render sleep mode
   const BACKEND_URL = process.env.BACKEND_URL;
   if (BACKEND_URL && BACKEND_URL.includes("onrender.com")) {
     const https = await import("https");
     setInterval(() => {
       https.get(`${BACKEND_URL}/ping`, (res) => {
+
         // Silent on success
       }).on("error", (err) => console.error("💔 Keep-Alive Error:", err.message));
     }, 10 * 60 * 1000); // 10 minutes

@@ -35,9 +35,14 @@ const DriverProfile = () => {
     name: "",
     phone: "",
     licenseNumber: "",
+    licenseImage: "",
     aadharNumber: "",
+    aadharImage: "",
     vehicleType: "",
     vehicleNumber: "",
+    rcBookImage: "",
+    insuranceImage: "",
+    vehicleImage: "",
     profileImage: "",
   });
   const [profileImagePreview, setProfileImagePreview] = useState("");
@@ -62,9 +67,14 @@ const DriverProfile = () => {
             name: user?.name || "",
             phone: user?.Mobile_no || "",
             licenseNumber: profileData.license?.number || "",
+            licenseImage: profileData.license?.image || "",
             aadharNumber: profileData.aadhar?.number || "",
+            aadharImage: profileData.aadhar?.image || "",
             vehicleType: profileData.vehicle?.type || "",
             vehicleNumber: profileData.vehicle?.number || "",
+            rcBookImage: profileData.vehicle?.rcBookImage || "",
+            insuranceImage: profileData.vehicle?.insuranceImage || "",
+            vehicleImage: profileData.vehicle?.vehicleImage || "",
             profileImage: user?.profileImage || "",
           });
           if (user?.profileImage) {
@@ -117,6 +127,17 @@ const DriverProfile = () => {
     }
   };
 
+  const handleDocumentImageChange = (e, field) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData({ ...formData, [field]: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const getInitials = (name) => {
     if (!name) return "D";
     return name
@@ -143,9 +164,14 @@ const DriverProfile = () => {
       
       const response = await updateDriverProfile({
         licenseNumber: formData.licenseNumber.trim() || null,
+        licenseImage: formData.licenseImage || null,
         aadharNumber: formData.aadharNumber.trim() || null,
+        aadharImage: formData.aadharImage || null,
         vehicleType: formData.vehicleType.trim() || null,
         vehicleNumber: formData.vehicleNumber.trim() || null,
+        rcBookImage: formData.rcBookImage || null,
+        insuranceImage: formData.insuranceImage || null,
+        vehicleImage: formData.vehicleImage || null,
       });
 
       if (response.data.success && phoneResponse.data.success) {
@@ -166,9 +192,14 @@ const DriverProfile = () => {
         name: user?.name || "",
         phone: user?.Mobile_no || "",
         licenseNumber: profile?.license?.number || "",
+        licenseImage: profile?.license?.image || "",
         aadharNumber: profile?.aadhar?.number || "",
+        aadharImage: profile?.aadhar?.image || "",
         vehicleType: profile?.vehicle?.type || "",
         vehicleNumber: profile?.vehicle?.number || "",
+        rcBookImage: profile?.vehicle?.rcBookImage || "",
+        insuranceImage: profile?.vehicle?.insuranceImage || "",
+        vehicleImage: profile?.vehicle?.vehicleImage || "",
         profileImage: user?.profileImage || "",
       });
     setProfileImagePreview(user?.profileImage || "");
@@ -340,6 +371,13 @@ const DriverProfile = () => {
                 <p className="text-xs text-(--text-dim) mt-2 ml-1">
                   Your valid driving license number
                 </p>
+                <div className="mt-3 flex items-center gap-4">
+                  <label className="cursor-pointer px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors font-semibold text-xs border border-primary/20">
+                    Upload License Image
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleDocumentImageChange(e, "licenseImage")} disabled={saving} />
+                  </label>
+                  {formData.licenseImage && <img src={formData.licenseImage} alt="License" className="h-12 w-auto rounded object-contain border border-(--card-border)" />}
+                </div>
               </div>
 
               {/* Aadhar Number */}
@@ -361,6 +399,13 @@ const DriverProfile = () => {
                 <p className="text-xs text-(--text-dim) mt-2 ml-1">
                   Your Aadhar number for identity verification
                 </p>
+                <div className="mt-3 flex items-center gap-4">
+                  <label className="cursor-pointer px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-colors font-semibold text-xs border border-primary/20">
+                    Upload Aadhar Image
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleDocumentImageChange(e, "aadharImage")} disabled={saving} />
+                  </label>
+                  {formData.aadharImage && <img src={formData.aadharImage} alt="Aadhar" className="h-12 w-auto rounded object-contain border border-(--card-border)" />}
+                </div>
               </div>
 
               {/* Vehicle Type */}
@@ -395,6 +440,56 @@ const DriverProfile = () => {
                 <p className="text-xs text-(--text-dim) mt-2 ml-1">
                   Your vehicle's registration number
                 </p>
+              </div>
+
+              {/* Extra Vehicle Documents */}
+              <div className="space-y-5 border-t border-(--card-border)/50 pt-5">
+                <h3 className="text-sm font-bold text-(--text-main)">Vehicle & Insurance Documents</h3>
+                
+                {/* Vehicle Image */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div>
+                    <p className="text-sm font-semibold text-(--text-main)">Vehicle Image</p>
+                    <p className="text-xs text-(--text-dim)">Clear photo of your car</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {formData.vehicleImage && <img src={formData.vehicleImage} alt="Vehicle" className="h-10 w-10 rounded object-cover border border-(--card-border)" />}
+                    <label className="cursor-pointer px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors font-semibold text-xs border border-primary/20">
+                      Upload
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleDocumentImageChange(e, "vehicleImage")} disabled={saving} />
+                    </label>
+                  </div>
+                </div>
+
+                {/* RC Book */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div>
+                    <p className="text-sm font-semibold text-(--text-main)">RC Book</p>
+                    <p className="text-xs text-(--text-dim)">Registration Certificate</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {formData.rcBookImage && <img src={formData.rcBookImage} alt="RC Book" className="h-10 w-10 rounded object-cover border border-(--card-border)" />}
+                    <label className="cursor-pointer px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors font-semibold text-xs border border-primary/20">
+                      Upload
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleDocumentImageChange(e, "rcBookImage")} disabled={saving} />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Insurance Image */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div>
+                    <p className="text-sm font-semibold text-(--text-main)">Insurance Policy</p>
+                    <p className="text-xs text-(--text-dim)">Valid insurance document</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {formData.insuranceImage && <img src={formData.insuranceImage} alt="Insurance" className="h-10 w-10 rounded object-cover border border-(--card-border)" />}
+                    <label className="cursor-pointer px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors font-semibold text-xs border border-primary/20">
+                      Upload
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleDocumentImageChange(e, "insuranceImage")} disabled={saving} />
+                    </label>
+                  </div>
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -435,6 +530,11 @@ const DriverProfile = () => {
                     <p className="text-sm text-(--text-main) font-semibold mt-1 wrap-break-word">
                       {profile?.license?.number || "Not provided"}
                     </p>
+                    {profile?.license?.image && (
+                      <div className="mt-3">
+                        <img src={profile.license.image} alt="License" className="h-20 w-auto rounded object-contain border border-white/10"/>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -452,6 +552,11 @@ const DriverProfile = () => {
                     <p className="text-sm text-(--text-main) font-semibold mt-1 wrap-break-word">
                       {profile?.aadhar?.number ? `****-****-${profile.aadhar.number.slice(-4)}` : "Not provided"}
                     </p>
+                    {profile?.aadhar?.image && (
+                      <div className="mt-3">
+                        <img src={profile.aadhar.image} alt="Aadhar" className="h-20 w-auto rounded object-contain border border-white/10"/>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -489,6 +594,33 @@ const DriverProfile = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Vehicle Documents Display */}
+              {(profile?.vehicle?.vehicleImage || profile?.vehicle?.rcBookImage || profile?.vehicle?.insuranceImage) && (
+                <div className="space-y-4 pt-4 border-t border-(--card-border)/50">
+                  <h3 className="text-sm font-bold text-(--text-main) uppercase tracking-wider">Vehicle Documents</h3>
+                  <div className="flex flex-wrap gap-4">
+                    {profile?.vehicle?.vehicleImage && (
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <p className="text-xs font-semibold text-(--text-dim) mb-2">Vehicle Photo</p>
+                        <img src={profile.vehicle.vehicleImage} alt="Vehicle Match" className="h-24 w-36 rounded object-cover border border-black/20" />
+                      </div>
+                    )}
+                    {profile?.vehicle?.rcBookImage && (
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <p className="text-xs font-semibold text-(--text-dim) mb-2">RC Book</p>
+                        <img src={profile.vehicle.rcBookImage} alt="RC Book" className="h-24 w-auto rounded object-contain border border-black/20" />
+                      </div>
+                    )}
+                    {profile?.vehicle?.insuranceImage && (
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <p className="text-xs font-semibold text-(--text-dim) mb-2">Insurance</p>
+                        <img src={profile.vehicle.insuranceImage} alt="Insurance" className="h-24 w-auto rounded object-contain border border-black/20" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Stats */}
               {profile && (

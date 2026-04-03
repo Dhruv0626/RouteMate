@@ -145,6 +145,7 @@ const RideMap = ({
   pickup, dropoff, driverLocation,
   userLocation    = null,
   allRoutes       = [],          // all fetched route objects
+  availableRides  = [],          // array of rides featuring coordinate drops
   selectedRouteIdx = 0,          // which is highlighted
   onRouteSelect   = null,        // (idx) => void — called when polyline clicked
 
@@ -316,7 +317,7 @@ const RideMap = ({
           </Marker>
         )}
 
-        {/* External driver */}
+        {/* External driver (if only one) */}
         {driverLocation && !isNavigating && (
           <Marker position={[driverLocation.lat, driverLocation.lng]} icon={blueIcon}>
             <Popup>
@@ -325,6 +326,19 @@ const RideMap = ({
             </Popup>
           </Marker>
         )}
+
+        {/* Available Published Rides */ }
+        {!isNavigating && availableRides.map((ride) => {
+          if (!ride.source?.location?.coordinates) return null;
+          return (
+            <Marker key={ride._id} position={[ride.source.location.coordinates[1], ride.source.location.coordinates[0]]} icon={blueIcon}>
+              <Popup>
+                <p style={{ fontWeight: 700, color: "#1e40af", fontSize: 13, marginBottom: 4 }}>🚗 {ride.driver?.name || "Driver"}</p>
+                <p style={{ margin: 0, fontSize: 12 }}>Heading to {ride.destination.address}</p>
+              </Popup>
+            </Marker>
+          )
+        })}
 
       </MapContainer>
     </div>
