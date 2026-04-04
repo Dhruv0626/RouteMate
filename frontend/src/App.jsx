@@ -34,6 +34,7 @@ import MyRatingPage from "./pages/driver/MyRatingPage";
 import PayoutsPage from "./pages/driver/PayoutsPage";
 import GoOnlinePage from "./pages/driver/GoOnlinePage";
 import DriverBookingsPage from "./pages/driver/DriverBookingsPage";
+import RideRequestDetailsPage from "./pages/driver/RideRequestDetailsPage";
 import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
 import AvailableRidesPage from "./pages/passenger/AvailableRidesPage";
 import PassengerBookingsPage from "./pages/passenger/PassengerBookingsPage";
@@ -580,6 +581,14 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <NotificationsPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/ride-request/:rideId/:bookingId"
+          element={
+            <DriverProtectedRoute>
+              <RideRequestDetailsPage />
             </DriverProtectedRoute>
           }
         />

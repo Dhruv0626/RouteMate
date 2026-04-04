@@ -235,20 +235,27 @@ const DriverBookingsPage = () => {
 
                         {/* Action buttons */}
                         {isPending && (
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                                <button
+                                onClick={() => handleRespond(ride._id, booking._id, "confirm")}
+                                disabled={isResponding}
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-500 text-white font-bold rounded-xl text-sm hover:bg-emerald-600 active:scale-95 transition-all disabled:opacity-50">
+                                {isResponding ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                                Confirm
+                                </button>
+                                <button
+                                onClick={() => handleRespond(ride._id, booking._id, "reject")}
+                                disabled={isResponding}
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-500/10 text-red-500 border border-red-500/20 font-bold rounded-xl text-sm hover:bg-red-500/20 active:scale-95 transition-all disabled:opacity-50">
+                                {isResponding ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                                Reject
+                                </button>
+                            </div>
                             <button
-                              onClick={() => handleRespond(ride._id, booking._id, "confirm")}
-                              disabled={isResponding}
-                              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-emerald-500 text-white font-bold rounded-xl text-sm hover:bg-emerald-600 active:scale-95 transition-all disabled:opacity-50">
-                              {isResponding ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => handleRespond(ride._id, booking._id, "reject")}
-                              disabled={isResponding}
-                              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-500/10 text-red-500 border border-red-500/20 font-bold rounded-xl text-sm hover:bg-red-500/20 active:scale-95 transition-all disabled:opacity-50">
-                              {isResponding ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                              Reject
+                                onClick={() => navigate(`/driver/dashboard/ride-request/${ride._id}/${booking._id}`)}
+                                className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary/10 text-primary border border-primary/20 font-bold rounded-xl text-xs hover:bg-primary/20 transition-all">
+                                <Navigation size={12} /> View Detailed Map & Request
                             </button>
                           </div>
                         )}

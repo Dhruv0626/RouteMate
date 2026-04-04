@@ -79,10 +79,10 @@ function RouteCard({ route, isSelected, onClick }) {
 
       {/* Stats */}
       <div style={{ textAlign: "right" }}>
-        <p style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: isSelected ? route.color : "var(--text-main)" }}>
+        <div style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: isSelected ? route.color : "var(--text-main)" }}>
           {route.durationMin} min
-        </p>
-        <p style={{ margin: 0, fontSize: "11px", color: "var(--text-dim)", marginTop: "1px" }}>{route.distanceStr}</p>
+        </div>
+        <div style={{ margin: 0, fontSize: "11px", color: "var(--text-dim)", marginTop: "1px" }}>{route.distanceStr}</div>
       </div>
     </button>
   );
@@ -110,26 +110,26 @@ function PublishedRideCard({ ride, isSelected, onClick }) {
           {ride.driver?.profileImage ? <img src={ride.driver.profileImage} alt="" style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover'}} /> : (ride.driver?.name?.[0] || 'D')}
         </div>
         <div>
-          <p style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
+          <div style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
             {ride.driver?.name || "Driver"} · {ride.vehicleType || "Car"}
-          </p>
-          <p style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
+          </div>
+          <div style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
             {ride.status === 'active' ? (
                 <span style={{ color: "#4ade80", fontWeight: 700 }}>● LIVE</span>
             ) : ride.status === 'full' ? (
                 <span style={{ color: "#ef4444", fontWeight: 700 }}>● FULL</span>
-            ) : (
-                <span>{ride.availableSeats} seats</span>
-            )}
-            • <span>{dep.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}</span>
-          </p>
+            ) : null}
+            <span>{dep.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}</span>
+          </div>
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
-        <p style={{ margin: 0, fontSize: "16px", fontWeight: 900, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
+        <div style={{ margin: 0, fontSize: "16px", fontWeight: 900, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
+          ₹{ride.price}
+        </div>
+        <div style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)" }}>
           {ride.distanceKm ? `~${ride.distanceKm}km` : "Live"}
-        </p>
-        <p style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)" }}>distance</p>
+        </div>
       </div>
     </button>
   );
@@ -225,9 +225,14 @@ const RideMapPage = () => {
       try {
         setTraffic(getTrafficCondition());
         
-        // Fetch ALL currently active rides to ensure we show them on the map
+        // Fetch active rides that ARE NEAR the passenger's specific pickup/dropoff
         const [fetchedRides, fetchedRoutes] = await Promise.all([
-          api.get("/published-rides/available").catch(() => ({ data: { success: true, data: [] } })),
+          api.get("/published-rides/available", {
+            params: {
+              srcLat: from.lat, srcLng: from.lng,
+              dstLat: to.lat,   dstLng: to.lng
+            }
+          }).catch(() => ({ data: { success: true, data: [] } })),
           getMultipleRoutes(from, to, systemConfig)
         ]);
         
@@ -265,40 +270,21 @@ const RideMapPage = () => {
   const canNavigate = pickup && dropoff && routeCoords.length > 0;
   const handleToggleNavigation = () => nav.isNavigating ? nav.stopNavigation() : nav.startNavigation();
 
-  // ─── Arrived toast ────────────────────────────────────────────────────────
+  // Fare estimate is now included in the availableRides response
   useEffect(() => {
-    if (selectedPublishedRide && pickup && dropoff) {
-      const fetchFare = async () => {
-        try {
-          const { data } = await api.get("/published-rides/fare-estimate", {
-            params: {
-              rideId: selectedPublishedRide._id,
-              passengerLat: pickup.lat,
-              passengerLng: pickup.lng,
-              destLat: dropoff.lat,
-              destLng: dropoff.lng,
-              bookingType: "shared",
-              seats: 1,
-              distanceKm: selectedRoute?.distanceKm
-            }
-          });
-          if (data.success) setFareEstimate(data.data);
-        } catch (err) {
-          console.error("Fare estimate error:", err.message);
-        }
-      };
-      fetchFare();
+    if (selectedPublishedRide) {
+       setFareEstimate({ totalFare: selectedPublishedRide.price });
     } else {
-      setFareEstimate(null);
+       setFareEstimate(null);
     }
-  }, [selectedPublishedRide, pickup, dropoff]);
+  }, [selectedPublishedRide]);
 
   const handleProceed = async () => {
     if (!selectedPublishedRide || !pickup || !dropoff) return;
     setBookingLoading(true);
     try {
       const res = await api.post(`/published-rides/book/${selectedPublishedRide._id}`, {
-        bookingType: "shared",
+        bookingType: "private",
         requestedSeats: 1,
         distanceKm: selectedRoute?.distanceKm,
         passengerSource: {
@@ -522,9 +508,9 @@ const RideMapPage = () => {
                     {fareEstimate && (
                         <div>
                             <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#a5b4fc", lineHeight: 1 }}>
-                                ₹{fareEstimate.sharedTotal}
+                                ₹{fareEstimate.totalFare}
                             </p>
-                            <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>approx fare</p>
+                            <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>final fare</p>
                         </div>
                     )}
                     <button

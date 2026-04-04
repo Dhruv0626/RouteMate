@@ -9,17 +9,17 @@ import { notifyUserBlocked, notifyUserUnblocked, notifyUserDeleted } from "../ut
 
 // ─── Token Helpers ────────────────────────────────────────────────────────────
 
-/** Generate Access Token (1 hour for stability) */
+/** Generate Access Token (24 hours for stability and multi-device persistence) */
 const generateAccessToken = (user) =>
     jwt.sign(
         { id: user._id, role: user.role },
         process.env.JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "1d" }
     );
 
-/** Generate long-lived Refresh Token (7 days for users, infinite for Admin) */
+/** Generate long-lived Refresh Token (30 days to ensure at least 7 days of absolute persistence) */
 const generateRefreshToken = (user) => {
-    const options = user.role === "admin" ? {} : { expiresIn: "7d" };
+    const options = user.role === "admin" ? {} : { expiresIn: "30d" };
     return jwt.sign(
         { id: user._id },
         process.env.JWT_REFRESH_SECRET,
@@ -35,16 +35,16 @@ const hashToken = (token) =>
 const setTokenCookies = (res, accessToken, refreshToken, role) => {
     const isProduction = process.env.NODE_ENV === "production";
 
-    // Admin refresh tokens stay forever (approx 100 years), others 7 days
+    // Admin refresh tokens stay forever (approx 100 years), others 30 days
     const refreshMaxAge = role === "admin"
         ? 100 * 365 * 24 * 60 * 60 * 1000
-        : 7 * 24 * 60 * 60 * 1000;
+        : 30 * 24 * 60 * 60 * 1000;
 
     res.cookie("accessToken", accessToken, {
         httpOnly: true,                  // Not accessible via JS (XSS protection)
         secure: isProduction,            // HTTPS only in production
         sameSite: isProduction ? "none" : "Lax", // Cross-site required for public suffixes
-        maxAge: 60 * 60 * 1000           // 1 hour
+        maxAge: 24 * 60 * 60 * 1000      // 24 hours
     });
 
     res.cookie("refreshToken", refreshToken, {

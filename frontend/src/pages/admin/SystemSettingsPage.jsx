@@ -84,15 +84,15 @@ const SystemSettingsPage = () => {
 
   // Configuration State
   const [config, setConfig] = useState({
-    commission: "15%",
-    maxRadius: "50km",
-    surgeMultiplier: "1.0x",
+    commission: "",
+    maxRadius: "",
+    surgeMultiplier: "",
     pricing: {
-       Bike: { baseFare: "₹20", costPerKm: "₹5" },
-       Auto: { baseFare: "₹30", costPerKm: "₹8" },
-       Sedan: { baseFare: "₹50", costPerKm: "₹12" },
-       SUV: { baseFare: "₹80", costPerKm: "₹18" },
-       Hatchback: { baseFare: "₹40", costPerKm: "₹10" }
+       Bike: { baseFare: "", costPerKm: "" },
+       Auto: { baseFare: "", costPerKm: "" },
+       Sedan: { baseFare: "", costPerKm: "" },
+       SUV: { baseFare: "", costPerKm: "" },
+       Hatchback: { baseFare: "", costPerKm: "" }
     }
   });
   const [isDeleting, setIsDeleting] = useState(false);
@@ -115,11 +115,11 @@ const SystemSettingsPage = () => {
           setConfig({
             ...s,
             pricing: {
-              Bike: s.pricing?.Bike || { baseFare: "₹20", costPerKm: "₹5" },
-              Auto: s.pricing?.Auto || { baseFare: "₹30", costPerKm: "₹8" },
-              Sedan: s.pricing?.Sedan || { baseFare: "₹50", costPerKm: "₹12" },
-              SUV: s.pricing?.SUV || { baseFare: "₹80", costPerKm: "₹18" },
-              Hatchback: s.pricing?.Hatchback || { baseFare: "₹40", costPerKm: "₹10" },
+              Bike: s.pricing?.Bike || { baseFare: "", costPerKm: "" },
+              Auto: s.pricing?.Auto || { baseFare: "", costPerKm: "" },
+              Sedan: s.pricing?.Sedan || { baseFare: "", costPerKm: "" },
+              SUV: s.pricing?.SUV || { baseFare: "", costPerKm: "" },
+              Hatchback: s.pricing?.Hatchback || { baseFare: "", costPerKm: "" },
             }
           });
         }

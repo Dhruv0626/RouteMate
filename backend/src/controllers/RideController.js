@@ -146,6 +146,38 @@ export const GetDriverHistory = async (req, res) => {
   }
 };
 
+// ─── Get Active Trips (Ongoing mission) ───────────────────────────────────────
+export const GetActiveTrips = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const trips = await TripModel.find({ 
+            driver: userId, 
+            phase: { $in: ["matched", "ongoing"] } 
+        }).populate("passenger", "name profileImage Mobile_no passengerStats");
+
+        // Simple aggregation for today's stats to show on the dashboard
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const stats = await TripModel.aggregate([
+            { $match: { driver: userId, phase: "completed", createdAt: { $gte: startOfDay } } },
+            { $group: { _id: null, count: { $sum: 1 }, earnings: { $sum: "$fare.total" } } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: trips,
+            stats: {
+                activeCount: trips.length,
+                todayRides: stats[0]?.count || 0,
+                todayEarnings: stats[0]?.earnings || 0
+            }
+        });
+    } catch (error) {
+        console.error("Get Active Trips Error:", error.message);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 /**
  * Get Fare Estimate based on distance and vehicle type
  */

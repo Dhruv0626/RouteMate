@@ -10,6 +10,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import LocationSearch from "../../components/map/LocationSearch";
 import api from "../../services/api";
 
 // ── Leaflet icons ─────────────────────────────────────────────────────────────
@@ -293,8 +294,20 @@ const AvailableRidesPage = () => {
   const fetchRides = async (e) => {
     if (e) e.preventDefault();
     setLoading(true); setError(""); setSuccess(""); setSearched(true);
+    
+    // Prepare params including coordinates if available
+    const params = { ...filters };
+    if (filters.src) { 
+      params.srcLat = filters.src.lat; 
+      params.srcLng = filters.src.lng; 
+    }
+    if (filters.dst) { 
+      params.dstLat = filters.dst.lat; 
+      params.dstLng = filters.dst.lng; 
+    }
+
     try {
-      const res = await api.get("/published-rides/available", { params: filters });
+      const res = await api.get("/published-rides/available", { params });
       if (res.data.success) setRides(res.data.data);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to fetch rides");
@@ -339,31 +352,32 @@ const AvailableRidesPage = () => {
           <h2 className="font-bold text-(--text-main) flex items-center gap-2 text-sm">
             <Filter size={16} className="text-primary" /> Filter Rides
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-500" />
-              <input type="text" placeholder="From city / area" value={filters.sourceCity}
-                onChange={(e) => setFilters({ ...filters, sourceCity: e.target.value })}
-                className="w-full pl-7 pr-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm outline-none focus:border-primary/60 transition-all"
+              <LocationSearch 
+                placeholder="From address / area" 
+                showCurrentLocation={true}
+                onSelect={(loc) => setFilters(prev => ({ ...prev, sourceCity: loc?.name || "", src: loc }))}
               />
             </div>
             <div className="relative">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-rose-500" />
-              <input type="text" placeholder="To city / area" value={filters.destinationCity}
-                onChange={(e) => setFilters({ ...filters, destinationCity: e.target.value })}
-                className="w-full pl-7 pr-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm outline-none focus:border-primary/60 transition-all"
+              <LocationSearch 
+                placeholder="To address / area" 
+                onSelect={(loc) => setFilters(prev => ({ ...prev, destinationCity: loc?.name || "", dst: loc }))}
               />
             </div>
-            <input type="date" value={filters.date}
-              onChange={(e) => setFilters({ ...filters, date: e.target.value })}
-              className="w-full px-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm outline-none focus:border-primary/60 transition-all"
-            />
+            <div className="relative">
+              <input type="date" value={filters.date}
+                onChange={(e) => setFilters(prev => ({ ...prev, date: e.target.value }))}
+                className="w-full h-[41px] px-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm outline-none focus:border-primary/60 transition-all font-medium"
+              />
+            </div>
+            <button type="submit" disabled={loading}
+              className="w-full h-[41px] bg-primary text-black font-black rounded-xl hover:scale-[1.01] active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 text-sm">
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              {loading ? "..." : "Find"}
+            </button>
           </div>
-          <button type="submit" disabled={loading}
-            className="w-full py-3 bg-primary text-black font-black rounded-xl hover:scale-[1.01] active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 text-sm">
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-            {loading ? "Searching..." : "Search Rides"}
-          </button>
         </form>
 
         {/* Success */}

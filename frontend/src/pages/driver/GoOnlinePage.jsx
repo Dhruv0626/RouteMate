@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import LocationSearch from "../../components/map/LocationSearch";
 import {
   MapContainer,
   TileLayer,
@@ -158,16 +159,35 @@ const GoOnlinePage = () => {
     // Network
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (conn) {
-      const mapSignal = () => {
+      const calculateNetInfo = () => {
         const dl = conn.downlink || 0;
-        if (dl >= 10) return 5; if (dl >= 5) return 4; if (dl >= 2) return 3;
-        if (dl >= 0.5) return 2; return 1;
+        let signal = 1;
+        let type = conn.effectiveType?.toUpperCase() || "LTE";
+        
+        // Signal Mapping based on speed (MBPS)
+        if (dl >= 8) signal = 5;
+        else if (dl >= 4) signal = 4;
+        else if (dl >= 1.5) signal = 3;
+        else if (dl >= 0.5) signal = 2;
+        else signal = 1;
+
+        // Enhanced type detection
+        if (dl >= 15) type = "FIBER / 5G+";
+        else if (dl >= 5) type = "4G / LTE";
+        else if (dl >= 1) type = "3G / HSPA";
+        else type = "2G / EDGE";
+
+        return { signal, type };
       };
-      setSignalStrength(mapSignal());
-      setConnectionType(conn.effectiveType?.toUpperCase() || conn.type || "Unknown");
+
+      const { signal, type } = calculateNetInfo();
+      setSignalStrength(signal);
+      setConnectionType(type);
+
       conn.addEventListener("change", () => {
-        setSignalStrength(mapSignal());
-        setConnectionType(conn.effectiveType?.toUpperCase() || conn.type || "Unknown");
+        const updated = calculateNetInfo();
+        setSignalStrength(updated.signal);
+        setConnectionType(updated.type);
       });
     } else {
       setSignalStrength(navigator.onLine ? 4 : 0);
@@ -242,6 +262,18 @@ const GoOnlinePage = () => {
 
     setPublishing(true);
     try {
+      // 1. Fetch full route geometry from OSRM to store path waypoints
+      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${sourcePin.lng},${sourcePin.lat};${destPin.lng},${destPin.lat}?overview=full&geometries=geojson`;
+      const osrmRes = await fetch(osrmUrl);
+      const osrmData = await osrmRes.json();
+      
+      let routeCoords = [];
+      if (osrmData.code === "Ok" && osrmData.routes?.length > 0) {
+        // [lng, lat] format
+        routeCoords = osrmData.routes[0].geometry.coordinates;
+      }
+
+      // 2. Publish to backend
       const res = await api.post("/published-rides/publish", {
         source: {
           address: sourcePin.address,
@@ -253,10 +285,11 @@ const GoOnlinePage = () => {
         },
         departureTime: new Date(rideForm.departureTime).toISOString(),
         totalSeats: Number(rideForm.totalSeats),
+        routeCoords, // Save full path for proximity matching
       });
 
       if (res.data.success) {
-        setPublishSuccess("🎉 Ride published! Passengers can now discover and book it.");
+        setPublishSuccess("🎉 Ride published! Path-based matching enabled.");
         setSourcePin(null); setDestPin(null); setDistanceKm(null);
         setRideForm({ departureTime: "", totalSeats: 2 });
         setShowPublishForm(false);
@@ -404,25 +437,56 @@ const GoOnlinePage = () => {
 
               {/* ── Interactive Map ── */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-(--text-dim) uppercase tracking-wider flex items-center gap-1.5">
-                    <Navigation size={12} /> Pick Route on Map
-                  </p>
-                  <div className="flex gap-2">
-                    <button type="button"
-                      onClick={() => setPickingMode(pickingMode === "source" ? null : "source")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${pickingMode === "source" ? "bg-emerald-500 text-white border-emerald-500 animate-pulse" : sourcePin ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      {pickingMode === "source" ? "Click map..." : sourcePin ? "Pickup ✓" : "Set Pickup"}
-                    </button>
-                    <button type="button"
-                      onClick={() => setPickingMode(pickingMode === "destination" ? null : "destination")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${pickingMode === "destination" ? "bg-rose-500 text-white border-rose-500 animate-pulse" : destPin ? "bg-rose-500/10 text-rose-500 border-rose-500/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
-                      <div className="w-2 h-2 rounded-full bg-rose-500" />
-                      {pickingMode === "destination" ? "Click map..." : destPin ? "Drop-off ✓" : "Set Drop-off"}
-                    </button>
+                <div className="space-y-4">
+                  {/* Header Row */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-(--text-dim) uppercase tracking-wider flex items-center gap-1.5">
+                      <Navigation size={12} /> Search or Pick Route
+                    </p>
+                    <div className="flex items-center gap-2">
+                       <span className="hidden sm:inline text-(--text-dim) text-[10px] font-bold">Pick on map:</span>
+                       <div className="flex gap-2">
+                        <button type="button"
+                          onClick={() => setPickingMode(pickingMode === "source" ? null : "source")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${pickingMode === "source" ? "bg-emerald-500 text-white border-emerald-500 animate-pulse" : sourcePin ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
+                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                          {pickingMode === "source" ? "Click map..." : sourcePin ? "Set Pickup ✓" : "Set Pickup"}
+                        </button>
+                        <button type="button"
+                          onClick={() => setPickingMode(pickingMode === "destination" ? null : "destination")}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${pickingMode === "destination" ? "bg-rose-500 text-white border-rose-500 animate-pulse" : destPin ? "bg-rose-500/10 text-rose-500 border-rose-500/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
+                          <div className="w-2 h-2 rounded-full bg-rose-500" />
+                          {pickingMode === "destination" ? "Click map..." : destPin ? "Set Drop-off ✓" : "Set Drop-off"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Manual Search Inputs */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <LocationSearch 
+                      label="Pickup Source" 
+                      placeholder="Search pickup point..." 
+                      showCurrentLocation={true}
+                      currentLocation={userLocation}
+                      value={sourcePin?.address || ""}
+                      onSelect={(loc) => {
+                        if (loc) setSourcePin({ lat: loc.lat, lng: loc.lng, address: loc.name });
+                        else setSourcePin(null);
+                      }}
+                    />
+                    <LocationSearch 
+                      label="Destination Point" 
+                      placeholder="Search destination..." 
+                      value={destPin?.address || ""}
+                      onSelect={(loc) => {
+                        if (loc) setDestPin({ lat: loc.lat, lng: loc.lng, address: loc.name });
+                        else setDestPin(null);
+                      }}
+                    />
                   </div>
                 </div>
+
 
                 {/* Map */}
                 <div className={`rounded-2xl overflow-hidden border-2 transition-all ${pickingMode ? "border-primary shadow-lg shadow-primary/20 cursor-crosshair" : "border-(--card-border)"}`} style={{ height: 320 }}>
@@ -481,7 +545,7 @@ const GoOnlinePage = () => {
               {(sourcePin || destPin) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3">
-                    <p className="text-xs font-bold text-emerald-500 mb-1 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Pickup</p>
+                    <div className="text-xs font-bold text-emerald-500 mb-1 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Pickup</div>
                     <p className="text-xs text-(--text-main) leading-tight">{sourcePin ? sourcePin.address : <span className="text-(--text-dim) italic">Not set</span>}</p>
                     {sourcePin && (
                       <button type="button" onClick={() => { setSourcePin(null); setPickingMode("source"); }}
@@ -489,7 +553,7 @@ const GoOnlinePage = () => {
                     )}
                   </div>
                   <div className="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3">
-                    <p className="text-xs font-bold text-rose-500 mb-1 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500" /> Drop-off</p>
+                    <div className="text-xs font-bold text-rose-500 mb-1 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500" /> Drop-off</div>
                     <p className="text-xs text-(--text-main) leading-tight">{destPin ? destPin.address : <span className="text-(--text-dim) italic">Not set</span>}</p>
                     {destPin && (
                       <button type="button" onClick={() => { setDestPin(null); setPickingMode("destination"); }}
@@ -521,19 +585,6 @@ const GoOnlinePage = () => {
                   required
                   className="w-full px-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm focus:border-primary/60 outline-none transition-all"
                 />
-              </div>
-
-              {/* Seats */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-(--text-dim) uppercase tracking-wider flex items-center gap-1.5">
-                  <Users size={12} /> Total Seats Available
-                </label>
-                <input type="number" min={1} max={10} value={rideForm.totalSeats}
-                  onChange={(e) => setRideForm({ ...rideForm, totalSeats: e.target.value })}
-                  required
-                  className="w-full px-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm focus:border-primary/60 outline-none transition-all"
-                />
-                <p className="text-[10px] text-(--text-dim)">Number of seats passengers can book</p>
               </div>
 
               {/* Fare info */}
@@ -598,9 +649,26 @@ const GoOnlinePage = () => {
               <span className="text-lg font-bold">{signalStrength !== null ? `${signalStrength}/5` : "N/A"}</span>
             </div>
             <div className="flex gap-1 items-end h-8">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className={`flex-1 rounded-full transition-all ${i < signalStrength ? "bg-blue-500" : "bg-(--bg-main)"}`} style={{ height: `${(i + 1) * 20}%` }} />
-              ))}
+              {Array.from({ length: 5 }).map((_, i) => {
+                const filled = i < signalStrength;
+                // Color codes: 1=Red, 2=Orange, 3=Amber, 4=Emerald, 5=Primary
+                const getPollColor = () => {
+                    if (!filled) return "bg-(--bg-main)";
+                    if (signalStrength >= 5) return "bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]";
+                    if (signalStrength >= 4) return "bg-emerald-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]";
+                    if (signalStrength >= 3) return "bg-amber-500";
+                    if (signalStrength >= 2) return "bg-orange-500";
+                    return "bg-red-500 animate-pulse";
+                };
+
+                return (
+                  <div 
+                    key={i} 
+                    className={`flex-1 rounded-full transition-all duration-500 ${getPollColor()}`} 
+                    style={{ height: `${(i + 1) * 20}%` }} 
+                  />
+                );
+              })}
             </div>
             {signalStrength !== null && signalStrength < 2 && <p className="mt-1.5 text-xs text-red-500">⚠️ Weak signal</p>}
           </div>
@@ -632,7 +700,7 @@ const GoOnlinePage = () => {
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Total Rides</p><p className="text-2xl font-black">{profile?.stats?.totalRides || 0}</p></div>
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Completed</p><p className="text-2xl font-black text-emerald-500">{profile?.stats?.completedRides || 0}</p></div>
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Rating</p><p className="text-2xl font-black text-amber-500">{profile?.averageRating?.toFixed(1) || "0.0"} ⭐</p></div>
-              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Trust Score</p><p className="text-2xl font-black text-primary">{profile?.trustScore || 100}</p></div>
+              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Trust Score</p><p className="text-2xl font-black text-primary">{profile?.trustScore || 0}</p></div>
             </div>
           </div>
         )}

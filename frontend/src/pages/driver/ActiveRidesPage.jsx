@@ -1,50 +1,64 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../../services/api";
 import {
-  ArrowLeft,
-  MapPin,
-  Navigation,
-  Clock,
-  Phone,
-  Star,
-  AlertCircle,
-  CheckCircle,
-  ChevronRight,
-  Map,
-  Zap,
-  MessageCircle,
-  Eye,
-  MoreVertical,
-  TrendingUp,
-  IndianRupee,
-  Fuel,
-  Activity,
-  AlertTriangle,
+  ArrowLeft, MapPin, Navigation, Clock, Phone, Star, 
+  AlertCircle, CheckCircle, ChevronRight, Map, Zap, 
+  MessageCircle, Eye, MoreVertical, TrendingUp, IndianRupee, 
+  Fuel, Activity, AlertTriangle, Loader2
 } from "lucide-react";
-import { useState } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 
 const ActiveRidesPage = () => {
   const navigate = useNavigate();
-  const [selectedRide, setSelectedRide] = useState(null);
-  const [expandedRide, setExpandedRide] = useState(null);
-  const [showNavigation, setShowNavigation] = useState(false);
-
-  // Mock active rides data
-  const activeRides = [];
-
-  const rideStats = {
+  const [activeRides, setActiveRides] = useState([]);
+  const [driverOnline, setDriverOnline] = useState(false);
+  const [rideStats, setRideStats] = useState({
     activeRides: 0,
     totalEarningsToday: 0,
     completedRides: 0,
     averageRating: 0,
     onlineHours: 0,
-  };
+  });
+  const [loading, setLoading] = useState(true);
+  const [expandedRide, setExpandedRide] = useState(null);
+  const [showNavigation, setShowNavigation] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [ridesRes, profileRes] = await Promise.all([
+            api.get("/rides/active-trips"),
+            api.get("/driver-profiles/my-profile")
+        ]);
+
+        if (ridesRes.data.success) {
+            setActiveRides(ridesRes.data.data || []);
+            setRideStats(prev => ({
+                ...prev,
+                activeRides: ridesRes.data.stats.activeCount,
+                completedRides: ridesRes.data.stats.todayRides,
+                totalEarningsToday: ridesRes.data.stats.todayEarnings
+            }));
+        }
+
+        if (profileRes.data.success) {
+            setDriverOnline(profileRes.data.data.isOnline);
+        }
+      } catch (err) {
+        console.error("Fetch Active Rides/Profile Error:", err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "in-progress":
+      case "ongoing":
         return "bg-blue-100/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300";
-      case "waiting":
+      case "matched":
         return "bg-amber-100/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300";
       case "completed":
         return "bg-emerald-100/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300";
@@ -55,10 +69,10 @@ const ActiveRidesPage = () => {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case "in-progress":
+      case "ongoing":
         return <Activity className="w-4 h-4" />;
-      case "waiting":
-        return <AlertCircle className="w-4 h-4" />;
+      case "matched":
+        return <Clock className="w-4 h-4" />;
       case "completed":
         return <CheckCircle className="w-4 h-4" />;
       default:
@@ -68,10 +82,10 @@ const ActiveRidesPage = () => {
 
   const getStatusLabel = (status) => {
     switch (status) {
-      case "in-progress":
-        return "In Progress";
-      case "waiting":
-        return "Waiting for Passenger";
+      case "ongoing":
+        return "Ride Ongoing";
+      case "matched":
+        return "Heading to Pickup";
       case "completed":
         return "Completed";
       default:
@@ -172,19 +186,23 @@ const ActiveRidesPage = () => {
             </p>
           </div>
         </div>
-
-        {/* Active Rides List */}
-        {activeRides.length > 0 ? (
+        {/* Active Rides List or Empty State */}
+        {loading ? (
+             <div className="min-h-[400px] flex flex-col items-center justify-center space-y-4">
+                 <Loader2 className="w-12 h-12 text-primary animate-spin opacity-40" />
+                 <p className="text-sm font-bold text-(--text-dim) animate-pulse">Scanning missions...</p>
+             </div>
+        ) : activeRides.length > 0 ? (
           <div className="space-y-6">
             {activeRides.map((ride) => (
               <div
-                key={ride.id}
+                key={ride._id}
                 className="bg-(--card-bg) rounded-xl border border-(--card-border) overflow-hidden shadow-sm hover:shadow-md transition-all duration-500"
               >
                 {/* Ride Summary */}
                 <div
                   onClick={() =>
-                    setExpandedRide(expandedRide === ride.id ? null : ride.id)
+                    setExpandedRide(expandedRide === ride._id ? null : ride._id)
                   }
                   className="p-6 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                 >
@@ -192,31 +210,31 @@ const ActiveRidesPage = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <span
-                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold border ${getStatusColor(
-                            ride.status
+                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(
+                            ride.phase
                           )}`}
                         >
-                          {getStatusIcon(ride.status)}
-                          {getStatusLabel(ride.status)}
+                          {getStatusIcon(ride.phase)}
+                          {getStatusLabel(ride.phase)}
                         </span>
-                        <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-semibold">
-                          {ride.rideType}
+                        <span className="text-[10px] px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-semibold uppercase">
+                          {ride.vehicleTypeRequested || "Sedan"}
                         </span>
                       </div>
 
                       {/* Passenger Info */}
                       <div className="flex items-center gap-2 mb-4">
-                        <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center text-white font-bold">
-                          {ride.passengerName.charAt(0)}
+                        <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center text-white font-bold overflow-hidden">
+                           {ride.passenger?.profileImage ? <img src={ride.passenger.profileImage} alt="" className="w-full h-full object-cover" /> : (ride.passenger?.name?.[0] || 'P')}
                         </div>
                         <div>
                           <p className="font-semibold text-(--text-main)">
-                            {ride.passengerName}
+                            {ride.passenger?.name || "Passenger"}
                           </p>
                           <div className="flex items-center gap-1">
                             <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
                             <span className="text-xs text-(--text-dim)">
-                              {ride.rating}
+                              {ride.passenger?.passengerStats?.averageRating?.toFixed(1) || "5.0"}
                             </span>
                           </div>
                         </div>
@@ -226,96 +244,40 @@ const ActiveRidesPage = () => {
                       <div className="flex items-start gap-3 mb-4">
                         <MapPin className="w-5 h-5 text-emerald-500 mt-1 flex-shrink-0" />
                         <div>
-                          <p className="text-sm font-medium text-(--text-main)">
-                            {ride.pickup}
+                          <p className="text-sm font-medium text-(--text-main) line-clamp-1">
+                            {ride.source?.address}
                           </p>
                           <div className="flex items-center gap-1 my-1">
                             <div className="h-4 border-l-2 border-dashed border-gray-300 dark:border-gray-600 ml-0.5"></div>
                           </div>
-                          <p className="text-sm text-(--text-dim)">
-                            {ride.dropoff}
+                          <p className="text-sm text-(--text-dim) line-clamp-1">
+                            {ride.destination?.address}
                           </p>
                         </div>
                       </div>
 
-                      {/* Progress Bar */}
-                      <div className="mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-semibold text-(--text-dim)">
-                            Trip Progress
-                          </span>
-                          <span className="text-xs font-bold text-(--text-main)">
-                            {Math.round(
-                              calculateProgress(
-                                ride.duration.elapsed,
-                                ride.duration.total
-                              )
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <div className="w-full h-2 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-primary to-primary-dark transition-all"
-                            style={{
-                              width: `${calculateProgress(
-                                ride.duration.elapsed,
-                                ride.duration.total
-                              )}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* Distance & Time */}
-                      <div className="grid grid-cols-3 gap-4">
+                      {/* Progress & Stats (Simplified for real data) */}
+                      <div className="grid grid-cols-2 gap-4 border-t border-(--card-border) pt-4">
                         <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Distance
-                          </p>
-                          <p className="font-bold text-(--text-main)">
-                            {ride.distance.remaining} km
-                          </p>
-                          <p className="text-xs text-(--text-dim)">
-                            {ride.distance.total} km total
-                          </p>
+                          <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter">Distance Estimate</p>
+                          <p className="font-black text-sm text-(--text-main)">{ride.distanceEstimate || "?"} km</p>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Time Remaining
-                          </p>
-                          <p className="font-bold text-(--text-main)">
-                            {ride.duration.remaining} min
-                          </p>
-                          <p className="text-xs text-(--text-dim)">
-                            {ride.duration.elapsed} min elapsed
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Current Fare
-                          </p>
-                          <p className="font-bold text-(--text-main)">
-                            ${(
-                              ride.fare.baseFare +
-                              (ride.duration.elapsed / ride.duration.total) *
-                                ride.fare.distanceFare +
-                              ride.duration.elapsed * 0.45
-                            ).toFixed(2)}
-                          </p>
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter">Trip Fare</p>
+                          <p className="font-black text-lg text-emerald-500">₹{ride.fare?.total}</p>
                         </div>
                       </div>
                     </div>
                     <ChevronRight
                       className={`w-6 h-6 text-gray-400 transition-transform flex-shrink-0 ${
-                        expandedRide === ride.id ? "rotate-90" : ""
+                        expandedRide === ride._id ? "rotate-90" : ""
                       }`}
                     />
                   </div>
                 </div>
 
                 {/* Expanded Details */}
-                {expandedRide === ride.id && (
+                {expandedRide === ride._id && (
                   <div className="border-t border-(--card-border) p-6 bg-black/5 dark:bg-white/5 space-y-6">
                     {/* Quick Actions */}
                     <div className="grid grid-cols-2 gap-3">
@@ -326,116 +288,33 @@ const ActiveRidesPage = () => {
                         <Navigation className="w-5 h-5" />
                         Navigation
                       </button>
-                      <button className="flex items-center justify-center gap-2 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-semibold transition">
+                      <a 
+                        href={`tel:${ride.passenger?.Mobile_no}`}
+                        className="flex items-center justify-center gap-2 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-semibold transition"
+                      >
                         <Phone className="w-5 h-5" />
                         Call
-                      </button>
-                      <button className="flex items-center justify-center gap-2 py-3 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition">
-                        <MessageCircle className="w-5 h-5" />
-                        Message
-                      </button>
-                      <button className="flex items-center justify-center gap-2 py-3 px-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-semibold transition">
-                        <Eye className="w-5 h-5" />
-                        Details
-                      </button>
+                      </a>
                     </div>
 
-                    {/* Navigation Preview */}
-                    {showNavigation && (
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                        <div className="h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                          <div className="text-center">
-                            <Map className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              Map view would display here
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                              Real-time navigation integrated with your GPS
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Location Details */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
-                          Your Location
-                        </p>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {ride.currentLocation}
-                        </p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
-                          Passenger Location
-                        </p>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {ride.passengerLocation}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Fare Breakdown */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-bold text-gray-900 dark:text-white mb-3">
-                        Estimated Fare Breakdown
-                      </p>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between text-gray-700 dark:text-gray-300">
-                          <span>Base Fare</span>
-                          <span>${ride.fare.baseFare.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-700 dark:text-gray-300">
-                          <span>Distance ({ride.distance.total} km)</span>
-                          <span>${ride.fare.distanceFare.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-700 dark:text-gray-300">
-                          <span>Time ({ride.duration.total} min)</span>
-                          <span>${ride.fare.timeFare.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-amber-600 dark:text-amber-400 font-semibold">
-                          <span>Surge Multiplier</span>
-                          <span>{ride.fare.surge.toFixed(1)}x</span>
-                        </div>
-                        <div className="border-t border-gray-200 dark:border-gray-700 pt-2 flex justify-between text-gray-900 dark:text-white font-bold">
-                          <span>Total (Estimated)</span>
-                          <span>${(ride.fare.total * ride.fare.surge).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Passenger Notes */}
-                    {ride.notes && (
-                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                        <p className="text-xs font-semibold text-yellow-800 dark:text-yellow-200 mb-1">
-                          Passenger Notes
-                        </p>
-                        <p className="text-sm text-yellow-900 dark:text-yellow-100">
-                          {ride.notes}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Control Buttons */}
+                    {/* Control Buttons based on Phase */}
                     <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      {ride.status === "waiting" && (
+                      {ride.phase === "matched" && (
                         <>
-                          <button className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-semibold transition">
+                          <button className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition">
                             Start Ride
                           </button>
-                          <button className="flex-1 py-3 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition">
-                            Cancel Ride
+                          <button className="flex-1 py-3 px-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg font-bold transition">
+                            Cancel
                           </button>
                         </>
                       )}
-                      {ride.status === "in-progress" && (
+                      {ride.phase === "ongoing" && (
                         <>
-                          <button className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-semibold transition">
+                          <button className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition">
                             Complete Ride
                           </button>
-                          <button className="flex-1 py-3 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition">
+                          <button className="flex-1 py-3 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold transition">
                             Emergency
                           </button>
                         </>
@@ -447,18 +326,33 @@ const ActiveRidesPage = () => {
             ))}
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center border border-gray-200 dark:border-gray-700">
-            <Activity className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-              No Active Rides
+          <div className="bg-(--card-bg) rounded-2xl p-16 text-center border border-(--card-border) shadow-xl shadow-black/10 transition-all duration-500">
+            <div className={`w-24 h-24 rounded-full mx-auto mb-8 flex items-center justify-center transition-all duration-1000 ${driverOnline ? 'bg-emerald-500/10' : 'bg-gray-500/10'}`}>
+               <Activity className={`w-12 h-12 ${driverOnline ? 'text-emerald-500 animate-pulse' : 'text-gray-400'}`} />
+            </div>
+            <h3 className="text-2xl font-black text-(--text-main) mb-3">
+              {driverOnline ? "Waiting for Missions" : "No Active Rides"}
             </h3>
-            <p className="text-gray-600 dark:text-gray-400 max-w-sm mx-auto">
-              You don't have any active rides at the moment. Go online to start
-              accepting ride requests.
+            <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-sm leading-relaxed mb-10 font-bold">
+              {driverOnline 
+                ? "The system is actively searching for requests along your routes. Keep the app open to receive instant alerts."
+                : "You don't have any active rides at the moment. Go online to start accepting ride requests."
+              }
             </p>
-            <button className="mt-6 px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition">
-              Go Online
-            </button>
+            {!driverOnline && (
+              <button 
+                onClick={() => navigate("/driver/dashboard/go-online")}
+                className="px-10 py-4 bg-primary text-black font-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center gap-2 mx-auto"
+              >
+                <Zap size={20} fill="currentColor" /> Go Online
+              </button>
+            )}
+            {driverOnline && (
+                <div className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full text-xs font-black uppercase tracking-widest">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    Live on Network
+                </div>
+            )}
           </div>
         )}
       </div>

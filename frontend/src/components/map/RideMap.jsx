@@ -9,8 +9,8 @@ import L from "leaflet";
 function makeColorIcon(color) {
   return new L.Icon({
     iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
+    shadowUrl: null,
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
   });
 }
 
@@ -281,7 +281,7 @@ const RideMap = ({
         )}
 
         {/* Live position (pulsing dot) */}
-        {livePos && (
+        {livePos?.lat != null && livePos?.lng != null && (
           <>
             <Circle
               center={[livePos.lat, livePos.lng]} radius={30}
@@ -296,7 +296,7 @@ const RideMap = ({
         )}
 
         {/* Pickup marker */}
-        {pickup && !arrived && (
+        {pickup?.lat != null && pickup?.lng != null && !arrived && (
           <Marker position={[pickup.lat, pickup.lng]} icon={greenIcon}>
             <Popup>
               <p style={{ fontWeight: 700, color: "#166534", fontSize: 13, marginBottom: 4 }}>📍 Pickup</p>
@@ -306,7 +306,7 @@ const RideMap = ({
         )}
 
         {/* Dropoff marker */}
-        {dropoff && (
+        {dropoff?.lat != null && dropoff?.lng != null && (
           <Marker position={[dropoff.lat, dropoff.lng]} icon={arrived ? greenIcon : redIcon}>
             <Popup>
               <p style={{ fontWeight: 700, color: arrived ? "#166534" : "#991b1b", fontSize: 13, marginBottom: 4 }}>

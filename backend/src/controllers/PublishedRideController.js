@@ -3,6 +3,7 @@ import DriverProfileModel from "../models/DriverProfile.js";
 import FareConfig from "../models/FareConfig.js";
 import SystemConfig from "../models/SystemConfig.js";
 import NotificationModel from "../models/Notification.js";
+import TripModel from "../models/Trip.js";
 
 // ─── Haversine distance (km) ──────────────────────────────────────────────────
 const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
@@ -22,14 +23,18 @@ const calcFare = async (distanceKm, vehicleType) => {
     try {
         const sys = await SystemConfig.findOne();
         
-        // Default base values
-        let base = 50;
-        let perKm = 12;
+        let baseFreq = 0;
+        let perKmRate = 0;
         let surge = 1.0;
-        let minimumFare = 30;
+
+        const parseNum = (val) => {
+            if (!val) return 0;
+            const cleaned = val.toString().replace(/[^0-9.]/g, "");
+            return parseFloat(cleaned) || 0;
+        };
 
         if (sys) {
-            // Mapping UI vehicle types to config keys
+            // Map common labels to DB pricing keys
             const mapping = {
                 "4-Wheeler": "Sedan",
                 "Sedan": "Sedan",
@@ -38,40 +43,32 @@ const calcFare = async (distanceKm, vehicleType) => {
                 "Auto": "Auto",
                 "Bike": "Bike"
             };
+
             const key = mapping[vehicleType] || "Sedan";
             const pricing = sys.pricing?.[key] || sys.pricing?.Sedan;
 
             if (pricing) {
-                // Parse numeric values from strings like "₹50" or "₹12"
-                const parseNum = (val) => {
-                    if (!val) return 0;
-                    const cleaned = val.toString().replace(/[^0-9.]/g, "");
-                    return parseFloat(cleaned) || 0;
-                };
-
-                base = parseNum(pricing.baseFare) || base;
-                perKm = parseNum(pricing.costPerKm) || perKm;
+                baseFreq = parseNum(pricing.baseFare);
+                perKmRate = parseNum(pricing.costPerKm);
             }
 
-            // Platform-level surge multiplier
-            surge = parseFloat(sys.surgeMultiplier?.toString().replace(/[^0-9.]/g, "") || 1.0);
+            surge = parseNum(sys.surgeMultiplier) || 1.0;
         }
 
-        const raw = (base + perKm * distanceKm) * surge;
-        const fullAmount = Math.max(Math.round(raw), minimumFare);
+        // Exact Formula: (Base + (Distance * Rate)) * Surge
+        const subtotal = baseFreq + (perKmRate * distanceKm);
+        const total = Math.round(subtotal * surge);
 
         return { 
-            fullAmount, 
-            baseFare: base, 
-            perKmRate: perKm, 
+            fullAmount: total, 
+            baseFare: baseFreq, 
+            perKmRate, 
             surgeMultiplier: surge,
-            minimumFare 
+            minimumFare: baseFreq 
         };
     } catch (error) {
         console.error("Fare Calc Error:", error);
-        // Fallback hardcoded values
-        const res = Math.max(Math.round(distanceKm * 12 + 50), 30);
-        return { fullAmount: res, baseFare: 50, perKmRate: 12, surgeMultiplier: 1 };
+        return { fullAmount: 0, baseFare: 0, perKmRate: 0, surgeMultiplier: 1.0, minimumFare: 0 };
     }
 };
 
@@ -79,12 +76,12 @@ const calcFare = async (distanceKm, vehicleType) => {
 export const PublishRide = async (req, res) => {
     try {
         const driverId = req.user.id;
-        const { source, destination, departureTime, totalSeats } = req.body;
+        const { source, destination, departureTime } = req.body;
 
-        if (!source || !destination || !departureTime || !totalSeats) {
+        if (!source || !destination || !departureTime) {
             return res.status(400).json({
                 success: false,
-                message: "Missing required fields: source, destination, departureTime, totalSeats"
+                message: "Missing required fields: source, destination, departureTime"
             });
         }
 
@@ -93,14 +90,19 @@ export const PublishRide = async (req, res) => {
             return res.status(403).json({ success: false, message: "Only approved drivers can publish rides" });
         }
 
+        // Optimization: Sample coordinates to reduce DB size (keep every 5th point)
+        const rawCoords = req.body.routeCoords || [];
+        const sampledCoords = rawCoords.filter((_, idx) => idx % 5 === 0);
+
         const newRide = await PublishedRideModel.create({
             driver: driverId,
             source,
             destination,
             departureTime,
-            totalSeats: Number(totalSeats),
-            availableSeats: Number(totalSeats),
+            totalSeats: 1,
+            availableSeats: 1,
             vehicleType: driverProfile.vehicle?.type || "Sedan",
+            routeCoords: sampledCoords, 
             status: "open",
             bookings: []
         });
@@ -119,11 +121,11 @@ export const PublishRide = async (req, res) => {
 // ─── Passenger: Get Available Rides ───────────────────────────────────────────
 export const GetAvailableRides = async (req, res) => {
     try {
-        const { sourceCity, destinationCity, date } = req.query;
+        const { sourceCity, destinationCity, date, srcLat, srcLng, dstLat, dstLng } = req.query;
 
         const filter = {
-            status: { $in: ["open", "full", "active"] },
-            departureTime: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Show rides from last 24h
+            status: "open", 
+            departureTime: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } 
         };
 
         if (sourceCity) filter["source.address"] = { $regex: sourceCity, $options: "i" };
@@ -138,18 +140,83 @@ export const GetAvailableRides = async (req, res) => {
             .populate("driver", "name email Mobile_no profileImage")
             .sort({ departureTime: 1 });
 
-        const enrichedRides = await Promise.all(rides.map(async (ride) => {
+        // ── Advanced Route-Aware Proximity Filter ──
+        const MAX_PICK_KM = 3.0; // Stricter 3km limit
+        const pSrc = (srcLat && srcLng) ? [parseFloat(srcLng), parseFloat(srcLat)] : null;
+        const pDst = (dstLat && dstLng) ? [parseFloat(dstLng), parseFloat(dstLat)] : null;
+
+        const filtered = rides.filter(ride => {
+            // Coordinate check for Source (Pickup)
+            if (pSrc) {
+                // Check if passenger's pickup is near NO part of the route
+                const driverSrc = ride.source.location.coordinates;
+                const distToStart = haversineKm(pSrc, driverSrc);
+
+                // If not near the start, check the entire path
+                if (distToStart > MAX_PICK_KM) {
+                    const coords = ride.routeCoords || [];
+                    if (!coords.length) return false; // Hide if we have no path data and start is far
+
+                    // Check path waypoints (sampled every 5th point for speed)
+                    let isNearPath = false;
+                    for (let i = 0; i < coords.length; i += 5) {
+                        if (haversineKm(pSrc, coords[i]) <= MAX_PICK_KM) {
+                            isNearPath = true;
+                            break;
+                        }
+                    }
+                    if (!isNearPath) return false;
+                }
+            }
+
+            // Coordinate check for Destination (Drop-off)
+            if (pDst) {
+                const driverDst = ride.destination.location.coordinates;
+                const distToDst = haversineKm(pDst, driverDst);
+                if (distToDst > MAX_PICK_KM) return false;
+            }
+
+            return true;
+        });
+
+        const enrichedRides = await Promise.all(filtered.map(async (ride) => {
             const profile = await DriverProfileModel.findOne({ user: ride.driver._id });
             const rideObj = ride.toObject();
+
+            // ── LIVE DISTANCE ──
+            const driverCoords = profile?.currentLocation?.coordinates;
+            const isValidGps = driverCoords && driverCoords[0] !== 0 && driverCoords[1] !== 0;
+
+            if (pSrc && isValidGps) {
+                const distToDriver = haversineKm(pSrc, driverCoords);
+                rideObj.distanceKm = Math.round(distToDriver * 10) / 10;
+            } else {
+                rideObj.distanceKm = null;
+            }
+
+            // ── DYNAMIC PRICING: Calculate price for this SPECIFIC ride's category ──
+            // Estimate road distance as 1.3x straight-line distance for more accurate browsing fares
+            const straightLineDist = (pSrc && pDst) ? haversineKm(pSrc, pDst) : haversineKm(ride.source.location.coordinates, ride.destination.location.coordinates);
+            const estimatedRoadDist = straightLineDist * 1.3;
+            
+            const fareData = await calcFare(estimatedRoadDist, ride.vehicleType || "Sedan");
+            rideObj.price = fareData.fullAmount;
+            rideObj.fareBreakdown = fareData;
+
             rideObj.vehicle = profile ? {
                 type: profile.vehicle?.type,
                 number: profile.vehicle?.number,
                 image: profile.vehicle?.vehicleImage,
             } : null;
+
+            // Remove legacy seat logic
+            delete rideObj.availableSeats;
+            delete rideObj.totalSeats;
+
             return rideObj;
         }));
 
-        res.status(200).json({ success: true, data: enrichedRides });
+        res.status(200).json({ success: true, count: enrichedRides.length, data: enrichedRides });
     } catch (error) {
         console.error("Get Available Rides Error:", error);
         res.status(500).json({ success: false, message: "Failed to fetch rides" });
@@ -159,7 +226,7 @@ export const GetAvailableRides = async (req, res) => {
 // ─── Get fare estimate (for passenger preview before booking) ─────────────────
 export const GetFareEstimate = async (req, res) => {
     try {
-        const { rideId, passengerLat, passengerLng, destLat, destLng, bookingType, seats, distanceKm: passedDist } = req.query;
+        const { rideId, passengerLat, passengerLng, destLat, destLng, seats, distanceKm: passedDist } = req.query;
 
         const ride = await PublishedRideModel.findById(rideId);
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found" });
@@ -176,18 +243,13 @@ export const GetFareEstimate = async (req, res) => {
         }
 
         const fareData = await calcFare(distanceKm, ride.vehicleType || "Sedan");
-        const numSeats = parseInt(seats || 1);
-
-        const privateAmount = fareData.fullAmount;
-        const sharedAmount  = Math.round(fareData.fullAmount / ride.totalSeats) * numSeats;
+        const finalPrice = fareData.fullAmount;
 
         res.status(200).json({
             success: true,
             data: {
                 distanceKm: Math.round(distanceKm * 10) / 10,
-                privateAmount,
-                sharedAmountPerSeat: Math.round(fareData.fullAmount / ride.totalSeats),
-                sharedTotal: sharedAmount,
+                totalFare: finalPrice,
                 fareBreakdown: {
                     baseFare: fareData.baseFare,
                     perKmRate: fareData.perKmRate,
@@ -208,19 +270,14 @@ export const BookRide = async (req, res) => {
         const passengerId = req.user.id;
         const { rideId } = req.params;
         const {
-            bookingType,
-            requestedSeats,
             passengerSource,       // { address, location: { coordinates: [lng, lat] } }
             passengerDestination,  // same shape
+            distanceKm: passedDist
         } = req.body;
-
-        if (!bookingType || !["private", "shared"].includes(bookingType)) {
-            return res.status(400).json({ success: false, message: "bookingType must be 'private' or 'shared'" });
-        }
 
         const ride = await PublishedRideModel.findById(rideId).populate("driver", "name");
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found" });
-        if (ride.status !== "open" || ride.availableSeats === 0) {
+        if (ride.status !== "open") {
             return res.status(400).json({ success: false, message: "Ride is no longer available" });
         }
         if (ride.driver._id.toString() === passengerId) {
@@ -228,7 +285,6 @@ export const BookRide = async (req, res) => {
         }
 
         // ── Fare calculated from PASSENGER's actual travel distance ───────────
-        const { distanceKm: passedDist } = req.body;
         let distanceKm = parseFloat(passedDist);
 
         if (!distanceKm || isNaN(distanceKm)) {
@@ -237,11 +293,14 @@ export const BookRide = async (req, res) => {
             distanceKm = 0;
             if (srcCoords?.length === 2 && dstCoords?.length === 2 &&
                 srcCoords.some(c => c !== 0) && dstCoords.some(c => c !== 0)) {
-                distanceKm = haversineKm(srcCoords, dstCoords);
+                // Apply same 1.3x road-path correction as browsing for consistency
+                distanceKm = haversineKm(srcCoords, dstCoords) * 1.3;
             }
         }
 
         const fareData = await calcFare(distanceKm, ride.vehicleType || "Sedan");
+        const amountPaid = fareData.fullAmount;
+
         const fareBreakdown = {
             baseFare:        fareData.baseFare,
             perKmRate:       fareData.perKmRate,
@@ -249,29 +308,11 @@ export const BookRide = async (req, res) => {
             surgeMultiplier: fareData.surgeMultiplier,
         };
 
-        let seatsToBook, amountPaid;
-
-        if (bookingType === "private") {
-            if (ride.bookings.some(b => b.status !== "cancelled")) {
-                return res.status(400).json({ success: false, message: "Private booking unavailable — seats already partially booked" });
-            }
-            seatsToBook = ride.totalSeats;
-            amountPaid  = fareData.fullAmount;
-        } else {
-            seatsToBook = Math.max(1, Number(requestedSeats || 1));
-            if (seatsToBook > ride.availableSeats) {
-                return res.status(400).json({ success: false, message: `Only ${ride.availableSeats} seat(s) available` });
-            }
-            // Shared: per-seat = fullAmount / totalSeats * seats requested
-            const perSeat = Math.round(fareData.fullAmount / ride.totalSeats);
-            amountPaid    = perSeat * seatsToBook;
-        }
-
         // Push booking (status = pending until driver confirms)
         ride.bookings.push({
             passenger: passengerId,
-            seats: seatsToBook,
-            bookingType,
+            seats: 1,
+            bookingType: "private",
             passengerSource:      passengerSource      || ride.source,
             passengerDestination: passengerDestination || ride.destination,
             distanceKm:           Math.round(distanceKm * 10) / 10,
@@ -280,8 +321,8 @@ export const BookRide = async (req, res) => {
             status: "pending",
         });
 
-        ride.availableSeats -= seatsToBook;
-        if (ride.availableSeats === 0) ride.status = "full";
+        ride.availableSeats = 0;
+        ride.status = "full";
 
         await ride.save();
 
@@ -292,17 +333,14 @@ export const BookRide = async (req, res) => {
         await NotificationModel.create({
             recipient: ride.driver._id,
             sender:    passengerId,
-            title:     "New Booking Request 🚗",
-            message:   `A passenger wants a ${bookingType} ride from "${from}" to "${to}" — ₹${amountPaid} for ${seatsToBook} seat(s). ${Math.round(distanceKm * 10) / 10} km.`,
+            title:     "New Ride Booking 🚗",
+            message:   `A passenger requested a ride — ₹${amountPaid} total fare.`,
             type:      "booking_request",
-            link:      `/driver/dashboard/rides`,
+            link:      `/driver/dashboard/ride-request/${ride._id}/${ride.bookings[ride.bookings.length - 1]._id}`,
             metadata: {
                 rideId:      ride._id,
                 bookingId:   ride.bookings[ride.bookings.length - 1]._id,
-                bookingType,
-                amountPaid,
-                seats:       seatsToBook,
-                distanceKm:  Math.round(distanceKm * 10) / 10,
+                amountPaid
             }
         });
 
@@ -310,7 +348,7 @@ export const BookRide = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: `${bookingType === "private" ? "Private" : "Shared"} ride booked! Driver will be notified.`,
+            message: `Ride request sent! Driver will be notified.`,
             data: ride
         });
     } catch (error) {
@@ -338,10 +376,37 @@ export const RespondToBooking = async (req, res) => {
 
         if (action === "confirm") {
             booking.status = "confirmed";
+            ride.status = "active"; 
+
+            // ── CREATE TRIP FOR LIVE TRACKING ──────────────────────────────────
+            await TripModel.create({
+                passenger: booking.passenger,
+                driver:    ride.driver,
+                phase:     "matched",
+                source: {
+                    address:  booking.passengerSource?.address || ride.source.address,
+                    location: {
+                        type:        "Point",
+                        coordinates: booking.passengerSource?.location?.coordinates || ride.source.location.coordinates
+                    }
+                },
+                destination: {
+                    address:  booking.passengerDestination?.address || ride.destination.address,
+                    location: {
+                        type:        "Point",
+                        coordinates: booking.passengerDestination?.location?.coordinates || ride.destination.location.coordinates
+                    }
+                },
+                distanceEstimate: booking.distanceKm,
+                fare: {
+                    total: booking.amountPaid
+                },
+                otp: Math.floor(1000 + Math.random() * 9000).toString(), // Generate 4-digit OTP
+                paymentStatus: "pending"
+            });
         } else {
             booking.status = "cancelled";
-            ride.availableSeats += booking.seats;
-            if (ride.status === "full") ride.status = "open";
+            ride.status = "open";
         }
 
         await ride.save();
@@ -352,10 +417,10 @@ export const RespondToBooking = async (req, res) => {
             sender:    driverId,
             title:     action === "confirm" ? "Booking Confirmed ✅" : "Booking Rejected ❌",
             message:   action === "confirm"
-                ? `Your ${booking.bookingType} ride booking was confirmed by the driver! Payment: ₹${booking.amountPaid} (cash to driver).`
-                : `Your ${booking.bookingType} ride booking was rejected by the driver. Please search for another ride.`,
+                ? `Your ride booking was confirmed by the driver! Payment: ₹${booking.amountPaid} (cash to driver).`
+                : `Your ride booking was rejected by the driver. Please search for another ride.`,
             type:      action === "confirm" ? "booking_confirmed" : "booking_rejected",
-            link:      `/passenger/dashboard`,
+            link:      `/passenger/dashboard/my-rides`,
             metadata:  { rideId, bookingId, amountPaid: booking.amountPaid }
         });
 

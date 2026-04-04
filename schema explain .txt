@@ -1,86 +1,73 @@
-# 🛡️ RouteMate: Schema Architecture & Workflow Guide
+# 🛡️ RouteMate: Database Schema & Workflow Architecture
 
-This document explains the 9 core MongoDB collections and how they connect to power the RouteMate platform.
-
----
-
-## 1. 📂 High-Level Relationship Map
-
-- **User**: The root identity for everyone (Passenger, Driver, or Admin).
-- **DriverProfile**: Extends 'User' when a user signs up to drive (`user_id` linkage).
-- **Trip**: The central hub. Links to `passenger` (User), `driver` (User), and `fareConfig` (via `vehicleType`).
-- **Review**: Links to a `trip`, a `reviewer` (User), and a `target` (User).
-- **SavedPlace**: Links to a `user` for quick destination setting.
-- **WalletTransaction**: Financial ledger linked to a `user`.
-- **SOS**: Emergency event linked to a `trip` and `user`.
-- **Notification**: Links to a `recipient` (User) for system/ride alerts.
-- **FareConfig**: Standalone pricing documents for dynamic calculation.
+This document clarifies the 11 MongoDB collections in RouteMate and explains exactly what each is used for.
 
 ---
 
-## 2. 🧩 Schema Breakdown
-
-set the code as not unneccesary mesagees or any other thing show in terminal , only any error occured that only show in terminal because it 
+## 1. 📂 Core Models (Active Booking Flow)
 
 ### 👤 User (`models/User.js`)
-- **Primary Keys**: `_id`, `email`, `Mobile_no`.
-- **Role System**: `passenger`, `driver`, `admin`.
-- **Passenger Stats**: Embedded object inside the user to track travel history.
-- **Auth**: Preserves legacy OTP and provider fields for social logins.
+- **Use Case**: The foundation of the platform's identity. 
+- **Working**: Stores credentials, roles (`passenger`, `driver`, `admin`), and personal info. Every other document in the system references a `User` ID.
 
 ### 🚗 DriverProfile (`models/DriverProfile.js`)
-- **Compulsory Docs**: License, Aadhar, RC Book, Insurance. (Stored in Cloudinary).
-- **Vehicle Details**: Model, Type, Color, Number.
-- **Verification**: `isApproved` (Admin controlled).
-- **Live Status**: `isOnline` and `currentLocation` (GeoJSON).
+- **Use Case**: Specific to the driver side of the marketplace.
+- **Working**: Stores KYC documents (Aadhar, License), vehicle details (RC Book, verification status), and real-time availability/location.
+
+### 🗺️ PublishedRide (`models/PublishedRide.js`)
+- **Use Case**: The core carpooling/ride-sharing engine.
+- **Working**: Allows drivers to post a "Future Route". It manages multiple seat bookings and ensures synchronization between drivers and interested passengers.
 
 ### 📍 Trip (`models/Trip.js`)
-- **Phase Lifecycle**: `searching` → `matched` → `ongoing` → `completed` / `cancelled`.
-- **Locations**: `source` and `destination` stored as GeoJSON Points.
-- **OTP**: Security code verified by driver to transition phase to `ongoing`.
-- **Fare**: Nested object with `baseFare`, `distanceFare`, and `total`.
-
-### 💰 FareConfig (`models/FareConfig.js`)
-- **Structure**: One document per `vehicleType` (Sedan, Bike, Auto, etc.).
-- **Dynamic Pricing**: `baseFare`, `perKmRate`, `surgeMultiplier`.
+- **Use Case**: The archival record of every completed or cancelled movement.
+- **Working**: Acts as the system's "History" ledger. While `PublishedRide` handles the booking, `Trip` stores the finalized details used for stats, revenue calculation, and historical logs.
 
 ### 🔔 Notification (`models/Notification.js`)
-- **Targeted**: Linked to a specific user.
-- **Types**: `ride_update`, `payment`, `promo`, `system`, `sos`.
+- **Use Case**: Communication and deep-linking.
+- **Working**: Stores every alert sent to a user. Key fields like `link` determine where a user lands when they tap a notification (e.g., the Driver Request Details page).
+
+### ⚙️ SystemConfig (`models/SystemConfig.js`)
+- **Use Case**: Global administrative control.
+- **Working**: Stores platform-wide constants like commission rates and global surge multipliers.
 
 ---
 
-## 3. 🔄 The Connection Workflow
+## 2. 🧩 Feature-Specific Models (Use Cases)
 
-### A. 📝 Registration & Verification
-1.  **User** creates an account (default role = `passenger`).
-2.  If they apply to drive, a **DriverProfile** is created linked to their `User._id`.
-3.  Documents uploaded to **Cloudinary**; URLs saved in **DriverProfile**.
-4.  Admin sets `isApproved: true` in **DriverProfile**, role stays `driver`.
+### 💰 FareConfig (`models/FareConfig.js`)
+- **Use Case**: Per-vehicle pricing refinement.
+- **Working**: Allows the system to have different base rates for different vehicle categories (e.g., ₹20 for Bike vs ₹50 for Sedan). It ensures that fare estimates are contextually accurate for the vehicle type requested.
 
-### B. 🚕 Ride Booking Lifecycle
-1.  Passenger requests a ride; **Trip** document is created (phase: `searching`).
-2.  Nearby **DriverProfiles** (where `isOnline: true`) are notified via **Notification**.
-3.  Driver accepts; **Trip** transitions to `matched`, `driver_id` is assigned.
-4.  Driver meets Passenger; verifies **OTP** in **Trip** → phase: `ongoing`.
-5.  Ride ends; **Trip** phase: `completed`, updated with `distanceActual` and `fare.total`.
+### 🌟 Review (`models/Review.js`)
+- **Use Case**: Trust and Safety.
+- **Working**: Stores ratings and feedback between passengers and drivers after a ride. This data is used to calculate the "Average Rating" displayed on profiles.
 
-### C. 💳 Payment & History
-1.  Payment processed; **WalletTransaction** recorded for both parties.
-2.  Passenger/Driver leaves a **Review** linked to that **Trip**.
-3.  Review ratings are aggregated back into **User.passengerStats** or **DriverProfile.averageRating**.
+### 🆘 SOS (`models/SOS.js`)
+- **Use Case**: Emergency Response.
+- **Working**: Tracks emergency triggers during a live ride. It records the location and timestamp of the alert, allowing admins or emergency contacts to be notified instantly.
+
+### 💳 WalletTransaction (`models/WalletTransaction.js`)
+- **Use Case**: Financial Accountability.
+- **Working**: Records every credit/debit to a user's account balance. It is essential for tracking payouts to drivers and payments from passengers.
+
+### 🏠 SavedPlace (`models/SavedPlace.js`)
+- **Use Case**: User Convenience.
+- **Working**: Stores recurring addresses (Home, Work, Gym) for passengers. It allows for "One-Tap" destination setting in the booking UI.
 
 ---
 
-## 💾 Model Naming Convention (Mongoose)
+## 💾 Summary of "Working" Collections
 
-Use the following for all imports in controllers:
-- `UserModel` from `User.js`
-- `DriverProfileModel` from `DriverProfile.js`
-- `TripModel` from `Trip.js`
-- `ReviewModel` from `Review.js`
-- `SavedPlaceModel` from `SavedPlace.js`
-- `WalletTransactionModel` from `WalletTransaction.js`
-- `FareConfigModel` from `FareConfig.js`
-- `SOSModel` from `SOS.js`
-- `NotificationModel` from `Notification.js`
+| Model | Status | Use Case / Working |
+| :--- | :--- | :--- |
+| **User** | Active | Core Identity & RBAC |
+| **DriverProfile** | Active | Verification & Live Status |
+| **PublishedRide** | Active | Real-time Booking Match |
+| **Trip** | Active | History & Revenue Stats |
+| **Notification** | Active | App Alerts & Deep Links |
+| **SystemConfig** | Active | Global Admin Controls |
+| **FareConfig** | Active | Vehicle-specific Pricing |
+| **Review** | Active | Ratings & Platform Trust |
+| **SOS** | Active | Real-time Safety Triggers |
+| **WalletTransaction**| Active | Financial History/Audits |
+| **SavedPlace** | Active | UX: Fast Address Selection |

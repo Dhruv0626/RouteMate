@@ -39,7 +39,7 @@ const EarningsPage = () => {
     monthRides: 0,
     completedRides: 0,
     cancelledRides: 0,
-    averageRating: 5.0,
+    averageRating: 0.0,
   });
   const [rideBreakdown, setRideBreakdown] = useState([]);
   const [dailyEarnings, setDailyEarnings] = useState([]);
@@ -75,7 +75,7 @@ const EarningsPage = () => {
             amount: r.fare.total,
             date: new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
             distance: `${r.distanceActual || 0} km`,
-            rating: 5.0 // Review integration needed
+            rating: 0.0 // Default to 0.0 before review
           })));
 
           // Hardcoded daily distribution for UI since we don't have separate time-series yet

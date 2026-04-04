@@ -101,9 +101,6 @@ const PassengerBookingsPage = () => {
                  <span className="flex items-center gap-1 font-semibold text-(--text-dim)">
                    <Clock size={14} /> {dep.toLocaleString("en-IN", { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" })}
                  </span>
-                 <span className="flex items-center gap-1 font-semibold text-(--text-dim)">
-                   <Users size={14} /> {myBooking.seats} seats
-                 </span>
                  <span className="flex items-center gap-1 font-semibold text-primary">
                    <IndianRupee size={14} /> ₹{myBooking.amountPaid}
                  </span>

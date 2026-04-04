@@ -55,14 +55,20 @@ const PublishedRideSchema = new Schema(
         },
 
         departureTime: { type: Date, required: true },
-        totalSeats:    { type: Number, required: true },
-        availableSeats: { type: Number, required: true },
+        totalSeats:    { type: Number, default: 1 },
+        availableSeats: { type: Number, default: 1 },
         vehicleType:   { type: String },
 
         status: {
             type: String,
             enum: ["open", "full", "active", "completed", "cancelled"],
             default: "open"
+        },
+
+        // Full list of route waypoints [lng, lat] from OSRM
+        routeCoords: {
+             type: [[Number]], 
+             default: []
         },
 
         bookings: [BookingSchema]

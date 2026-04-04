@@ -89,13 +89,20 @@ const LocationSearch = ({
   onSelect,
   showCurrentLocation = false,
   currentLocation = null,
+  value = "",
 }) => {
-  const [query, setQuery]             = useState("");
+  const [query, setQuery]             = useState(value || "");
   const [results, setResults]         = useState([]);
   const [isLoading, setIsLoading]     = useState(false);
   const [isOpen, setIsOpen]           = useState(false);
-  const [selectedName, setSelectedName] = useState("");
+  const [selectedName, setSelectedName] = useState(value || "");
   const [isFocused, setIsFocused]     = useState(false);
+
+  // Update internal state when value prop changes
+  useEffect(() => {
+    setQuery(value || "");
+    setSelectedName(value || "");
+  }, [value]);
   // GPS state
   const [gpsLoading, setGpsLoading]   = useState(false);
   const [gpsLocation, setGpsLocation] = useState(null); // { lat, lng, name }
