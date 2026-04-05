@@ -24,6 +24,32 @@ const ActiveRidesPage = () => {
   const [expandedRide, setExpandedRide] = useState(null);
   const [showNavigation, setShowNavigation] = useState(false);
 
+  const handleUpdateStatus = async (rideId, status) => {
+    if (status === "arrived" || status === "matched") {
+        // Navigate to the live tracking page for deeper interaction (OTP, arrived state etc)
+        navigate(`/live-tracking/${rideId}`);
+        return;
+    }
+
+    try {
+      await api.patch(`/published-rides/${rideId}/status`, { status });
+      // Refresh data
+      window.location.reload(); 
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update status");
+    }
+  };
+
+  const handleCancel = async (rideId) => {
+    if (!window.confirm("Are you sure you want to cancel this ride?")) return;
+    try {
+      await api.patch(`/published-rides/${rideId}/status`, { status: "cancelled" });
+      window.location.reload();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to cancel ride");
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -190,7 +216,7 @@ const ActiveRidesPage = () => {
         {loading ? (
              <div className="min-h-[400px] flex flex-col items-center justify-center space-y-4">
                  <Loader2 className="w-12 h-12 text-primary animate-spin opacity-40" />
-                 <p className="text-sm font-bold text-(--text-dim) animate-pulse">Scanning missions...</p>
+                 <p className="text-sm font-bold text-(--text-dim) animate-pulse">Scanning Rides......</p>
              </div>
         ) : activeRides.length > 0 ? (
           <div className="space-y-6">
@@ -282,8 +308,8 @@ const ActiveRidesPage = () => {
                     {/* Quick Actions */}
                     <div className="grid grid-cols-2 gap-3">
                       <button
-                        onClick={() => setShowNavigation(!showNavigation)}
-                        className="flex items-center justify-center gap-2 py-3 px-4 bg-primary hover:bg-primary-dark text-white rounded-lg font-semibold transition"
+                        onClick={() => navigate(`/live-tracking/${ride.publishedRide || ride._id}`)}
+                        className="flex items-center justify-center gap-2 py-3 px-4 bg-amber-400 hover:bg-amber-500 text-black rounded-lg font-bold transition"
                       >
                         <Navigation className="w-5 h-5" />
                         Navigation
@@ -301,17 +327,26 @@ const ActiveRidesPage = () => {
                     <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                       {ride.phase === "matched" && (
                         <>
-                          <button className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition">
+                          <button 
+                            onClick={() => navigate(`/live-tracking/${ride.publishedRide || ride._id}`)}
+                            className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition"
+                          >
                             Start Ride
                           </button>
-                          <button className="flex-1 py-3 px-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg font-bold transition">
+                          <button 
+                            onClick={() => handleCancel(ride._id)}
+                            className="flex-1 py-3 px-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg font-bold transition"
+                          >
                             Cancel
                           </button>
                         </>
                       )}
                       {ride.phase === "ongoing" && (
                         <>
-                          <button className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition">
+                          <button 
+                            onClick={() => handleUpdateStatus(ride._id, "completed")}
+                            className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition"
+                          >
                             Complete Ride
                           </button>
                           <button className="flex-1 py-3 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold transition">
@@ -331,7 +366,7 @@ const ActiveRidesPage = () => {
                <Activity className={`w-12 h-12 ${driverOnline ? 'text-emerald-500 animate-pulse' : 'text-gray-400'}`} />
             </div>
             <h3 className="text-2xl font-black text-(--text-main) mb-3">
-              {driverOnline ? "Waiting for Missions" : "No Active Rides"}
+              {driverOnline ? "Waiting for Rides" : "No Active Rides"}
             </h3>
             <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-sm leading-relaxed mb-10 font-bold">
               {driverOnline 

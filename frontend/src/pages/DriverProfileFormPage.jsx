@@ -18,13 +18,58 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import { createDriverProfile, getMyDriverProfile, updateDriverProfile } from "../services/driverProfileService";
+import { compressImage } from "../utils/imageCompressor";
 
-const VEHICLE_TYPES = ["2-Wheeler", "3-Wheeler", "4-Wheeler"];
-
+const VEHICLE_TYPES = [
+  "MOTO",
+  "EVMOTO",
+  "AUTO",
+  "EVAUTO",
+  "GO",
+  "EVGO",
+  "PRIME",
+  "XL"
+];
 const VEHICLE_MODELS = {
-  "2-Wheeler": ["Bike", "Scooter", "Motorcycle"],
-  "3-Wheeler": ["Auto Rickshaw", "Tuk-Tuk", "Bajaj"],
-  "4-Wheeler": ["Sedan", "SUV", "Hatchback", "MUV"],
+  MOTO: [
+    "Honda Activa 6G", "TVS Jupiter 125", "Hero Splendor Plus", "Bajaj Pulsar 125",
+    "Honda Shine 100", "TVS Raider 125", "Hero HF Deluxe", "Suzuki Access 125",
+    "Yamaha FZ-S V3", "Bajaj CT 110X"
+  ],
+  EVMOTO: [
+    "Ola Electric S1 Air", "Ather 450X", "TVS iQube S", "Bajaj Chetak Electric",
+    "Hero Vida V1 Pro", "Ola Electric S1 Pro", "Ampere Nexus", "Greaves Ampere Magnus",
+    "Pure EV ETrance Neo", "Okinawa Praise Pro"
+  ],
+  AUTO: [
+    "Bajaj RE Compact 4S", "Piaggio Ape City Plus", "TVS King Duramax", "Mahindra Alfa Plus",
+    "Atul Gem Paxx", "Bajaj RE 4S", "Piaggio Ape Xtra", "Mahindra Treo Yaari",
+    "TVS King Deluxe", "Atul Smart"
+  ],
+  EVAUTO: [
+    "Mahindra Treo", "Piaggio Ape E-City", "Euler HiLoad EV", "Bajaj RE EV",
+    "Kinetic Safar Star", "OSM Rage Plus", "YC Electric Auto", "Saarthi EV Auto",
+    "ETrio Touro Max", "Gayam Motor EV"
+  ],
+  GO: [
+    "Maruti Suzuki Swift", "Maruti WagonR", "Tata Tiago", "Hyundai Grand i10 Nios",
+    "Renault Kwid", "Maruti Celerio", "Tata Punch", "Hyundai i20", "Honda Brio",
+    "Maruti Alto K10"
+  ],
+  EVGO: [
+    "Tata Tiago EV", "MG Comet EV", "Citroen e-C3", "Tata Punch EV", "Maruti eVX",
+    "Hyundai Casper EV", "BYD Seagull", "Renault Kwid EV", "PMV EaS-E", "Strom R3"
+  ],
+  PRIME: [
+    "Honda City", "Hyundai Verna", "Maruti Suzuki Ciaz", "Skoda Slavia",
+    "Volkswagen Virtus", "Toyota Yaris", "Hyundai Aura", "Tata Tigor",
+    "Honda Amaze", "Maruti Dzire"
+  ],
+  XL: [
+    "Toyota Innova Crysta", "Mahindra XUV700", "Hyundai Creta", "Kia Seltos",
+    "Tata Safari", "MG Hector Plus", "Mahindra Scorpio N", "Toyota Fortuner",
+    "Kia Carens", "Maruti Ertiga"
+  ]
 };
 
 const DriverProfileFormPage = () => {
@@ -108,9 +153,10 @@ const DriverProfileFormPage = () => {
     setFormData({
       ...formData,
       vehicleType: e.target.value,
+      vehicleName: "", // Reset model when type changes
     });
     if (errors.vehicleType) {
-      setErrors({ ...errors, vehicleType: "" });
+      setErrors({ ...errors, vehicleType: "", vehicleName: "" });
     }
   };
 
@@ -141,10 +187,14 @@ const DriverProfileFormPage = () => {
     setUploading((prev) => ({ ...prev, [type]: true }));
     setError("");
 
-    const uploadData = new FormData();
-    uploadData.append("image", file);
-
     try {
+      // 🧊 COMPRESS: Reduce image to ~1200px wide, 70% quality (JPEG)
+      // This turns a 5-10MB mobile photo into a <500KB optimized file
+      const compressedFile = await compressImage(file, { maxWidth: 1200, quality: 0.7 });
+      
+      const uploadData = new FormData();
+      uploadData.append("image", compressedFile);
+
       // Import api from services/api
       const { default: api } = await import("../services/api");
       const response = await api.post("/upload", uploadData, {
@@ -322,14 +372,30 @@ const DriverProfileFormPage = () => {
                     )}
                   </div>
 
-                  <Input
-                    label="Vehicle Model/Name"
-                    placeholder="e.g. Swift Dzire, Honda Activa"
-                    value={formData.vehicleName}
-                    onChange={(e) => handleInputChange(e, 'vehicleName')}
-                    error={errors.vehicleName}
-                    disabled={loading}
-                  />
+                  <div>
+                    <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
+                      Vehicle Model
+                    </label>
+                    <select
+                      className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleName ? "border-red-500/50 ring-red-500/10" : ""}`}
+                      value={formData.vehicleName || ""}
+                      onChange={(e) => handleInputChange(e, 'vehicleName')}
+                      disabled={loading || !formData.vehicleType}
+                    >
+                      <option value="">{formData.vehicleType ? `Select ${formData.vehicleType} model` : 'Select type first'}</option>
+                      {formData.vehicleType && VEHICLE_MODELS[formData.vehicleType]?.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.vehicleName && (
+                      <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <AlertCircle size={12} className="text-red-500" />
+                        <span className="text-[10px] font-bold text-red-500">{errors.vehicleName}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">

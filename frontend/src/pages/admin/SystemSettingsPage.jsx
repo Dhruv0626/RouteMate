@@ -23,12 +23,12 @@ const SettingGroup = ({ title, desc, children }) => (
   </div>
 );
 
-const ConfigInput = ({ label, desc, type = "text", value, onChange, icon: Icon, prefix, suffix }) => (
-  <div className="space-y-2">
-    <label className="text-xs font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1.5">
+const ConfigInput = ({ label, desc, type = "text", value, onChange, icon: Icon, prefix, suffix, centerValue = false }) => (
+  <div className="space-y-2 flex flex-col items-center sm:items-start">
+    <label className={`text-[10px] font-black text-(--text-dim) uppercase tracking-[0.15em] flex items-center gap-1.5 ${centerValue ? 'w-full justify-center' : ''}`}>
       {Icon && <Icon size={12} className="text-primary" />} {label}
     </label>
-    <div className="relative group">
+    <div className="relative group w-full">
       {prefix && (
         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-primary">
           {prefix}
@@ -38,17 +38,19 @@ const ConfigInput = ({ label, desc, type = "text", value, onChange, icon: Icon, 
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full bg-black/5 dark:bg-black/20 border border-(--card-border) rounded-2xl py-3 outline-none focus:border-primary/50 text-sm font-semibold transition-all ${
+        className={`w-full bg-black/5 dark:bg-black/20 border border-(--card-border) rounded-2xl py-3 outline-none focus:border-primary/50 text-sm font-bold transition-all transition-colors duration-300 ${
+          centerValue ? "text-center" : "text-left"
+        } ${
           prefix ? "pl-8 pr-4" : "px-4"
         }`}
       />
       {suffix && (
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-(--text-dim) uppercase">
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-(--text-dim) uppercase pointer-events-none">
           {suffix}
         </span>
       )}
     </div>
-    <p className="text-[10px] text-(--text-dim) font-medium leading-tight">{desc}</p>
+    <p className={`text-[9px] text-(--text-dim) font-black uppercase tracking-wider leading-tight ${centerValue ? 'w-full text-center' : ''}`}>{desc}</p>
   </div>
 );
 
@@ -73,6 +75,17 @@ const ToggleInput = ({ label, desc, active, onToggle }) => (
   </div>
 );
 
+const CAT_LIST = [
+    { key: "MOTO", label: "MOTO (Petrol Bike)", icon: "🏍️", color: "primary" },
+    { key: "EVMOTO", label: "EVMOTO (Electric Bike)", icon: "⚡🏍️", color: "emerald-500" },
+    { key: "AUTO", label: "AUTO (Petrol Auto)", icon: "🛺", color: "emerald-500" },
+    { key: "EVAUTO", label: "EVAUTO (Electric Auto)", icon: "⚡🛺", color: "emerald-500" },
+    { key: "GO", label: "GO (Hatchback)", icon: "🚕", color: "amber-500" },
+    { key: "EVGO", label: "EVGO (Electric Hatch)", icon: "⚡🚕", color: "emerald-500" },
+    { key: "PRIME", label: "PRIME (Sedan)", icon: "🚗", color: "blue-500" },
+    { key: "XL", label: "XL (SUV)", icon: "🚙", color: "violet-500" },
+];
+
 const SystemSettingsPage = () => {
   const navigate = useNavigate();
   const { user: currentUser, logout } = useAuth();
@@ -88,11 +101,14 @@ const SystemSettingsPage = () => {
     maxRadius: "",
     surgeMultiplier: "",
     pricing: {
-       Bike: { baseFare: "", costPerKm: "" },
-       Auto: { baseFare: "", costPerKm: "" },
-       Sedan: { baseFare: "", costPerKm: "" },
-       SUV: { baseFare: "", costPerKm: "" },
-       Hatchback: { baseFare: "", costPerKm: "" }
+       MOTO: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" },
+       EVMOTO: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" },
+       AUTO: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" },
+       EVAUTO: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" },
+       GO: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" },
+       EVGO: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" },
+       PRIME: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" },
+       XL: { baseFare: "", costPerKm: "", perMinRate: "", minFare: "", nightCharge: "", surgeCap: "" }
     }
   });
   const [isDeleting, setIsDeleting] = useState(false);
@@ -111,16 +127,14 @@ const SystemSettingsPage = () => {
         const { data } = await api.get("/admin/system-settings");
         if (data.success && data.settings) {
           const s = data.settings;
-          // Ensure we preserve the structure and defaults
+          const mergedPricing = {};
+          CAT_LIST.forEach(cat => {
+              mergedPricing[cat.key] = s.pricing?.[cat.key] || { baseFare: "0", costPerKm: "0", perMinRate: "0", minFare: "0", nightCharge: "0", surgeCap: "1.8" };
+          });
+
           setConfig({
             ...s,
-            pricing: {
-              Bike: s.pricing?.Bike || { baseFare: "", costPerKm: "" },
-              Auto: s.pricing?.Auto || { baseFare: "", costPerKm: "" },
-              Sedan: s.pricing?.Sedan || { baseFare: "", costPerKm: "" },
-              SUV: s.pricing?.SUV || { baseFare: "", costPerKm: "" },
-              Hatchback: s.pricing?.Hatchback || { baseFare: "", costPerKm: "" },
-            }
+            pricing: mergedPricing
           });
         }
       } catch (err) {
@@ -155,6 +169,19 @@ const SystemSettingsPage = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const updatePriceField = (cat, field, val) => {
+      setConfig({
+          ...config,
+          pricing: {
+              ...config.pricing,
+              [cat]: {
+                  ...config.pricing[cat],
+                  [field]: val
+              }
+          }
+      });
   };
 
   return (
@@ -193,121 +220,51 @@ const SystemSettingsPage = () => {
 
       <main className="mx-auto max-w-5xl px-6 py-10 space-y-12 relative z-10">
         
-        {/* Warning Banner */}
-        {config.maintenanceMode && (
-           <section className="bg-rose-500/10 border border-rose-500/20 rounded-3xl p-5 flex gap-4 animate-in fade-in slide-in-from-top-4">
-             <div className="p-3 bg-rose-500 rounded-2xl h-fit text-white shadow-lg shadow-rose-500/30">
-               <AlertTriangle size={20} />
-             </div>
-             <div>
-               <h4 className="text-rose-500 font-black text-sm uppercase tracking-tight">Maintenance Mode Active</h4>
-               <p className="text-xs text-rose-500/80 font-medium leading-relaxed max-w-2xl">
-                 New users cannot register and no new ride requests can be created. Existing rides will continue.
-               </p>
-             </div>
-           </section>
-        )}
-
-        <SettingGroup title="Vehicle Specific Pricing" desc="Set base fare and per KM rates for different vehicle categories.">
-           {/* Bike Pricing */}
-           <div className="space-y-4 p-4 rounded-3xl bg-primary/5 border border-primary/20">
-             <h4 className="text-xs font-black text-primary uppercase tracking-widest flex items-center gap-2">
-               🏍️ 2-Wheeler (Bike)
-             </h4>
-             <div className="grid grid-cols-2 gap-4">
-               <ConfigInput
-                 label="Base Fare" desc="Start price" 
-                 value={strip(config.pricing.Bike.baseFare)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Bike: {...config.pricing.Bike, baseFare: v}}})}
-               />
-               <ConfigInput
-                 label="Cost Per KM" desc="Rate/KM"
-                 value={strip(config.pricing.Bike.costPerKm)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Bike: {...config.pricing.Bike, costPerKm: v}}})}
-               />
-             </div>
-           </div>
-
-           {/* Auto Pricing */}
-           <div className="space-y-4 p-4 rounded-3xl bg-emerald-500/5 border border-emerald-500/20">
-             <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-               🛺 3-Wheeler (Auto)
-             </h4>
-             <div className="grid grid-cols-2 gap-4">
-               <ConfigInput
-                 label="Base Fare" desc="Start price" 
-                 value={strip(config.pricing.Auto.baseFare)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Auto: {...config.pricing.Auto, baseFare: v}}})}
-               />
-               <ConfigInput
-                 label="Cost Per KM" desc="Rate/KM"
-                 value={strip(config.pricing.Auto.costPerKm)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Auto: {...config.pricing.Auto, costPerKm: v}}})}
-               />
-             </div>
-           </div>
-
-           {/* Sedan Pricing */}
-           <div className="space-y-4 p-4 rounded-3xl bg-blue-500/5 border border-blue-500/20">
-             <h4 className="text-xs font-black text-blue-500 uppercase tracking-widest flex items-center gap-2">
-               🚗 4-Wheeler (Sedan)
-             </h4>
-             <div className="grid grid-cols-2 gap-4">
-               <ConfigInput
-                 label="Base Fare" desc="Start price" 
-                 value={strip(config.pricing.Sedan.baseFare)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Sedan: {...config.pricing.Sedan, baseFare: v}}})}
-               />
-               <ConfigInput
-                 label="Cost Per KM" desc="Rate/KM"
-                 value={strip(config.pricing.Sedan.costPerKm)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Sedan: {...config.pricing.Sedan, costPerKm: v}}})}
-               />
-             </div>
-           </div>
-
-           {/* SUV Pricing */}
-           <div className="space-y-4 p-4 rounded-3xl bg-violet-500/5 border border-violet-500/20">
-             <h4 className="text-xs font-black text-violet-500 uppercase tracking-widest flex items-center gap-2">
-               🚙 SUV / Luxury
-             </h4>
-             <div className="grid grid-cols-2 gap-4">
-               <ConfigInput
-                 label="Base Fare" desc="Start price" 
-                 value={strip(config.pricing.SUV.baseFare)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, SUV: {...config.pricing.SUV, baseFare: v}}})}
-               />
-               <ConfigInput
-                 label="Cost Per KM" desc="Rate/KM"
-                 value={strip(config.pricing.SUV.costPerKm)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, SUV: {...config.pricing.SUV, costPerKm: v}}})}
-               />
-             </div>
-           </div>
-
-           {/* Hatchback Pricing */}
-           <div className="space-y-4 p-4 rounded-3xl bg-amber-500/5 border border-amber-500/20">
-             <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
-               🚕 4-Wheeler (Hatchback)
-             </h4>
-             <div className="grid grid-cols-2 gap-4">
-               <ConfigInput
-                 label="Base Fare" desc="Start price" 
-                 value={strip(config.pricing.Hatchback.baseFare)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Hatchback: {...config.pricing.Hatchback, baseFare: v}}})}
-               />
-               <ConfigInput
-                 label="Cost Per KM" desc="Rate/KM"
-                 value={strip(config.pricing.Hatchback.costPerKm)}
-                 onChange={(v) => setConfig({...config, pricing: {...config.pricing, Hatchback: {...config.pricing.Hatchback, costPerKm: v}}})}
-               />
-             </div>
-           </div>
+        <SettingGroup title="Vehicle Specific Pricing" desc="Set base fare, per KM, per Min rates and surge limits for all RouteMate categories.">
+            {CAT_LIST.map((cat) => (
+                <div key={cat.key} className={`col-span-full space-y-4 p-5 rounded-3xl bg-${cat.color}/5 border border-${cat.color}/20 hover:scale-[1.01] transition-all duration-300`}>
+                  <h4 className={`text-[10px] font-black text-${cat.color} uppercase tracking-[0.2em] flex items-center gap-2`}>
+                    {cat.icon} {cat.label}
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <ConfigInput
+                      label="Base Fare" desc="Start price" centerValue={true}
+                      value={strip(config.pricing[cat.key]?.baseFare)}
+                      onChange={(v) => updatePriceField(cat.key, "baseFare", v)}
+                    />
+                    <ConfigInput
+                      label="Rate/KM" desc="Per KM cost" centerValue={true}
+                      value={strip(config.pricing[cat.key]?.costPerKm)}
+                      onChange={(v) => updatePriceField(cat.key, "costPerKm", v)}
+                    />
+                    <ConfigInput
+                      label="Rate/Min" desc="Per Min cost" centerValue={true}
+                      value={strip(config.pricing[cat.key]?.perMinRate)}
+                      onChange={(v) => updatePriceField(cat.key, "perMinRate", v)}
+                    />
+                    <ConfigInput
+                      label="Min Fare" desc="Min charge" centerValue={true}
+                      value={strip(config.pricing[cat.key]?.minFare)}
+                      onChange={(v) => updatePriceField(cat.key, "minFare", v)}
+                    />
+                    <ConfigInput
+                      label="Night Fix" desc="Flat charge" centerValue={true}
+                      value={strip(config.pricing[cat.key]?.nightCharge)}
+                      onChange={(v) => updatePriceField(cat.key, "nightCharge", v)}
+                    />
+                    <ConfigInput
+                      label="Surge Cap" desc="Max surge" centerValue={true}
+                      value={strip(config.pricing[cat.key]?.surgeCap)}
+                      onChange={(v) => updatePriceField(cat.key, "surgeCap", v)}
+                    />
+                  </div>
+                </div>
+            ))}
         </SettingGroup>
 
         <SettingGroup title="Global Multipliers" desc="Platform-wide adjustments and fees.">
            <ConfigInput
-             label="Surge Multiplier" desc="Global multiplier"
+             label="Demand Ratio Multiplier" desc="Global sensitivity"
              value={config.surgeMultiplier} icon={Sliders} suffix="x"
              onChange={(v) => setConfig({...config, surgeMultiplier: v})}
            />
@@ -327,66 +284,14 @@ const SystemSettingsPage = () => {
            <div className="flex flex-col gap-4">
               <ToggleInput
                 label="Real-time Tracking"
-                desc="Enable high-precision GPS polling for active rides."
                 active={config.realTimeTracking}
                 onToggle={() => setConfig({...config, realTimeTracking: !config.realTimeTracking})}
               />
               <ToggleInput
                 label="Auto-Approve Drivers"
-                desc="Bypass administrative review for new driver signups (Risk High)."
                 active={config.autoApproveDrivers}
                 onToggle={() => setConfig({...config, autoApproveDrivers: !config.autoApproveDrivers})}
               />
-           </div>
-        </SettingGroup>
-
-        <SettingGroup title="System & Identity" desc="Platform branding and infrastructure settings.">
-           <ConfigInput
-             label="Application Name" desc="Display name across all user interfaces."
-             value={config.appName} icon={Settings}
-             onChange={(v) => setConfig({...config, appName: v})}
-           />
-           <ConfigInput
-             label="Support Email" desc="Destination for automated system ticket alerts."
-             value={config.supportEmail} icon={Bell}
-             onChange={(v) => setConfig({...config, supportEmail: v})}
-           />
-           <div className="flex flex-col gap-4">
-              <ToggleInput
-                label="Maintenance Mode"
-                desc="Place the entire platform on freeze for server updates."
-                active={config.maintenanceMode}
-                onToggle={() => setConfig({...config, maintenanceMode: !config.maintenanceMode})}
-              />
-              <ToggleInput
-                label="Crypto Payments"
-                desc="Enable Web3 wallet integration for ride settlements."
-                active={config.enableCrypto}
-                onToggle={() => setConfig({...config, enableCrypto: !config.enableCrypto})}
-              />
-           </div>
-        </SettingGroup>
-
-        <SettingGroup title="User Experience & Alerts" desc="Configure and test how notifications reach users.">
-           <div className="flex flex-col gap-4 p-4 rounded-3xl bg-primary/5 border border-primary/20">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-black text-(--text-main)">System Tray Notifications</p>
-                  <p className="text-[10px] text-(--text-dim) font-medium leading-relaxed max-w-xs">
-                    Test the "Real App" experience by triggering a desktop notification with sound.
-                  </p>
-                </div>
-                <button
-                  onClick={() => showNativeNotification({
-                    title: "Test Notification",
-                    message: "This is how users will see updates in the upper bar!",
-                    type: "success"
-                  })}
-                  className="px-4 py-2 rounded-xl bg-primary/20 text-primary border border-primary/30 text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all"
-                >
-                  Send Test Alert
-                </button>
-              </div>
            </div>
         </SettingGroup>
 
@@ -412,13 +317,7 @@ const SystemSettingsPage = () => {
 
         {/* ── Personal Account Section ── */}
         <section className="pt-10 border-t border-(--card-border) space-y-6">
-           <div>
-              <h3 className="h3-display text-xl font-display font-black text-(--text-main)">Personal Account</h3>
-              <p className="text-xs text-(--text-dim) font-semibold">Manage your administrative access and security.</p>
-           </div>
-           
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Logout Button */}
               <button 
                 onClick={async () => {
                   try {
@@ -441,7 +340,6 @@ const SystemSettingsPage = () => {
                 </div>
               </button>
 
-              {/* Delete Account Button */}
               <button 
                 onClick={async () => {
                   if (window.confirm("FATAL ACTION: Are you sure you want to PERMANENTLY delete your Admin account? This action is irreversible.")) {
@@ -480,7 +378,7 @@ const SystemSettingsPage = () => {
            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
            <p className="text-[10px] font-black tracking-widest uppercase">Global Cloud Nodes Live</p>
         </div>
-        <p className="text-[10px] font-black tracking-widest uppercase">Kernel Version 4.2.0-STABLE</p>
+        <p className="text-[10px] font-black tracking-widest uppercase">Kernel Version 5.1.0-STABLE</p>
       </footer>
     </div>
   );

@@ -215,7 +215,22 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
                 <MapPicker mode={pickMode} onPick={handleMapPick} />
                 {srcPin && <Marker position={[srcPin.lat, srcPin.lng]} icon={greenIcon}><Popup><p className="font-bold text-xs text-emerald-700">📍 Your Pickup</p><p className="text-[11px] mt-1">{srcPin.address}</p></Popup></Marker>}
                 {dstPin && <Marker position={[dstPin.lat, dstPin.lng]} icon={redIcon}><Popup><p className="font-bold text-xs text-red-700">🏁 Your Drop-off</p><p className="text-[11px] mt-1">{dstPin.address}</p></Popup></Marker>}
-                {srcPin && dstPin && <Polyline positions={[[srcPin.lat, srcPin.lng],[dstPin.lat, dstPin.lng]]} pathOptions={{ color:"#ffcc00", weight:5, dashArray:"10 6", lineCap:"round" }} />}
+                
+                {/* Driver's full planned route */}
+                {ride.routeCoords?.length > 0 && (
+                  <Polyline 
+                    positions={ride.routeCoords.map(c => [c[1], c[0]])} 
+                    pathOptions={{ color: "#6366f1", weight: 4, opacity: 0.6 }} 
+                  />
+                )}
+
+                {/* Passenger's straight-line segment */}
+                {srcPin && dstPin && (
+                  <Polyline 
+                    positions={[[srcPin.lat, srcPin.lng],[dstPin.lat, dstPin.lng]]} 
+                    pathOptions={{ color:"#ffcc00", weight:5, dashArray:"10 6", lineCap:"round" }} 
+                  />
+                )}
               </MapContainer>
             </div>
             {pickMode && <p className="text-center text-xs font-semibold text-primary animate-pulse">🗺️ Click the map to set your {pickMode === "source" ? "pickup" : "drop-off"}</p>}

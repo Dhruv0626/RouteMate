@@ -356,21 +356,27 @@ const DashboardPage = () => {
               ]);
             }
 
-            // Map live rides to activity format
+            // Map live rides to activity format (Include cancelled so they don't disappear)
             const activeActivities = liveRides
-              .filter(r => r.status !== 'completed' && r.status !== 'cancelled')
-              .map(ride => ({
-                id: ride._id,
-                type: "Live Ride",
-                from: ride.source?.address?.split(',')[0] || "Unknown",
-                to: ride.destination?.address?.split(',')[0] || "Unknown",
-                date: "Now",
-                rawDate: new Date(ride.departureTime),
-                status: ride.status.toUpperCase(),
-                amount: ride.vehicleType || "Ride",
-                icon: Car,
-                isLive: true
-            }));
+              .filter(r => r.status !== 'completed')
+              .map(ride => {
+                const myBooking = ride.myBookings?.[0];
+                const displayStatus = myBooking?.status === 'cancelled' ? 'REJECTED' : ride.status.toUpperCase();
+                
+                return {
+                  id: ride._id,
+                  type: "Live Ride",
+                  from: ride.source?.address?.split(',')[0] || "Unknown",
+                  to: ride.destination?.address?.split(',')[0] || "Unknown",
+                  date: "Now",
+                  rawDate: new Date(ride.departureTime),
+                  status: displayStatus,
+                  amount: ride.vehicleType || "Ride",
+                  icon: Car,
+                  isLive: true,
+                  bookingStatus: myBooking?.status
+                };
+            });
 
             // For Activity, we'll use a mix of recent rides and live ones
             const activityHistory = rides.map(ride => ({
@@ -586,6 +592,57 @@ const DashboardPage = () => {
             })}
           </div>
         </section>
+
+        {/* Live Bookings Section (FOR PASSENGERS) */}
+        {role === "passenger" && activities.filter(a => a.isLive).length > 0 && (
+          <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
+                My Current Bookings <span className="bg-amber-500 h-1.5 w-1.5 rounded-full animate-pulse"></span>
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+               {activities.filter(a => a.isLive).map((item) => (
+                 <div 
+                   key={item.id} 
+                   onClick={() => navigate(`/live-tracking/${item.id}`)}
+                   className={`glass-card group relative overflow-hidden rounded-3xl p-5 border cursor-pointer hover:scale-[1.01] transition-all ${item.bookingStatus === 'cancelled' ? 'border-red-500/30 bg-red-500/5' : 'border-primary/30 bg-primary/5'}`}
+                 >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all group-hover:scale-110 ${item.bookingStatus === 'cancelled' ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'}`}>
+                          <Car size={20} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-(--text-main)">{item.from} → {item.to}</p>
+                          <p className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest leading-none">{item.amount}</p>
+                        </div>
+                      </div>
+                      <div className={`px-4 py-1.5 rounded-full border text-[10px] font-black tracking-widest uppercase ${item.bookingStatus === 'cancelled' ? 'bg-red-500/20 text-red-500 border-red-500/30' : item.bookingStatus === 'confirmed' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
+                        {item.status}
+                      </div>
+                    </div>
+                    {item.bookingStatus === 'cancelled' ? (
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-red-500/10">
+                         <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                         <p className="text-[10px] font-bold text-red-500/80 italic">This request was declined by the driver. Please try a different ride.</p>
+                      </div>
+                    ) : item.bookingStatus === 'confirmed' ? (
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-emerald-500/10">
+                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                         <p className="text-[10px] font-bold text-emerald-500/80 italic">Verified! Tap to track your ride and share OTP.</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-amber-500/10">
+                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                         <p className="text-[10px] font-bold text-amber-500/80 italic">Waiting for driver to confirm your seat...</p>
+                      </div>
+                    )}
+                 </div>
+               ))}
+            </div>
+          </section>
+        )}
 
         {/* Recent History Section */}
         <section id="history" className="space-y-6 scroll-mt-24">

@@ -61,7 +61,7 @@ const PublishedRideSchema = new Schema(
 
         status: {
             type: String,
-            enum: ["open", "full", "active", "completed", "cancelled"],
+            enum: ["open", "full", "active", "arrived", "completed", "cancelled"],
             default: "open"
         },
 

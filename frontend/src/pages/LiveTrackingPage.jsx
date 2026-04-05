@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Navigation, Play, Square, Loader2, User as UserIcon } from "lucide-react";
+import { ArrowLeft, Navigation, Play, Square, Loader2, User as UserIcon, Lock, MapPin, IndianRupee, Phone } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import L from "leaflet";
 import socket from "../services/socket";
@@ -25,6 +25,9 @@ const LiveTrackingPage = () => {
   const [driverLocation, setDriverLocation] = useState(null);
   const [isDriver, setIsDriver] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [otp, setOtp] = useState("");
+  const [isStartingRequest, setIsStartingRequest] = useState(false);
+  const [isNavigatingInternal, setIsNavigatingInternal] = useState(false);
 
   // Initialize and connect socket
   useEffect(() => {
@@ -46,10 +49,7 @@ const LiveTrackingPage = () => {
   useEffect(() => {
     const fetchRide = async () => {
       try {
-        // Just determine if current user is the driver
-        const res = await api.get("/published-rides/available"); // or a dedicated single ride endpoint if available. Wait, driver can get it from my-published. Passenger from my-booked.
-        // Actually, we can just fetch my-published and my-booked to find the ride.
-        
+        // Driver can get it from my-published. Passenger from my-booked.
         let foundRide = null;
         if (user.role === "driver") {
           const res1 = await api.get("/published-rides/my-published");
@@ -62,11 +62,6 @@ const LiveTrackingPage = () => {
         }
         
         setRide(foundRide);
-        
-        // Initial driver location if available in ride object
-        // if (foundRide && foundRide.source.location.coordinates) {
-        //   setDriverLocation({ lat: foundRide.source.location.coordinates[1], lng: foundRide.source.location.coordinates[0] });
-        // }
       } catch (err) {
         console.error("Failed to load ride", err);
       } finally {
@@ -103,15 +98,26 @@ const LiveTrackingPage = () => {
   }, [isDriver, rideId]);
 
   const handleUpdateStatus = async (status) => {
+    if (status === "active" && !otp) {
+        alert("Please enter the passenger's OTP to start the trip.");
+        return;
+    }
+
+    setIsStartingRequest(true);
     try {
-      await api.patch(`/published-rides/${rideId}/status`, { status });
+      const payload = { status };
+      if (status === "active") payload.otp = otp;
+
+      await api.patch(`/published-rides/${rideId}/status`, payload);
       setRide(prev => ({ ...prev, status }));
       if (status === "completed") {
         alert("Ride Completed!");
         navigate("/driver/dashboard");
       }
     } catch (e) {
-      alert("Failed to update status");
+      alert(e.response?.data?.message || "Failed to update status");
+    } finally {
+      setIsStartingRequest(false);
     }
   };
 
@@ -134,6 +140,10 @@ const LiveTrackingPage = () => {
   const mapCenter = driverLocation || 
     (ride.source && ride.source.location.coordinates ? [ride.source.location.coordinates[1], ride.source.location.coordinates[0]] : [23.0225, 72.5714]);
 
+  // Determine route: Driver location to first pickup if not active, else full route
+  const firstPassenger = (ride.bookings || []).find(b => b.status === "confirmed" || b.status === "pending");
+  const isHeadingToPickup = (ride.status === "open" || ride.status === "full" || ride.status === "arrived") && firstPassenger;
+
   return (
     <div className="relative flex flex-col h-screen text-white bg-black">
       {/* Header */}
@@ -142,8 +152,10 @@ const LiveTrackingPage = () => {
           <ArrowLeft size={20} />
         </button>
         <div className="bg-black/50 backdrop-blur border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-xs font-bold uppercase tracking-wider">{ride.status === "active" ? "Live Tracking" : "Not Started"}</span>
+          <span className={`w-2 h-2 rounded-full ${ride.status === "active" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
+          <span className="text-xs font-bold uppercase tracking-wider">
+            {ride.status === "active" ? "Mission Ongoing" : ride.status === "arrived" ? "Wait for OTP" : ride.status === "full" || ride.status === "open" ? "Heading to Pickup" : "Ride Tracker"}
+          </span>
         </div>
       </div>
 
@@ -159,8 +171,8 @@ const LiveTrackingPage = () => {
             </Marker>
           )}
 
-          {/* Passenger Pickups */}
-          {(ride.bookings || []).filter(b => b.status === "confirmed").map((b, i) => (
+          {/* Passenger Pickups - ONLY SHOW IF NOT STARTED */}
+          {ride.status !== "active" && (ride.bookings || []).filter(b => b.status === "confirmed" || b.status === "pending").map((b, i) => (
              b.passengerSource?.location?.coordinates && b.passengerSource.location.coordinates[1] !== 0 && (
               <Marker key={`p-${i}`} position={[b.passengerSource.location.coordinates[1], b.passengerSource.location.coordinates[0]]} icon={greenIcon}>
                  <Popup><b className="text-emerald-700">Passenger Pickup</b><br/>{b.passengerSource.address}</Popup>
@@ -168,45 +180,130 @@ const LiveTrackingPage = () => {
              )
           ))}
 
-          {/* Main Route Dropoff */}
-           {ride.destination?.location?.coordinates && (
+          {/* Main Route Dropoff - ONLY SHOW IF STARTED */}
+           {ride.status === "active" && ride.destination?.location?.coordinates && (
             <Marker position={[ride.destination.location.coordinates[1], ride.destination.location.coordinates[0]]} icon={redIcon}>
-              <Popup><b className="text-red-700">Driver End</b><br/>{ride.destination.address}</Popup>
+              <Popup><b className="text-red-700">Passenger Destination</b><br/>{ride.destination.address}</Popup>
             </Marker>
           )}
 
           {/* Driver Live Marker */}
           {driverLocation && (
             <Marker position={[driverLocation.lat, driverLocation.lng]} icon={carIcon}>
-              <Popup><b>Driver's Current Location</b></Popup>
+              <Popup><b>Your Location</b></Popup>
             </Marker>
           )}
 
-          {/* Route line (straight line approximations for now) */}
-          {ride.source?.location?.coordinates && ride.destination?.location?.coordinates && (
-            <Polyline 
-              positions={[
-                [ride.source.location.coordinates[1], ride.source.location.coordinates[0]], 
-                [ride.destination.location.coordinates[1], ride.destination.location.coordinates[0]]
-              ]} 
-              pathOptions={{ color: "#6366f1", weight: 5, opacity: 0.7 }} 
-            />
+          {/* Route line */}
+          {isHeadingToPickup ? (
+            /* Heading to Pickup: Driver -> Passenger Source */
+            driverLocation && (
+              <Polyline 
+                positions={[
+                  [driverLocation.lat, driverLocation.lng],
+                  [firstPassenger.passengerSource.location.coordinates[1], firstPassenger.passengerSource.location.coordinates[0]]
+                ]}
+                pathOptions={{ color: "#fbbf24", weight: 5, opacity: 0.8, dashArray: "10 10", lineCap: "round" }}
+              />
+            )
+          ) : (
+            /* Active Trip: actual road path if available */
+            (ride.routeCoords?.length > 0 || (ride.source?.location?.coordinates && ride.destination?.location?.coordinates)) && (
+              <Polyline 
+                positions={ride.routeCoords?.length > 0 
+                  ? ride.routeCoords.map(c => [c[1], c[0]]) 
+                  : [
+                    [ride.source.location.coordinates[1], ride.source.location.coordinates[0]], 
+                    [ride.destination.location.coordinates[1], ride.destination.location.coordinates[0]]
+                  ]
+                } 
+                pathOptions={{ color: "#6366f1", weight: 5, opacity: 0.7 }} 
+              />
+            )
           )}
         </MapContainer>
       </div>
 
       {/* Bottom HUD */}
       <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none">
-        <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto">
+        <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl">
           {isDriver ? (
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3">
+              {/* Quick Actions Group - ONLY FOR PICKUP PHASE */}
               {ride.status !== "active" && (
-                <button onClick={() => handleUpdateStatus("active")} className="flex-1 bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2">
-                  <Play size={20} /> Start Ride
-                </button>
+                <div className="flex gap-3">
+                    <button 
+                      onClick={() => setIsNavigatingInternal(!isNavigatingInternal)} 
+                      className={`flex-1 ${isNavigatingInternal ? 'bg-primary text-black' : 'bg-amber-400 text-black'} font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg transition-all text-sm pointer-events-auto`}
+                    >
+                      <Navigation size={18} className={isNavigatingInternal ? "animate-pulse" : ""} />
+                      {isNavigatingInternal ? "Exit Nav" : "Navigation"}
+                    </button>
+                    <a 
+                      href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
+                      className="flex-1 bg-emerald-500 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm pointer-events-auto"
+                    >
+                      <Phone size={18} />
+                      Call
+                    </a>
+                </div>
+              )}
+
+              {ride.status !== "active" && (
+                <>
+                  {ride.status !== "arrived" ? (
+                    <button 
+                      onClick={() => handleUpdateStatus("arrived")} 
+                      disabled={isStartingRequest}
+                      className="flex-1 bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-amber-500/20"
+                    >
+                      {isStartingRequest ? <Loader2 size={20} className="animate-spin" /> : <MapPin size={20} />}
+                      I Have Arrived
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-2 bg-white/5 border border-white/10 p-3 rounded-xl">
+                      <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1">
+                        <Lock size={10} /> Secure Trip Start
+                      </p>
+                      <div className="flex items-center gap-2">
+                         <input 
+                           type="text" 
+                           maxLength={4}
+                           placeholder="Enter OTP"
+                           value={otp}
+                           onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ""))}
+                           className="flex-1 bg-black/40 border border-white/10 px-4 py-3 rounded-lg text-lg font-black tracking-[0.4em] text-center focus:border-primary outline-none"
+                         />
+                         <button 
+                           onClick={() => handleUpdateStatus("active")} 
+                           disabled={otp.length !== 4 || isStartingRequest}
+                           className="h-[54px] px-6 bg-primary text-black font-black rounded-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2 shrink-0"
+                         >
+                           {isStartingRequest ? <Loader2 size={18} className="animate-spin" /> : <Play size={20} />}
+                           Start
+                         </button>
+                      </div>
+                      <p className="text-[9px] text-white/40 italic text-center">Ask the passenger for their 4-digit code</p>
+                    </div>
+                  )}
+                </>
               )}
               {ride.status === "active" && (
-                <button onClick={() => handleUpdateStatus("completed")} className="flex-1 bg-red-500 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                     <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Trip Ongoing</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                    <span className="text-[9px] font-black text-emerald-500/60 uppercase">Final Fare</span>
+                    <span className="text-sm font-black text-emerald-500 flex items-center gap-0.5">
+                      <IndianRupee size={12} /> {firstPassenger?.amountPaid || 0}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {ride.status === "active" && (
+                <button onClick={() => handleUpdateStatus("completed")} className="flex-1 bg-red-500 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-red-500/20">
                   <Square size={20} /> Complete Ride
                 </button>
               )}
@@ -217,10 +314,33 @@ const LiveTrackingPage = () => {
                 <UserIcon size={24} className="text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm truncate">{ride.driver?.name || "Your Driver"}</p>
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-sm truncate">{ride.driver?.name || "Your Driver"}</p>
+                  <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
+                    <span className="text-[8px] font-black text-emerald-500/60 uppercase leading-none">Final Fare</span>
+                    <span className="text-xs font-black text-emerald-500 flex items-center gap-0.5 leading-none">
+                      <IndianRupee size={10} /> {firstPassenger?.amountPaid || 0}
+                    </span>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="px-2 border rounded-full text-[10px] uppercase font-bold border-emerald-500/30 text-emerald-500">Live</span>
-                  <span className="text-xs text-white/50 truncate">{ride.vehicleType || "Vehicle"} • En route</span>
+                  {ride.status !== "active" ? (
+                    <div className="flex flex-col gap-1">
+                        <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
+                          {ride.status === "arrived" ? "Driver has arrived!" : "Driver is heading to your pickup"}
+                        </span>
+                        <p className="text-[10px] text-white/50">
+                          {ride.status === "arrived" 
+                            ? "Please share your OTP with the driver to start the trip." 
+                            : "Your OTP is waiting in your notifications."}
+                        </p>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="px-2 border rounded-full text-[10px] uppercase font-bold border-emerald-500/30 text-emerald-500">Live</span>
+                      <span className="text-xs text-white/50 truncate">{ride.vehicleType || "Vehicle"} • En route</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

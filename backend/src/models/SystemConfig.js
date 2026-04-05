@@ -8,31 +8,75 @@ const { Schema } = mongoose;
 const SystemConfigSchema = new Schema(
     {
         // ── Platform Settings ──────────────────────────────────────────────────
-        commission: { type: String, default: "" },     // Platform fee percentage
-        maxRadius: { type: String, default: "" },    // Max booking distance
-        surgeMultiplier: { type: String, default: "" },    // Global surge heuristic
-
-        // ── Pricing Metadata (Copy of FareConfig for fast frontend lookup) ──────
+        commission: { type: String, default: "0" },     // Platform fee percentage
+        maxRadius: { type: String, default: "3.0" },      // Max booking distance
+        
+        // ── Ride Pricing Configuration ──────────────────────────────────────────
+        // Categories: MOTO, EVMOTO, AUTO, EVAUTO, GO, EVGO, PRIME, XL
         pricing: {
-            Sedan: {
-                baseFare: { type: String, default: "" },
-                costPerKm: { type: String, default: "" }
+            MOTO: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.8" }
             },
-            SUV: {
-                baseFare: { type: String, default: "" },
-                costPerKm: { type: String, default: "" }
+            EVMOTO: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.5" }
             },
-            Hatchback: {
-                baseFare: { type: String, default: "" },
-                costPerKm: { type: String, default: "" }
+            AUTO: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.8" }
             },
-            Auto: {
-                baseFare: { type: String, default: "" },
-                costPerKm: { type: String, default: "" }
+            EVAUTO: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.5" }
             },
-            Bike: {
-                baseFare: { type: String, default: "" },
-                costPerKm: { type: String, default: "" }
+            GO: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.8" }
+            },
+            EVGO: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.5" }
+            },
+            PRIME: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.8" }
+            },
+            XL: {
+                baseFare: { type: String, default: "0" },
+                costPerKm: { type: String, default: "0" },
+                perMinRate: { type: String, default: "0" },
+                minFare: { type: String, default: "0" },
+                nightCharge: { type: String, default: "0" },
+                surgeCap: { type: String, default: "1.8" }
             }
         },
 

@@ -118,7 +118,7 @@ const RideRequestDetailsPage = () => {
       {/* Map View - Dominant Area */}
       <div className="h-[42vh] w-full relative">
         <Suspense fallback={<div className="h-full w-full bg-slate-900 border-indigo-500 animate-pulse" />}>
-           <RideMap 
+            <RideMap 
               pickup={{ 
                 lat: booking.passengerSource?.location?.coordinates[1], 
                 lng: booking.passengerSource?.location?.coordinates[0], 
@@ -130,10 +130,15 @@ const RideRequestDetailsPage = () => {
                 name: booking.passengerDestination?.address 
               }}
               userLocation={null}
-              allRoutes={[]}
+              allRoutes={ride.routeCoords?.length ? [{
+                id: ride._id,
+                coords: ride.routeCoords.map(c => [c[1], c[0]]),
+                color: "#6366f1",
+                label: "Planned Route"
+              }] : []}
               availableRides={[]}
               selectedRouteIdx={0}
-              isNavigating={true} 
+              isNavigating={false} 
            />
         </Suspense>
         
@@ -146,7 +151,7 @@ const RideRequestDetailsPage = () => {
                 </div>
                 <div className="h-6 w-[1px] bg-(--card-border)" />
                 <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-black text-(--text-dim) uppercase">Earnings</span>
+                    <span className="text-[9px] font-black text-(--text-dim) uppercase">Final Fare</span>
                     <span className="text-sm font-black text-emerald-500">₹{booking.amountPaid}</span>
                 </div>
             </div>

@@ -11,6 +11,17 @@ import { getMultipleRoutes, getTrafficCondition } from "../utils/geocode";
 import { useGeoNavigation } from "../hooks/useGeoNavigation";
 import api from "../services/api";
 
+const VEHICLE_METADATA = {
+  MOTO: { name: "Bike", capacity: 1, desc: "Affordable bike rides", icon: "🏍️", tag: "" },
+  EVMOTO: { name: "Electric Bike", capacity: 1, desc: "Eco-friendly bike rides", icon: "🌱🏍️", tag: "Eco" },
+  AUTO: { name: "Auto", capacity: 3, desc: "Quick city transport", icon: "🛺", tag: "" },
+  EVAUTO: { name: "Electric Auto", capacity: 3, desc: "Green city transport", icon: "🌱🛺", tag: "Eco" },
+  GO: { name: "GO", capacity: 4, desc: "Affordable Hatchback", icon: "🚕", tag: "" },
+  EVGO: { name: "Electric GO", capacity: 4, desc: "Sustainable Hatchback", icon: "🌱🚕", tag: "Eco" },
+  PRIME: { name: "Prime Sedan", capacity: 4, desc: "Top-rated comfort sedans", icon: "🚗", tag: "Premium" },
+  XL: { name: "SUV XL", capacity: 6, desc: "Spacious SUVs for clans", icon: "🚙", tag: "Spacious" }
+};
+
 const RideMap = lazy(() => import("../components/map/RideMap"));
 
 // ─── Map Skeleton ─────────────────────────────────────────────────────────────
@@ -89,46 +100,74 @@ function RouteCard({ route, isSelected, onClick }) {
 }
 
 // ─── Published Ride Card ──────────────────────────────────────────────────────
-function PublishedRideCard({ ride, isSelected, onClick }) {
-  const dep = new Date(ride.departureTime);
+function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0 }) {
+  const meta = VEHICLE_METADATA[ride.vehicleType?.toUpperCase()] || { name: ride.vehicleType, capacity: 4, desc: "Safe city ride", icon: "🚗" };
+  const arrivalText = "2 mins away"; // Mocked dynamic arrival
+  const dropTime = durationMin > 0 
+    ? new Date(Date.now() + durationMin * 60000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      width: "100%", padding: "10px 12px", borderRadius: "12px",
-      border: `2px solid ${isSelected ? "rgba(99,102,241,0.65)" : "var(--card-border)"}`,
-      background: isSelected ? "rgba(99,102,241,0.10)" : "transparent",
+      width: "100%", padding: "14px 16px", borderRadius: "20px",
+      border: `2px solid ${isSelected ? "#2563eb" : "var(--card-border)"}`,
+      background: isSelected ? "rgba(37,99,235,0.04)" : "var(--card-bg)",
       cursor: "pointer", textAlign: "left",
-      transition: "all 0.18s ease", fontFamily: "'Inter',sans-serif",
-      boxShadow: isSelected ? "0 0 0 3px rgba(99,102,241,0.12)" : "none",
+      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+      fontFamily: "'Inter', sans-serif",
+      boxShadow: isSelected ? "0 8px 24px -12px rgba(37,99,235,0.3)" : "none",
+      position: 'relative',
+      marginBottom: '8px'
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: "50%", background: "var(--primary-color, #6366f1)",
-          display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", fontWeight: "bold",
-          color: "#fff"
+      <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1 }}>
+        {/* Left: Icon/Badge */}
+        <div style={{ 
+          width: "56px", height: "56px", 
+          display: "flex", alignItems: "center", justifyItems: "center",
+          background: isSelected ? "rgba(37,99,235,0.1)" : "var(--bg-main)",
+          borderRadius: "16px", flexShrink: 0
         }}>
-          {ride.driver?.profileImage ? <img src={ride.driver.profileImage} alt="" style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover'}} /> : (ride.driver?.name?.[0] || 'D')}
-        </div>
-        <div>
-          <div style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
-            {ride.driver?.name || "Driver"} · {ride.vehicleType || "Car"}
+          <div style={{ width: '100%', textAlign: 'center', fontSize: '28px' }}>
+            {meta.icon}
           </div>
-          <div style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
-            {ride.status === 'active' ? (
-                <span style={{ color: "#4ade80", fontWeight: 700 }}>● LIVE</span>
-            ) : ride.status === 'full' ? (
-                <span style={{ color: "#ef4444", fontWeight: 700 }}>● FULL</span>
-            ) : null}
-            <span>{dep.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}</span>
+        </div>
+
+        {/* Middle: Data */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+            <span style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-main)" }}>
+                {meta.name}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.6 }}>
+                <UserIcon size={12} fill="currentColor" />
+                <span style={{ fontSize: '11px', fontWeight: 700 }}>{meta.capacity}</span>
+            </div>
+            {meta.tag && (
+                 <span style={{ 
+                    fontSize: "9px", fontWeight: 900, px: "6px", py: "2px", 
+                    background: "#4ade8020", color: "#4ade80", borderRadius: "4px",
+                    textTransform: 'uppercase', letterSpacing: '0.04em', padding: '1px 5px'
+                  }}>{meta.tag}</span>
+            )}
+          </div>
+          
+          <p style={{ margin: 0, fontSize: "11px", color: "var(--text-dim)", fontWeight: 500, marginBottom: "4px" }}>
+            {meta.desc}
+          </p>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
+             <span style={{ color: "var(--text-dim)" }}>{arrivalText}</span>
+             <span style={{ color: "var(--text-dim)", opacity: 0.3 }}>•</span>
+             <span style={{ color: "var(--text-dim)" }}>{dropTime ? `Drop ${dropTime}` : "Arriving soon"}</span>
           </div>
         </div>
       </div>
-      <div style={{ textAlign: "right" }}>
-        <div style={{ margin: 0, fontSize: "16px", fontWeight: 900, color: isSelected ? "#a5b4fc" : "var(--text-main)" }}>
+
+      {/* Right: Price */}
+      <div style={{ textAlign: "right", marginLeft: '12px' }}>
+        <div style={{ fontSize: "18px", fontWeight: 900, color: "var(--text-main)" }}>
           ₹{ride.price}
-        </div>
-        <div style={{ margin: 0, fontSize: "10px", color: "var(--text-dim)" }}>
-          {ride.distanceKm ? `~${ride.distanceKm}km` : "Live"}
         </div>
       </div>
     </button>
@@ -270,14 +309,33 @@ const RideMapPage = () => {
   const canNavigate = pickup && dropoff && routeCoords.length > 0;
   const handleToggleNavigation = () => nav.isNavigating ? nav.stopNavigation() : nav.startNavigation();
 
-  // Fare estimate is now included in the availableRides response
+  // Update fare estimate whenever ride or route changes — USE ACTUAL ROAD DISTANCE
   useEffect(() => {
-    if (selectedPublishedRide) {
-       setFareEstimate({ totalFare: selectedPublishedRide.price });
-    } else {
-       setFareEstimate(null);
-    }
-  }, [selectedPublishedRide]);
+    const fetchFare = async () => {
+      if (!selectedPublishedRide || !selectedRoute) {
+        setFareEstimate(null);
+        return;
+      }
+      
+      try {
+        const res = await api.get("/published-rides/fare-estimate", {
+          params: {
+            rideId: selectedPublishedRide._id,
+            distanceKm: selectedRoute.distanceKm // PURE ROAD DISTANCE
+          }
+        });
+        if (res.data.success) {
+          setFareEstimate(res.data.data);
+        }
+      } catch (err) {
+        console.error("Fare estimate failed:", err);
+        // Fallback to ride list price if API fails
+        setFareEstimate({ totalFare: selectedPublishedRide.price });
+      }
+    };
+
+    fetchFare();
+  }, [selectedPublishedRide, selectedRoute]);
 
   const handleProceed = async () => {
     if (!selectedPublishedRide || !pickup || !dropoff) return;
@@ -476,8 +534,13 @@ const RideMapPage = () => {
                   {availableRides.map((ride, idx) => (
                     <PublishedRideCard
                       key={ride._id}
-                      ride={ride}
+                      ride={{
+                        ...ride,
+                        // If selected, use the precise calculated fare instead of the general estimate
+                        price: (idx === selectedRideIdx && fareEstimate) ? fareEstimate.totalFare : ride.price
+                      }}
                       isSelected={idx === selectedRideIdx}
+                      durationMin={selectedRoute.durationMin}
                       onClick={() => setSelectedRideIdx(idx)}
                     />
                   ))}

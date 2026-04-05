@@ -1,73 +1,102 @@
 # 🛡️ RouteMate: Database Schema & Workflow Architecture
 
-This document clarifies the 11 MongoDB collections in RouteMate and explains exactly what each is used for.
+This document clarifies the 11 MongoDB collections in RouteMate and provides a deep dive into the synchronization between **PublishedRide** and **Trip** models.
 
 ---
 
 ## 1. 📂 Core Models (Active Booking Flow)
 
 ### 👤 User (`models/User.js`)
-- **Use Case**: The foundation of the platform's identity. 
-- **Working**: Stores credentials, roles (`passenger`, `driver`, `admin`), and personal info. Every other document in the system references a `User` ID.
+- **Use Case**: Identity and Access Management.
+- **Working**: Stores credentials, roles (`passenger`, `driver`, `admin`), and personal info. Every other document references this ID.
 
 ### 🚗 DriverProfile (`models/DriverProfile.js`)
-- **Use Case**: Specific to the driver side of the marketplace.
-- **Working**: Stores KYC documents (Aadhar, License), vehicle details (RC Book, verification status), and real-time availability/location.
+- **Use Case**: Driver verification and live status.
+- **Working**: Stores KYC, vehicle details, and real-time availability/location.
 
 ### 🗺️ PublishedRide (`models/PublishedRide.js`)
-- **Use Case**: The core carpooling/ride-sharing engine.
-- **Working**: Allows drivers to post a "Future Route". It manages multiple seat bookings and ensures synchronization between drivers and interested passengers.
+- **Use Case**: The "Vehicle" or "Pool" state.
+- **Working**: Represents a driver's intention to travel a route. It can hold multiple `bookings`. It tracks the overall vehicle status (open, full, arrived, active).
 
 ### 📍 Trip (`models/Trip.js`)
-- **Use Case**: The archival record of every completed or cancelled movement.
-- **Working**: Acts as the system's "History" ledger. While `PublishedRide` handles the booking, `Trip` stores the finalized details used for stats, revenue calculation, and historical logs.
-
-### 🔔 Notification (`models/Notification.js`)
-- **Use Case**: Communication and deep-linking.
-- **Working**: Stores every alert sent to a user. Key fields like `link` determine where a user lands when they tap a notification (e.g., the Driver Request Details page).
-
-### ⚙️ SystemConfig (`models/SystemConfig.js`)
-- **Use Case**: Global administrative control.
-- **Working**: Stores platform-wide constants like commission rates and global surge multipliers.
+- **Use Case**: The "Journey" or "Transaction" state.
+- **Working**: Represents a specific passenger's ride from A to B. It is created when a driver accepts a booking. It tracks the passenger's experience (searching, matched, arrived, ongoing, completed).
 
 ---
 
-## 2. 🧩 Feature-Specific Models (Use Cases)
+## 2. 🔄 Deep Sync: PublishedRide ↔ Trip
 
-### 💰 FareConfig (`models/FareConfig.js`)
-- **Use Case**: Per-vehicle pricing refinement.
-- **Working**: Allows the system to have different base rates for different vehicle categories (e.g., ₹20 for Bike vs ₹50 for Sedan). It ensures that fare estimates are contextually accurate for the vehicle type requested.
+While **PublishedRide** tracks the driver's vehicle, the **Trip** tracks the passenger's journey. They are connected via the `publishedRide` field in the Trip model.
 
-### 🌟 Review (`models/Review.js`)
-- **Use Case**: Trust and Safety.
-- **Working**: Stores ratings and feedback between passengers and drivers after a ride. This data is used to calculate the "Average Rating" displayed on profiles.
+### Lifecycle Status Mapping
+The system ensures that when a driver updates their status, all associated passenger trips are synchronized.
 
-### 🆘 SOS (`models/SOS.js`)
-- **Use Case**: Emergency Response.
-- **Working**: Tracks emergency triggers during a live ride. It records the location and timestamp of the alert, allowing admins or emergency contacts to be notified instantly.
-
-### 💳 WalletTransaction (`models/WalletTransaction.js`)
-- **Use Case**: Financial Accountability.
-- **Working**: Records every credit/debit to a user's account balance. It is essential for tracking payouts to drivers and payments from passengers.
-
-### 🏠 SavedPlace (`models/SavedPlace.js`)
-- **Use Case**: User Convenience.
-- **Working**: Stores recurring addresses (Home, Work, Gym) for passengers. It allows for "One-Tap" destination setting in the booking UI.
+| Event | PublishedRide Status | Trip Phase | Description |
+| :--- | :--- | :--- | :--- |
+| **Driver Posts** | `open` | *N/A* | Driver offers a ride on a specific route. |
+| **Request Recv** | `full` | *N/A* | Passenger requests a seat. Booking is `pending`. |
+| **Driver Accepts**| `active` | `matched` | Trip created. OTP generated and sent to passenger. |
+| **Driver Arrives**| `arrived` | `arrived` | Driver reached pickup. Passenger notified to share OTP. |
+| **Trip Starts** | `active` | `ongoing` | Driver enters 4-digit OTP. Trip officially starts. |
+| **Trip Ends** | `completed` | `completed` | Driver completes ride. Stats updated. |
 
 ---
 
-## 💾 Summary of "Working" Collections
+## 📈 Graph-wise Working Flow
+
+```mermaid
+graph TD
+    A[Driver: Publish Ride] -->|status: open| B(PublishedRide Created)
+    B --> C[Passenger: Search & Book]
+    C -->|status: full| D{Driver: Respond}
+    
+    D -->|Reject| E[Status: open]
+    D -->|Accept| F[Booking Confirmed]
+    
+    F -->|ride: active| G[Trip Created: matched]
+    G --> H[Driver Arrival]
+    
+    H -->|ride: arrived| I[Trip: arrived]
+    I --> J{Enter OTP}
+    
+    J -->|Verified| K[Trip: ongoing]
+    K --> L[Driver: Finish]
+    
+    L -->|ride: completed| M[Trip: completed]
+    M --> N[Earnings & Stats Updated]
+```
+
+---
+
+## 3. 🧩 Supporting Models
 
 | Model | Status | Use Case / Working |
 | :--- | :--- | :--- |
-| **User** | Active | Core Identity & RBAC |
-| **DriverProfile** | Active | Verification & Live Status |
-| **PublishedRide** | Active | Real-time Booking Match |
-| **Trip** | Active | History & Revenue Stats |
-| **Notification** | Active | App Alerts & Deep Links |
-| **SystemConfig** | Active | Global Admin Controls |
-| **FareConfig** | Active | Vehicle-specific Pricing |
-| **Review** | Active | Ratings & Platform Trust |
-| **SOS** | Active | Real-time Safety Triggers |
-| **WalletTransaction**| Active | Financial History/Audits |
-| **SavedPlace** | Active | UX: Fast Address Selection |
+| **Notification** | Active | App Alerts, OTP Delivery & Deep Links |
+| **SystemConfig** | Active | Global Fare Settings & Commission Rates |
+| **FareConfig** | Active | Vehicle-specific Pricing Logic |
+| **Review** | Active | Passenger/Driver Ratings & Feedback |
+| **SOS** | Active | Real-time Safety Triggers & Location Logging |
+| **WalletTransaction**| Active | Financial Audits, Payouts & Credits |
+| **SavedPlace** | Active | Fast Address Selection for UX |
+
+---
+
+## 🚀 The Working Flow (Step-by-Step)
+
+1. **Discovery**: Driver publishes a route (`PublishedRide`). Passenger searches using source/destination cities and road-aware proximity.
+2. **Booking**: Passenger selects a ride. The **Fare Engine** calculates the "Final Fare" based on road distance. Booking is saved as `pending` inside the `PublishedRide`.
+3. **Acceptance**: Driver is notified. Upon "Accept", the system:
+    - Sets `PublishedRide` to `active`.
+    - Creates a new **Trip** record linked to that ride.
+    - Generates a **4-digit OTP** stored in the Trip.
+    - Notifies the passenger with the "Booking Confirmed" message + OTP.
+4. **Pickup**: Driver navigates to the passenger. When they click "I Have Arrived":
+    - Both `PublishedRide` and `Trip` switch to `arrived`.
+    - Passenger gets a notification: "Share OTP to start".
+5. **On-Trip**: Driver enters the OTP.
+    - `Trip.phase` becomes `ongoing`.
+    - `Trip.startedAt` is recorded.
+6. **Completion**: Driver arrives at the drop-off and clicks "Complete Ride":
+    - Both sync to `completed`.
+    - Final stats (Trips count, Earnings) are incremented in User and DriverProfile models.

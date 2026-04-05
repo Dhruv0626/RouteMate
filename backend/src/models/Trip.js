@@ -4,7 +4,8 @@ const { Schema } = mongoose;
 const TripSchema = new Schema(
   {
     passenger: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    driver:    { type: Schema.Types.ObjectId, ref: "User" },   // null until matched
+    driver: { type: Schema.Types.ObjectId, ref: "User" },   // null until matched
+    publishedRide: { type: Schema.Types.ObjectId, ref: "PublishedRide" }, // if created from a shared ride
 
     // ── Full lifecycle tracked by phase ────────────────────────────────────
     phase: {
@@ -12,6 +13,7 @@ const TripSchema = new Schema(
       enum: [
         "searching",     // passenger requested, finding driver
         "matched",       // driver accepted, heading to pickup
+        "arrived",       // driver reached pickup point, waiting for OTP
         "ongoing",       // OTP verified, ride started
         "completed",     // ride finished
         "cancelled",     // cancelled at any phase
@@ -21,49 +23,50 @@ const TripSchema = new Schema(
 
     // ── Locations (GeoJSON) ────────────────────────────────────────────────
     source: {
-      address:  { type: String, required: true },
+      address: { type: String, required: true },
       location: {
-        type:        { type: String, default: "Point" },
+        type: { type: String, default: "Point" },
         coordinates: { type: [Number], required: true },       // [lng, lat]
       },
     },
 
     destination: {
-      address:  { type: String, required: true },
+      address: { type: String, required: true },
       location: {
-        type:        { type: String, default: "Point" },
+        type: { type: String, default: "Point" },
         coordinates: { type: [Number], required: true },
       },
     },
 
     vehicleTypeRequested: {
       type: String,
-      enum: ["Sedan", "SUV", "Hatchback", "Auto", "Bike"],
+      enum: ["MOTO", "EVMOTO", "AUTO", "EVAUTO", "GO", "EVGO", "PRIME", "XL"],
     },
 
     // ── Driver Matching ────────────────────────────────────────────────────
     driversNotified: [{ type: Schema.Types.ObjectId, ref: "User" }],
     driversRejected: [{ type: Schema.Types.ObjectId, ref: "User" }],
-    expiresAt:       { type: Date },                           // auto-cancel if no driver found
+    expiresAt: { type: Date },                           // auto-cancel if no driver found
 
     // ── OTP ────────────────────────────────────────────────────────────────
-    otp:         { type: String },                             // 4-digit, shown to passenger
+    otp: { type: String },                             // 4-digit, shown to passenger
     otpVerified: { type: Boolean, default: false },
 
     // ── Distance & Duration ────────────────────────────────────────────────
     distanceEstimate: { type: Number },                        // km  — shown before ride
     durationEstimate: { type: Number },                        // min — shown before ride
-    distanceActual:   { type: Number },                        // km  — filled on completion
-    durationActual:   { type: Number },                        // min — filled on completion
+    distanceActual: { type: Number },                        // km  — filled on completion
+    durationActual: { type: Number },                        // min — filled on completion
 
     // ── Fare ───────────────────────────────────────────────────────────────
     fare: {
-      baseFare:     { type: Number, default: 0 },
+      baseFare: { type: Number, default: 0 },
       distanceFare: { type: Number, default: 0 },
-      timeFare:     { type: Number, default: 0 },
-      surgeFare:    { type: Number, default: 0 },
-      discount:     { type: Number, default: 0 },
-      total:        { type: Number, default: 0 },
+      timeFare: { type: Number, default: 0 },
+      surgeFare: { type: Number, default: 0 },
+      discount: { type: Number, default: 0 },
+      co2Saved: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
     },
 
     surgeMultiplier: { type: Number, default: 1.0 },
@@ -73,15 +76,15 @@ const TripSchema = new Schema(
     paymentStatus: { type: String, enum: ["pending", "paid", "failed"], default: "pending" },
 
     // ── Cancellation ───────────────────────────────────────────────────────
-    cancelledBy:        { type: String, enum: ["passenger", "driver", "system"] },
+    cancelledBy: { type: String, enum: ["passenger", "driver", "system"] },
     cancellationReason: { type: String, default: "" },
 
     // ── Phase Timestamps ───────────────────────────────────────────────────
-    matchedAt:       { type: Date },
+    matchedAt: { type: Date },
     driverArrivedAt: { type: Date },
-    startedAt:       { type: Date },
-    completedAt:     { type: Date },
-    cancelledAt:     { type: Date },
+    startedAt: { type: Date },
+    completedAt: { type: Date },
+    cancelledAt: { type: Date },
   },
   { timestamps: true }
 );

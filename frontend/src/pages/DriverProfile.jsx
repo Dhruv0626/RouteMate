@@ -175,7 +175,7 @@ const DriverProfile = () => {
       });
 
       if (response.data.success && phoneResponse.data.success) {
-        setProfile(response.data.data.profile);
+        setProfile(response.data.data);
         setSuccess("Profile updated successfully!");
         setIsEditing(false);
       }

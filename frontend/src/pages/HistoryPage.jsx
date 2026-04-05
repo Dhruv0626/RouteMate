@@ -71,7 +71,8 @@ const HistoryPage = () => {
             date: new Date(ride.createdAt).toLocaleString('en-IN', { 
                 day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
             }),
-            rideType: ride.vehicleTypeRequested ? (ride.vehicleTypeRequested.charAt(0).toUpperCase() + ride.vehicleTypeRequested.slice(1)) : "Standard",
+            rideType: ride.vehicleTypeRequested || "PRIME",
+            co2Saved: ride.fare?.co2Saved || 0,
             paymentMethod: ride.paymentMethod?.toUpperCase() || "CASH",
             cancelReason: ride.cancellationReason
           }));
@@ -289,6 +290,12 @@ const HistoryPage = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-display font-bold text-(--text-main)">{ride.name}</h3>
+                        {ride.co2Saved > 0 && (
+                          <div className="flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                            <Zap size={10} className="text-emerald-500 fill-emerald-500" />
+                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-tight">Green Ride</span>
+                          </div>
+                        )}
                         {(role === "driver" ? ride.rating : ride.rating) && (
                           <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full">
                             <Star size={14} className="text-amber-500 fill-amber-500" />
@@ -355,7 +362,7 @@ const HistoryPage = () => {
                       <div className="bg-(--card-bg) rounded-xl p-4 space-y-2">
                         <h4 className="font-semibold text-(--text-main) mb-3 flex items-center gap-2">
                           <IndianRupee size={16} className={role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"} />
-                          {role === "driver" ? "Earnings Breakdown" : "Fare Breakdown"}
+                          {role === "driver" ? "Final Earnings Breakdown" : "Final Fare Breakdown"}
                         </h4>
                         <div className="flex justify-between text-sm">
                           <span className="text-(--text-dim)">Base Fare</span>
@@ -369,6 +376,14 @@ const HistoryPage = () => {
                           <span className="text-(--text-dim)">Time ({ride.duration} min)</span>
                           <span className="font-semibold text-(--text-main)">₹{ride.timeFare}</span>
                         </div>
+                        {ride.co2Saved > 0 && (
+                          <div className="flex justify-between text-sm py-1 px-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
+                                <Zap size={12} className="fill-emerald-500" /> Environment Benefit
+                            </span>
+                            <span className="font-black text-emerald-600 dark:text-emerald-400">{ride.co2Saved}kg CO2 Saved</span>
+                          </div>
+                        )}
                         {role === "driver" && ride.surge > 0 && (
                           <div className="flex justify-between text-sm">
                             <span className="text-(--text-dim)">Surge</span>

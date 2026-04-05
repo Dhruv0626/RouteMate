@@ -1,22 +1,26 @@
 import TripModel from "../models/Trip.js";
-import FareConfig from "../models/FareConfig.js";
+import SystemConfig from "../models/SystemConfig.js";
 
 /**
  * Helper to calculate fare based on distance and vehicle type using FareConfig
  */
 const calculateFare = async (distanceKm, vehicleType) => {
-  const config = await FareConfig.findOne({ vehicleType: vehicleType });
-  if (!config) {
-    // Attempt fallback to Sedan or generic default
-    const fallback = await FareConfig.findOne({ vehicleType: "Sedan" });
-    if (!fallback) return 150; 
-    
-    const totalFare = (fallback.baseFare + (fallback.perKmRate * distanceKm)) * fallback.surgeMultiplier;
-    return Math.round(totalFare);
-  }
+  const sys = await SystemConfig.findOne();
+  if (!sys) return 150; // Fallback
 
-  const totalFare = (config.baseFare + (config.perKmRate * distanceKm)) * config.surgeMultiplier;
-  return Math.round(totalFare);
+  const catKey = vehicleType?.toUpperCase() || "PRIME";
+  const pricing = sys.pricing[catKey] || sys.pricing["PRIME"];
+  
+  if (!pricing) return 150;
+
+  const parse = (val) => parseFloat(String(val || "0").replace(/[^\d.]/g, ""));
+
+  const base = parse(pricing.baseFare);
+  const rate = parse(pricing.costPerKm);
+  const minFare = parse(pricing.minFare);
+  
+  const total = Math.round(base + (rate * distanceKm));
+  return Math.max(total, minFare);
 };
 
 // ─── Get Passenger History ────────────────────────────────────────────────────

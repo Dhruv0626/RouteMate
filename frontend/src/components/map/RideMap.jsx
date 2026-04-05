@@ -203,7 +203,7 @@ const RideMap = ({
             RENDER ORDER: non-selected first (underneath), selected last (on top)
             KEY includes selection state to force react-leaflet to remount and
             correctly apply new pathOptions whenever selection changes.          */}
-        {!isNavigating && (() => {
+        {(!isNavigating || !showSplit) && (() => {
           // Split: draw unselected below, selected on top
           const unselected = allRoutes.filter((_, i) => i !== selectedRouteIdx);
           const selected   = allRoutes.filter((_, i) => i === selectedRouteIdx);

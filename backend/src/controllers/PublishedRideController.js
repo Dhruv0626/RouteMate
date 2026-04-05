@@ -1,9 +1,9 @@
 import PublishedRideModel from "../models/PublishedRide.js";
 import DriverProfileModel from "../models/DriverProfile.js";
-import FareConfig from "../models/FareConfig.js";
 import SystemConfig from "../models/SystemConfig.js";
 import NotificationModel from "../models/Notification.js";
 import TripModel from "../models/Trip.js";
+import UserModel from "../models/User.js";
 
 // ─── Haversine distance (km) ──────────────────────────────────────────────────
 const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
@@ -18,57 +18,123 @@ const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+// ─── Help: Demand Ratio (Requests / Drivers) ──────────────────────────────────
+const getDemandRatio = async () => {
+    try {
+        const driversCount = await DriverProfileModel.countDocuments({ isOnline: true, isApproved: true });
+        const requestCount = await PublishedRideModel.countDocuments({ status: "open" });
+
+        if (driversCount === 0) return requestCount > 0 ? 3.0 : 1.0; // Max surge if no drivers but requests exist
+        return requestCount / driversCount;
+    } catch (error) {
+        return 1.0;
+    }
+};
+
+// ─── Help: Check if current time is night (10PM - 6AM) ─────────────────────────
+const isNightTime = () => {
+    const hour = new Date().getHours();
+    return hour >= 22 || hour < 6;
+};
+
 // ─── Calculate fare from SystemConfig based on distance ─────────────────────────
-const calcFare = async (distanceKm, vehicleType) => {
+// ─── Smart Ride Price Calculation Engine (RouteMAte) ─────────────────────────
+const calcFare = async ({
+    category,
+    distanceKm,
+    timeMin = 20, 
+    demandRatio = 1.0,
+    isNight = false
+}) => {
     try {
         const sys = await SystemConfig.findOne();
-        
-        let baseFreq = 0;
-        let perKmRate = 0;
-        let surge = 1.0;
+        if (!sys) throw new Error("System configuration not found");
 
-        const parseNum = (val) => {
+        const catKey = category.toUpperCase();
+        const pricing = sys.pricing[catKey];
+        if (!pricing) throw new Error(`Category ${category} not found in system config`);
+
+        const parse = (val) => {
             if (!val) return 0;
-            const cleaned = val.toString().replace(/[^0-9.]/g, "");
-            return parseFloat(cleaned) || 0;
+            // Clean string from symbols like ₹, %, x and parse
+            const cleaned = val.toString().replace(/[^\d.]/g, "");
+            return parseFloat(cleaned || "0");
         };
 
-        if (sys) {
-            // Map common labels to DB pricing keys
-            const mapping = {
-                "4-Wheeler": "Sedan",
-                "Sedan": "Sedan",
-                "SUV": "SUV",
-                "Hatchback": "Hatchback",
-                "Auto": "Auto",
-                "Bike": "Bike"
-            };
+        const base_fare = parse(pricing.baseFare);
+        const per_km_rate = parse(pricing.costPerKm);
+        const per_min_rate = parse(pricing.perMinRate);
+        const night_charge = parse(pricing.nightCharge);
+        const min_fare = parse(pricing.minFare);
+        const surge_cap = parse(pricing.surgeCap);
 
-            const key = mapping[vehicleType] || "Sedan";
-            const pricing = sys.pricing?.[key] || sys.pricing?.Sedan;
+        // Step 1: Subtotal = Base Fare + (Distance KM × Per KM Rate) + (Time Min × Per Min Rate)
+        let subtotal = base_fare + (distanceKm * per_km_rate) + (timeMin * per_min_rate);
 
-            if (pricing) {
-                baseFreq = parseNum(pricing.baseFare);
-                perKmRate = parseNum(pricing.costPerKm);
-            }
+        // Step 2: Night Charge is FLAT - add to subtotal if it's night time
+        const night_val = isNight ? night_charge : 0;
+        subtotal += night_val;
 
-            surge = parseNum(sys.surgeMultiplier) || 1.0;
+        // Step 3: Calculate Surge Multiplier based on demand_ratio
+        let surge_multiplier = 1.0;
+        let surge_label = "No Surge";
+
+        if (demandRatio > 2.5) {
+            surge_multiplier = surge_cap;
+            surge_label = "Extreme Surge";
+        } else if (demandRatio > 2.0) {
+            surge_multiplier = 1.6;
+            surge_label = "High Surge";
+        } else if (demandRatio > 1.5) {
+            surge_multiplier = 1.4;
+            surge_label = "Medium Surge";
+        } else if (demandRatio > 1.2) {
+            surge_multiplier = 1.2;
+            surge_label = "Low Surge";
         }
 
-        // Exact Formula: (Base + (Distance * Rate)) * Surge
-        const subtotal = baseFreq + (perKmRate * distanceKm);
-        const total = Math.round(subtotal * surge);
+        // Never exceed the surge_cap
+        if (surge_multiplier > surge_cap) {
+            surge_multiplier = surge_cap;
+        }
 
-        return { 
-            fullAmount: total, 
-            baseFare: baseFreq, 
-            perKmRate, 
-            surgeMultiplier: surge,
-            minimumFare: baseFreq 
+        // Step 4: Final Price = MAX(Subtotal × Surge Multiplier, Min Fare)
+        let final_price_raw = subtotal * surge_multiplier;
+        const min_fare_applied = final_price_raw < min_fare;
+        let final_price = Math.max(final_price_raw, min_fare);
+
+        // Step 5: Round Final Price to nearest whole Rupee (₹)
+        final_price = Math.round(final_price);
+
+        // EV SPECIAL RULES: Calculate CO2 Saved
+        const is_ev = ["EVMOTO", "EVAUTO", "EVGO"].includes(catKey);
+        const co2_saved_kg = is_ev ? (distanceKm * 0.12) : 0;
+
+        return {
+            category: category.toLowerCase(),
+            is_ev,
+            distance_km: Math.round(distanceKm * 10) / 10,
+            time_min: Math.round(timeMin),
+            base_fare,
+            distance_charge: Math.round(distanceKm * per_km_rate),
+            time_charge: Math.round(timeMin * per_min_rate),
+            night_charge: night_val,
+            subtotal: Math.round(subtotal),
+            surge_multiplier,
+            surge_label,
+            final_price,
+            min_fare_applied,
+            co2_saved_kg: Number(co2_saved_kg.toFixed(3)),
+            currency: "INR"
         };
     } catch (error) {
-        console.error("Fare Calc Error:", error);
-        return { fullAmount: 0, baseFare: 0, perKmRate: 0, surgeMultiplier: 1.0, minimumFare: 0 };
+        console.error("🔴 RouteMate Fare Engine Error:", error.message);
+        console.error("Context:", { category, distanceKm, timeMin, demandRatio, isNight });
+        return { 
+            error: "Calculation failed", 
+            message: error.message,
+            final_price: 0 // Return 0 so it's visible something is wrong
+        };
     }
 };
 
@@ -102,7 +168,7 @@ export const PublishRide = async (req, res) => {
             totalSeats: 1,
             availableSeats: 1,
             vehicleType: driverProfile.vehicle?.type || "Sedan",
-            routeCoords: sampledCoords, 
+            routeCoords: sampledCoords,
             status: "open",
             bookings: []
         });
@@ -124,15 +190,15 @@ export const GetAvailableRides = async (req, res) => {
         const { sourceCity, destinationCity, date, srcLat, srcLng, dstLat, dstLng } = req.query;
 
         const filter = {
-            status: "open", 
-            departureTime: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } 
+            status: "open",
+            departureTime: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
         };
 
         if (sourceCity) filter["source.address"] = { $regex: sourceCity, $options: "i" };
         if (destinationCity) filter["destination.address"] = { $regex: destinationCity, $options: "i" };
         if (date) {
             const startDate = new Date(date); startDate.setHours(0, 0, 0, 0);
-            const endDate   = new Date(date); endDate.setHours(23, 59, 59, 999);
+            const endDate = new Date(date); endDate.setHours(23, 59, 59, 999);
             filter.departureTime = { $gte: startDate, $lte: endDate };
         }
 
@@ -195,12 +261,19 @@ export const GetAvailableRides = async (req, res) => {
             }
 
             // ── DYNAMIC PRICING: Calculate price for this SPECIFIC ride's category ──
-            // Estimate road distance as 1.3x straight-line distance for more accurate browsing fares
             const straightLineDist = (pSrc && pDst) ? haversineKm(pSrc, pDst) : haversineKm(ride.source.location.coordinates, ride.destination.location.coordinates);
             const estimatedRoadDist = straightLineDist * 1.3;
-            
-            const fareData = await calcFare(estimatedRoadDist, ride.vehicleType || "Sedan");
-            rideObj.price = fareData.fullAmount;
+
+            const demandRatio = await getDemandRatio();
+            const fareData = await calcFare({
+                category: ride.vehicleType || "PRIME",
+                distanceKm: estimatedRoadDist,
+                timeMin: estimatedRoadDist * 2, // 2 mins per km estimate
+                demandRatio,
+                isNight: isNightTime()
+            });
+
+            rideObj.price = fareData.final_price;
             rideObj.fareBreakdown = fareData;
 
             rideObj.vehicle = profile ? {
@@ -233,29 +306,31 @@ export const GetFareEstimate = async (req, res) => {
 
         // ── Use passed road distance if available, else fallback to Haversine ──
         let distanceKm = parseFloat(passedDist);
-        
+
         if (!distanceKm || isNaN(distanceKm)) {
             const pLat = parseFloat(passengerLat), pLng = parseFloat(passengerLng);
-            const dLat = parseFloat(destLat),      dLng = parseFloat(destLng);
+            const dLat = parseFloat(destLat), dLng = parseFloat(destLng);
             distanceKm = (pLat && pLng && dLat && dLng)
                 ? haversineKm([pLng, pLat], [dLng, dLat])
                 : 0;
         }
 
-        const fareData = await calcFare(distanceKm, ride.vehicleType || "Sedan");
-        const finalPrice = fareData.fullAmount;
+        const demandRatio = await getDemandRatio();
+        const fareData = await calcFare({
+            category: ride.vehicleType || "PRIME",
+            distanceKm,
+            timeMin: distanceKm * 2,
+            demandRatio,
+            isNight: isNightTime()
+        });
+        const finalPrice = fareData.final_price;
 
         res.status(200).json({
             success: true,
             data: {
                 distanceKm: Math.round(distanceKm * 10) / 10,
                 totalFare: finalPrice,
-                fareBreakdown: {
-                    baseFare: fareData.baseFare,
-                    perKmRate: fareData.perKmRate,
-                    distanceKm: Math.round(distanceKm * 10) / 10,
-                    surgeMultiplier: fareData.surgeMultiplier,
-                }
+                fareBreakdown: fareData
             }
         });
     } catch (error) {
@@ -288,8 +363,8 @@ export const BookRide = async (req, res) => {
         let distanceKm = parseFloat(passedDist);
 
         if (!distanceKm || isNaN(distanceKm)) {
-            const srcCoords  = passengerSource?.location?.coordinates;
-            const dstCoords  = passengerDestination?.location?.coordinates;
+            const srcCoords = passengerSource?.location?.coordinates;
+            const dstCoords = passengerDestination?.location?.coordinates;
             distanceKm = 0;
             if (srcCoords?.length === 2 && dstCoords?.length === 2 &&
                 srcCoords.some(c => c !== 0) && dstCoords.some(c => c !== 0)) {
@@ -298,24 +373,26 @@ export const BookRide = async (req, res) => {
             }
         }
 
-        const fareData = await calcFare(distanceKm, ride.vehicleType || "Sedan");
-        const amountPaid = fareData.fullAmount;
+        const demandRatio = await getDemandRatio();
+        const fareData = await calcFare({
+            category: ride.vehicleType || "PRIME",
+            distanceKm,
+            timeMin: distanceKm * 2,
+            demandRatio,
+            isNight: isNightTime()
+        });
+        const amountPaid = fareData.final_price;
 
-        const fareBreakdown = {
-            baseFare:        fareData.baseFare,
-            perKmRate:       fareData.perKmRate,
-            distanceKm:      Math.round(distanceKm * 10) / 10,
-            surgeMultiplier: fareData.surgeMultiplier,
-        };
+        const fareBreakdown = fareData;
 
         // Push booking (status = pending until driver confirms)
         ride.bookings.push({
             passenger: passengerId,
             seats: 1,
             bookingType: "private",
-            passengerSource:      passengerSource      || ride.source,
+            passengerSource: passengerSource || ride.source,
             passengerDestination: passengerDestination || ride.destination,
-            distanceKm:           Math.round(distanceKm * 10) / 10,
+            distanceKm: Math.round(distanceKm * 10) / 10,
             amountPaid,
             fareBreakdown,
             status: "pending",
@@ -327,19 +404,19 @@ export const BookRide = async (req, res) => {
         await ride.save();
 
         // ── Notify the driver ─────────────────────────────────────────────────
-        const from = passengerSource?.address      || ride.source.address;
-        const to   = passengerDestination?.address || ride.destination.address;
+        const from = passengerSource?.address || ride.source.address;
+        const to = passengerDestination?.address || ride.destination.address;
 
         await NotificationModel.create({
             recipient: ride.driver._id,
-            sender:    passengerId,
-            title:     "New Ride Booking 🚗",
-            message:   `A passenger requested a ride — ₹${amountPaid} total fare.`,
-            type:      "booking_request",
-            link:      `/driver/dashboard/ride-request/${ride._id}/${ride.bookings[ride.bookings.length - 1]._id}`,
+            sender: passengerId,
+            title: "New Ride Booking 🚗",
+            message: `A passenger requested a ride — Final Price: ₹${amountPaid}.`,
+            type: "booking_request",
+            link: `/driver/dashboard/ride-request/${ride._id}/${ride.bookings[ride.bookings.length - 1]._id}`,
             metadata: {
-                rideId:      ride._id,
-                bookingId:   ride.bookings[ride.bookings.length - 1]._id,
+                rideId: ride._id,
+                bookingId: ride.bookings[ride.bookings.length - 1]._id,
                 amountPaid
             }
         });
@@ -359,6 +436,7 @@ export const BookRide = async (req, res) => {
 
 // ─── Driver: Confirm / Reject a booking ──────────────────────────────────────
 export const RespondToBooking = async (req, res) => {
+    let trip = null;
     try {
         const driverId = req.user.id;
         const { rideId, bookingId } = req.params;
@@ -376,30 +454,36 @@ export const RespondToBooking = async (req, res) => {
 
         if (action === "confirm") {
             booking.status = "confirmed";
-            ride.status = "active"; 
+            ride.status = "active";
 
             // ── CREATE TRIP FOR LIVE TRACKING ──────────────────────────────────
-            await TripModel.create({
+            trip = await TripModel.create({
                 passenger: booking.passenger,
-                driver:    ride.driver,
-                phase:     "matched",
+                driver: ride.driver,
+                publishedRide: ride._id, // LINK TO PUBLISHED RIDE
+                phase: "matched",
                 source: {
-                    address:  booking.passengerSource?.address || ride.source.address,
+                    address: booking.passengerSource?.address || ride.source.address,
                     location: {
-                        type:        "Point",
+                        type: "Point",
                         coordinates: booking.passengerSource?.location?.coordinates || ride.source.location.coordinates
                     }
                 },
                 destination: {
-                    address:  booking.passengerDestination?.address || ride.destination.address,
+                    address: booking.passengerDestination?.address || ride.destination.address,
                     location: {
-                        type:        "Point",
+                        type: "Point",
                         coordinates: booking.passengerDestination?.location?.coordinates || ride.destination.location.coordinates
                     }
                 },
                 distanceEstimate: booking.distanceKm,
                 fare: {
-                    total: booking.amountPaid
+                    total: booking.amountPaid,
+                    baseFare: booking.fareBreakdown?.base_fare || 0,
+                    distanceFare: booking.fareBreakdown?.distance_charge || 0,
+                    timeFare: booking.fareBreakdown?.time_charge || 0,
+                    surgeFare: 0, // already included in breakdown if calculated that way
+                    co2Saved: booking.fareBreakdown?.co2_saved_kg || 0
                 },
                 otp: Math.floor(1000 + Math.random() * 9000).toString(), // Generate 4-digit OTP
                 paymentStatus: "pending"
@@ -414,14 +498,14 @@ export const RespondToBooking = async (req, res) => {
         // Notify passenger
         await NotificationModel.create({
             recipient: booking.passenger,
-            sender:    driverId,
-            title:     action === "confirm" ? "Booking Confirmed ✅" : "Booking Rejected ❌",
-            message:   action === "confirm"
-                ? `Your ride booking was confirmed by the driver! Payment: ₹${booking.amountPaid} (cash to driver).`
+            sender: driverId,
+            title: action === "confirm" ? "Booking Confirmed ✅" : "Booking Rejected ❌",
+            message: action === "confirm"
+                ? `Your ride booking was confirmed! Provide OTP: ${trip?.otp || "----"} to the driver to start the trip. Final Price: ₹${booking.amountPaid}.`
                 : `Your ride booking was rejected by the driver. Please search for another ride.`,
-            type:      action === "confirm" ? "booking_confirmed" : "booking_rejected",
-            link:      `/passenger/dashboard/my-rides`,
-            metadata:  { rideId, bookingId, amountPaid: booking.amountPaid }
+            type: action === "confirm" ? "booking_confirmed" : "booking_rejected",
+            link: `/passenger/dashboard/my-rides`,
+            metadata: { rideId, bookingId, amountPaid: booking.amountPaid, otp: trip?.otp }
         });
 
         res.status(200).json({
@@ -451,16 +535,81 @@ export const GetMyPublishedRides = async (req, res) => {
 export const UpdateRideStatus = async (req, res) => {
     try {
         const { rideId } = req.params;
-        const { status } = req.body; // "active" or "completed"
-        
+        const { status, otp } = req.body; // "arrived", "active" (start) or "completed"
+
         const ride = await PublishedRideModel.findOne({ _id: rideId, driver: req.user.id });
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found or unauthorized" });
-        
+
+        // ── VERIFY OTP IF STARTING RIDE ──
+        if (status === "active") {
+            if (!otp) return res.status(400).json({ success: false, message: "OTP is required to start the ride" });
+            
+            // Find matched or arrived trips for this ride
+            const tripsToStart = await TripModel.find({ publishedRide: rideId, phase: { $in: ["matched", "arrived"] } });
+            if (tripsToStart.length === 0) return res.status(400).json({ success: false, message: "No trips to start" });
+
+            // Check if ANY matched trip matches this OTP
+            const validTrip = tripsToStart.find(t => t.otp === otp);
+            if (!validTrip) return res.status(400).json({ success: false, message: "Invalid OTP. Please check with your passenger." });
+        }
+
         ride.status = status;
         await ride.save();
+
+        // ── UPDATE ASSOCIATED TRIPS ──
+        // Mapping PublishedRide status to Trip phase
+        const tripPhase = status === "active" ? "ongoing" : (status === "completed" ? "completed" : (status === "arrived" ? "arrived" : "matched"));
         
+        // If starting with OTP, only start the one that matches!
+        const query = { publishedRide: rideId, phase: { $ne: "cancelled" } };
+        if (status === "active") query.otp = otp; // Only the one with this OTP
+
+        const trips = await TripModel.find(query);
+        
+        for (const trip of trips) {
+            trip.phase = tripPhase;
+            if (status === "completed") {
+                trip.completedAt = new Date();
+                // Update passenger stats
+                await UserModel.findByIdAndUpdate(trip.passenger, {
+                    $inc: { "passengerStats.totalTrips": 1 }
+                });
+            }
+            if (status === "active") trip.startedAt = new Date();
+            
+            if (status === "arrived") {
+                trip.driverArrivedAt = new Date();
+                
+                // NOTIFY PASSENGER THAT DRIVER ARRIVED
+                await NotificationModel.create({
+                    recipient: trip.passenger,
+                    sender: req.user.id,
+                    title: "Driver Arrived! 🚗",
+                    message: `Your driver has arrived at the pickup location. Share the OTP: ${trip.otp} with the driver to start.`,
+                    type: "driver_arrived",
+                    link: "/passenger/dashboard/my-rides",
+                    metadata: { rideId, otp: trip.otp }
+                });
+            }
+            await trip.save();
+        }
+
+        // ── UPDATE DRIVER STATS ──
+        if (status === "completed") {
+            await DriverProfileModel.findOneAndUpdate(
+                { user: req.user.id },
+                { 
+                    $inc: { 
+                        "stats.totalRides": 1, 
+                        "stats.completedRides": 1 
+                    } 
+                }
+            );
+        }
+
         res.status(200).json({ success: true, message: `Ride marked as ${status}`, data: ride });
     } catch (e) {
+        console.error("Update Ride Status Error:", e);
         res.status(500).json({ success: false, message: "Failed to update ride status" });
     }
 };
