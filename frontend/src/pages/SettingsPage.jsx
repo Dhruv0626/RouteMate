@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Button from "../components/ui/Button";
 import ThemeToggle from "../components/ui/ThemeToggle";
+import api from "../services/api";
 
 const SettingsPage = () => {
   const navigate = useNavigate();

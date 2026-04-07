@@ -67,12 +67,12 @@ router.get(
             if (!user) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             await issueOAuthTokens(user, res);
-            
+
             // Redirect to complete profile if mobile number is missing
-            const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000") 
-                ? "/complete-profile" 
+            const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000")
+                ? "/complete-profile"
                 : `/${user.role}/dashboard`;
-                
+
             res.redirect(`${FRONTEND_URL}${redirectPath}`);
         })(req, res, next);
     }
@@ -103,12 +103,12 @@ router.get(
             if (!user) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             await issueOAuthTokens(user, res);
-            
+
             // Redirect to complete profile if mobile number is missing
-            const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000") 
-                ? "/complete-profile" 
+            const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000")
+                ? "/complete-profile"
                 : `/${user.role}/dashboard`;
-                
+
             res.redirect(`${FRONTEND_URL}${redirectPath}`);
         })(req, res, next);
     }
