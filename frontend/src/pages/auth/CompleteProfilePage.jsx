@@ -1,27 +1,39 @@
 import React, { useState, useEffect } from "react";
 import { Phone, ArrowRight, ShieldCheck } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import api from "../../services/api";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import Loader from "../../components/ui/Loader";
 
 const CompleteProfilePage = () => {
   const navigate = useNavigate();
-  const { user, setUser } = useAuth();
+  const { user, setUser, loading: authLoading } = useAuth();
   const [mobileNumber, setMobileNumber] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Redirect if already completed or not logged in
+  
+  // ── Redirect Protection Logic ──
   useEffect(() => {
+    if (authLoading) return;
+
+    // If no user is logged in, unauthorized — go to signin
     if (!user) {
       navigate("/signin", { replace: true });
-    } else if (user.Mobile_no && user.Mobile_no !== "0000000000") {
+      return;
+    }
+
+    // If user already exists and HAS a mobile number registered, proceed to dashboard
+    if (user.Mobile_no && user.Mobile_no !== "0000000000") {
       navigate(`/${user.role}/dashboard`, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, authLoading]);
+
+  if (authLoading) {
+    return <Loader fullPage text="Verifying your session..." />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,7 +47,11 @@ const CompleteProfilePage = () => {
     setLoading(true);
 
     try {
-      const response = await api.post("/users/update-mobile", { mobileNumber: mobileNumber });
+      // Reverted to session-based update only
+      const response = await api.post("/users/update-mobile", { 
+        mobileNumber: mobileNumber 
+      });
+
       if (response.data.success) {
         setUser(response.data.user);
         navigate(`/${response.data.user.role}/dashboard`);

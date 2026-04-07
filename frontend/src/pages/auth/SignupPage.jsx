@@ -46,6 +46,7 @@ const SignupPage = () => {
   const [resending, setResending] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [resetOTPTrigger, setResetOTPTrigger] = useState(false);
+  const [registrationToken, setRegistrationToken] = useState("");
 
   const handleRoleChange = (newRole) => {
     if (newRole !== role) {
@@ -87,6 +88,7 @@ const SignupPage = () => {
       const response = await api.post("/users/register", { ...formData, role });
       if (response.data.success) {
         if (response.data.needsVerification) {
+          setRegistrationToken(response.data.registrationToken);
           setNeedsVerification(true);
         } else {
           setUser(response.data.user);
@@ -120,7 +122,7 @@ const SignupPage = () => {
     setError("");
     try {
       const response = await api.post("/users/verify-otp", {
-        email: formData.email,
+        registrationToken,
         otp: codeToVerify
       });
       if (response.data.success) {
@@ -168,9 +170,12 @@ const SignupPage = () => {
     setResending(true);
     try {
       const response = await api.post("/users/resend-otp", {
-        email: formData.email
+        registrationToken
       });
       if (response.data.success) {
+        if (response.data.registrationToken) {
+           setRegistrationToken(response.data.registrationToken);
+        }
         setError("✅ New verification code sent to your email!");
         startTimer();
         setResetOTPTrigger((prev) => !prev);

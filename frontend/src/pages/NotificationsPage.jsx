@@ -191,7 +191,7 @@ const NotifCard = ({ notification, onAction, onDelete }) => {
             </span>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(notification._id); }}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-(--text-dim) hover:bg-red-500/20 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-(--text-dim) hover:bg-red-500/20 hover:text-red-400 transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
             >
               <X size={13} />
             </button>

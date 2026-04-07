@@ -627,11 +627,11 @@ import { ToastProvider } from "./context/ToastContext";
 function App() {
   return (
     <AuthProvider>
-      <NotificationProvider>
-        <ToastProvider>
+      <ToastProvider>
+        <NotificationProvider>
           <AppRoutes />
-        </ToastProvider>
-      </NotificationProvider>
+        </NotificationProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 }

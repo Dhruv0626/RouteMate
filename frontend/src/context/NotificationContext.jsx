@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Zap, TrendingUp, Heart, AlertCircle, CheckCircle, MessageCircle, Settings, Shield, Bell, Info, ShieldAlert, CheckSquare, Navigation, UserCheck } from "lucide-react";
 import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
 import { 
   getMyNotifications, 
   markAsRead as apiMarkAsRead, 
@@ -34,6 +35,7 @@ const NOTIFICATION_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869
 
 export const NotificationProvider = ({ children }) => {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,54 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
+  const markAsRead = useCallback(async (id) => {
+    try {
+      const { data } = await apiMarkAsRead(id);
+      if (data.success) {
+        setNotifications(prev => 
+          prev.map(n => n._id === id ? { ...n, isRead: true } : n)
+        );
+        const newCount = Math.max(0, unreadCount - 1);
+        setUnreadCount(newCount);
+        prevUnreadCountRef.current = newCount;
+      }
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error.message);
+    }
+  }, [unreadCount]);
+
+  const markAllAsRead = useCallback(async () => {
+    try {
+      const { data } = await apiMarkAllAsRead();
+      if (data.success) {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        setUnreadCount(0);
+        prevUnreadCountRef.current = 0;
+      }
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error.message);
+    }
+  }, []);
+
+  const deleteNotification = useCallback(async (id) => {
+    try {
+      const { data } = await apiDeleteNotification(id);
+      if (data.success) {
+        setNotifications(prev => {
+           const wasUnread = prev.find(n => n._id === id && !n.isRead);
+           if (wasUnread) {
+             const newCount = Math.max(0, unreadCount - 1);
+             setUnreadCount(newCount);
+             prevUnreadCountRef.current = newCount;
+           }
+           return prev.filter(n => n._id !== id);
+        });
+      }
+    } catch (error) {
+      console.error("Failed to delete notification:", error.message);
+    }
+  }, [unreadCount]);
+
   // Fetch notifications from API
   const fetchNotifications = useCallback(async (isInitial = false) => {
     if (!user) return;
@@ -99,6 +149,11 @@ export const NotificationProvider = ({ children }) => {
           const latest = newNotifications.find(n => !n.isRead);
           if (latest) {
              showNativeNotification(latest);
+             
+             // Also show In-App Toast with DELETE action on close as requested
+             showToast(latest.message, latest.type === 'error' ? 'error' : (latest.type === 'warning' ? 'warning' : 'info'), 8000, {
+                 onDismiss: () => deleteNotification(latest._id)
+             });
           }
         }
 
@@ -109,7 +164,7 @@ export const NotificationProvider = ({ children }) => {
     } catch (error) {
       console.error("Failed to fetch notifications:", error.message);
     }
-  }, [user, showNativeNotification]);
+  }, [user, showNativeNotification, showToast, deleteNotification]);
 
   // Initial load and polling
   useEffect(() => {
@@ -128,52 +183,6 @@ export const NotificationProvider = ({ children }) => {
       prevUnreadCountRef.current = 0;
     }
   }, [user, fetchNotifications]);
-
-  const markAsRead = async (id) => {
-    try {
-      const { data } = await apiMarkAsRead(id);
-      if (data.success) {
-        setNotifications(prev => 
-          prev.map(n => n._id === id ? { ...n, isRead: true } : n)
-        );
-        const newCount = Math.max(0, unreadCount - 1);
-        setUnreadCount(newCount);
-        prevUnreadCountRef.current = newCount;
-      }
-    } catch (error) {
-      console.error("Failed to mark notification as read:", error.message);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      const { data } = await apiMarkAllAsRead();
-      if (data.success) {
-        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-        setUnreadCount(0);
-        prevUnreadCountRef.current = 0;
-      }
-    } catch (error) {
-      console.error("Failed to mark all notifications as read:", error.message);
-    }
-  };
-
-  const deleteNotification = async (id) => {
-    try {
-      const { data } = await apiDeleteNotification(id);
-      if (data.success) {
-        const wasUnread = notifications.find(n => n._id === id && !n.isRead);
-        setNotifications(prev => prev.filter(n => n._id !== id));
-        if (wasUnread) {
-          const newCount = Math.max(0, unreadCount - 1);
-          setUnreadCount(newCount);
-          prevUnreadCountRef.current = newCount;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to delete notification:", error.message);
-    }
-  };
 
   const value = {
     notifications,
