@@ -180,9 +180,11 @@ export const NotificationProvider = ({ children }) => {
           if (latest) {
              showNativeNotification(latest);
              
-             // Also show In-App Toast with DELETE action on close as requested
+             // UI Enhancement: Show toast with specific icon (Polling path)
+             const ToastIcon = ICONS[latest.type] || Bell;
              showToast(latest.message, latest.type === 'error' ? 'error' : (latest.type === 'warning' ? 'warning' : 'info'), 8000, {
-                 onDismiss: () => deleteNotification(latest._id)
+                 onDismiss: () => deleteNotification(latest._id),
+                 icon: <ToastIcon size={18} />
              });
           }
         }
@@ -215,8 +217,14 @@ export const NotificationProvider = ({ children }) => {
           showNativeNotification(notification);
           return [notification, ...prev];
         });
+        
         setUnreadCount(prev => prev + 1);
-        showToast(notification.message, "info");
+
+        // UI Enhancement: Show toast with specific icon
+        const ToastIcon = ICONS[notification.type] || Bell;
+        showToast(notification.message, "info", 8000, {
+          icon: <ToastIcon size={18} />
+        });
       };
 
       socket.on("new_notification", handleFastNotification);
