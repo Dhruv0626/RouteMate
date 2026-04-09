@@ -12,7 +12,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export const sendEmail = async (options) => {
     try {
         const { data, error } = await resend.emails.send({
-            from: "RouteMate RideMatch <routemateridematch@gmail.com>", // Replace with your verified domain in production
+            from: "RouteMate RideMatch <onboarding@resend.dev>", // DO NOT CHANGE THIS TO GMAIL OR A DUMMY EMAIL
             to: options.email,
             subject: options.subject,
             html: options.html,

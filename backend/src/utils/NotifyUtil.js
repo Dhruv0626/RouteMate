@@ -144,14 +144,18 @@ export const notifyUserUnblocked = async ({ targetUser, adminId }) => {
 /**
  * EVENT: Admin deleted a user
  */
-export const notifyUserDeleted = async ({ targetUser, adminId }) => {
+export const notifyUserDeleted = async ({ targetUser, adminId, isSelfDelete }) => {
+    const message = isSelfDelete 
+        ? `User action: ${targetUser.name} (${targetUser.role}) has voluntarily deleted their own account from the platform.`
+        : `Admin action: The account of ${targetUser.name} (${targetUser.role}) has been permanently deleted from the platform.`;
+
     await notifyAdmins({
         title: "User Account Permanently Deleted",
-        message: `Admin action: The account of ${targetUser.name} (${targetUser.role}) has been permanently deleted from the platform.`,
+        message: message,
         senderId: adminId,
         type: "error",
         link: "/admin/dashboard/manage-users",
-        metadata: { targetUserId: targetUser._id, action: "deleted" }
+        metadata: { targetUserId: targetUser._id, action: "deleted", isSelfDelete }
     });
 };
 
