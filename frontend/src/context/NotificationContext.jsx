@@ -8,6 +8,7 @@ import {
   markAllAsRead as apiMarkAllAsRead, 
   deleteNotification as apiDeleteNotification 
 } from "../services/notificationService";
+import socket from "../services/socket";
 
 const ICONS = {
   ride_request: Zap,
