@@ -22,9 +22,16 @@ export const GetDashboardStats = async (req, res) => {
         const cachedData = await cacheService.get(cacheKey);
         
         if (cachedData) {
+            // 🔴 Always inject the LIVE socket count — never serve it from cache
             return res.status(200).json({
                 success: true,
-                stats: cachedData,
+                stats: {
+                    ...cachedData,
+                    counts: {
+                        ...cachedData.counts,
+                        activeUsers: getActiveConnectionCount()
+                    }
+                },
                 source: "cache"
             });
         }
@@ -93,14 +100,12 @@ export const GetDashboardStats = async (req, res) => {
         const totalRides = tripStats.reduce((a, b) => a + b.count, 0);
         const cancellationRate = totalRides > 0 ? (totalCancelledRides / totalRides) * 100 : 0;
 
-        const activeUsersCount = getActiveConnectionCount();
-
         const stats = {
             counts: {
                 total: totalUsers,
                 passengers,
                 drivers,
-                activeUsers: activeUsersCount,
+                activeUsers: getActiveConnectionCount(), // Always live — NOT cached
                 online: onlineDrivers
             },
             drivers: {
