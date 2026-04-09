@@ -5,6 +5,8 @@ import ReviewModel from "../models/Review.js";
 import cacheService from "../utils/redis.js";
 import NotificationModel from "../models/Notification.js";
 
+import { getActiveConnectionCount } from "../utils/SocketManager.js";
+
 /**
  * Get core statistics for the admin dashboard
  * Provides: 
@@ -32,7 +34,6 @@ export const GetDashboardStats = async (req, res) => {
             totalUsers,
             passengers,
             drivers,
-            activeUsers,
             approvedDrivers,
             onlineDrivers,
             tripStats,
@@ -44,7 +45,6 @@ export const GetDashboardStats = async (req, res) => {
             UserModel.countDocuments(),
             UserModel.countDocuments({ role: "passenger" }),
             UserModel.countDocuments({ role: "driver" }),
-            UserModel.countDocuments({ isBlocked: { $ne: true } }), // Active (unblocked) users
             DriverProfileModel.countDocuments({ isApproved: true }),
             DriverProfileModel.countDocuments({ isOnline: true }),
             
@@ -93,12 +93,14 @@ export const GetDashboardStats = async (req, res) => {
         const totalRides = tripStats.reduce((a, b) => a + b.count, 0);
         const cancellationRate = totalRides > 0 ? (totalCancelledRides / totalRides) * 100 : 0;
 
+        const activeUsersCount = getActiveConnectionCount();
+
         const stats = {
             counts: {
                 total: totalUsers,
                 passengers,
                 drivers,
-                activeUsers,
+                activeUsers: activeUsersCount,
                 online: onlineDrivers
             },
             drivers: {

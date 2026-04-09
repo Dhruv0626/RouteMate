@@ -15,7 +15,6 @@ try {
         privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
       }),
     });
-    console.log("✅ Firebase Admin SDK Initialized");
   } else {
     console.warn("⚠️ Firebase Admin SDK NOT Initialized: Missing environment variables.");
   }
@@ -29,7 +28,7 @@ try {
 export const sendPushNotification = async (userId, notification) => {
   try {
     const user = await UserModel.findById(userId).select("fcmToken");
-    
+
     if (!user || !user.fcmToken) {
       return; // No token, no push
     }
