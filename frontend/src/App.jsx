@@ -9,6 +9,7 @@ import {
 import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import api from "./services/api";
 import SignInPage from "./pages/auth/SignInPage";
 import SignupPage from "./pages/auth/SignupPage";
 import CompleteProfilePage from "./pages/auth/CompleteProfilePage";
@@ -55,6 +56,33 @@ import { ShieldAlert } from "lucide-react";
 import { getMyDriverProfile } from "./services/driverProfileService";
 import { requestForToken, onMessageListener } from "./firebase";
 
+// ─── Shared UI Components ─────────────────────────────────────────────────────
+function SuspendedUI({ isSuspended = true }) {
+  return (
+    <div className="mesh-bg min-h-screen flex items-center justify-center p-6 text-center">
+      <div className="glass-card p-10 max-w-sm rounded-3xl border-(--card-border)">
+        <div className="bg-red-500/10 p-4 rounded-full w-fit mx-auto mb-6">
+          <ShieldAlert size={48} className="text-red-500" />
+        </div>
+        <h2 className="text-xl font-black mb-2">
+          {isSuspended ? "Account Suspended" : "Connectivity Error"}
+        </h2>
+        <p className="text-sm text-(--text-dim) mb-6">
+          {isSuspended 
+            ? "Your account has been suspended. Please check your email for more details regarding the issue." 
+            : "We're having trouble reaching the server. Please check your connection and try again."}
+        </p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="w-full bg-primary text-black py-3 rounded-xl font-bold hover:scale-105 transition-all"
+        >
+          {isSuspended ? "Reload Status" : "Retry Connection"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Protected Route ──────────────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -62,6 +90,10 @@ function ProtectedRoute({ children }) {
     return <Loader fullPage text="Synchronizing your account securely..." />; // Use our new premium loader
   
   if (!user) return <Navigate to="/signin" replace />;
+
+  if (user.isBlocked) {
+    return <SuspendedUI isSuspended={true} />;
+  }
 
   // Redirect to complete profile if mobile number is missing
   if (user.role !== "admin" && (!user.Mobile_no || user.Mobile_no === "0000000000")) {
@@ -150,32 +182,8 @@ function DriverProtectedRoute({ children }) {
   }
 
   // 4. API Error (Transient)?
-  if (errorStatus && errorStatus !== 404) {
-    const isSuspended = errorStatus === 403;
-    
-    return (
-        <div className="mesh-bg min-h-screen flex items-center justify-center p-6 text-center">
-            <div className="glass-card p-10 max-w-sm rounded-3xl border-(--card-border)">
-                <div className="bg-red-500/10 p-4 rounded-full w-fit mx-auto mb-6">
-                    <ShieldAlert size={48} className="text-red-500" />
-                </div>
-                <h2 className="text-xl font-black mb-2">
-                    {isSuspended ? "Account Suspended" : "Connectivity Error"}
-                </h2>
-                <p className="text-sm text-(--text-dim) mb-6">
-                    {isSuspended 
-                        ? "Your account has been suspended. Please check your email for more details regarding the issue." 
-                        : "We're having trouble reaching the server. Please check your connection and try again."}
-                </p>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="w-full bg-primary text-black py-3 rounded-xl font-bold hover:scale-105 transition-all"
-                >
-                    {isSuspended ? "Reload Status" : "Retry Connection"}
-                </button>
-            </div>
-        </div>
-    );
+  if (errorStatus && errorStatus !== 404 && errorStatus !== 403) {
+    return <SuspendedUI isSuspended={false} />;
   }
 
   // 5. Driver HAS NO PROFILE RECORD - force them to fill it
@@ -626,6 +634,9 @@ function AppRoutes() {
 import { ToastProvider } from "./context/ToastContext";
 
 function InternalAppInitializer({ children }) {
+  const { setUser } = useAuth();
+  const [globalSuspended, setGlobalSuspended] = useState(false);
+
   useEffect(() => {
     // 1. Request FCM Token on app load
     requestForToken().then(token => {
@@ -637,7 +648,23 @@ function InternalAppInitializer({ children }) {
       // Handle foreground notification
     }).catch(err => {});
 
+    // 3. GLOBAL INTERCEPTOR for 403 (Suspension)
+    const interceptor = api.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response?.status === 403) {
+          setGlobalSuspended(true);
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => api.interceptors.response.eject(interceptor);
   }, []);
+
+  if (globalSuspended) {
+    return <SuspendedUI isSuspended={true} />;
+  }
 
   return children;
 }
