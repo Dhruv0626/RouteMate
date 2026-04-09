@@ -19,6 +19,7 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
+import { useDialog } from "../../context/DialogContext";
 
 const RoleBadge = ({ role }) => {
   const configs = {
@@ -42,6 +43,7 @@ const ManageUsersPage = () => {
   const [actionLoading, setActionLoading] = useState(null); // stores userId currently being updated
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const { showAlert, showConfirm } = useDialog();
 
   useEffect(() => {
     fetchUsers();
@@ -69,14 +71,15 @@ const ManageUsersPage = () => {
         setUsers(users.map(u => u._id === userId ? { ...u, isBlocked: !isBlocked } : u));
       }
     } catch (error) {
-      alert(error.response?.data?.message || "Action failed");
+      showAlert(error.response?.data?.message || "Action failed", "Error", "error");
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleDeleteUser = async (userId, name) => {
-    if (!window.confirm(`Are you sure you want to PERMANENTLY delete user "${name}"? This action cannot be undone.`)) return;
+    const confirmed = await showConfirm(`Are you sure you want to PERMANENTLY delete user "${name}"?\nThis action cannot be undone.`, "Delete User", "error", "Yes, Delete");
+    if (!confirmed) return;
     
     try {
       setActionLoading(userId);
@@ -85,7 +88,7 @@ const ManageUsersPage = () => {
         setUsers(users.filter(u => u._id !== userId));
       }
     } catch (error) {
-      alert(error.response?.data?.message || "Action failed");
+      showAlert(error.response?.data?.message || "Action failed", "Error", "error");
     } finally {
       setActionLoading(null);
     }

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useDialog } from "../../context/DialogContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import api from "../../services/api";
 import { useNotifications } from "../../context/NotificationContext";
@@ -90,6 +91,7 @@ const SystemSettingsPage = () => {
   const navigate = useNavigate();
   const { user: currentUser, logout } = useAuth();
   const { showNativeNotification } = useNotifications();
+  const { showAlert, showConfirm } = useDialog();
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -165,7 +167,7 @@ const SystemSettingsPage = () => {
       }
     } catch (err) {
       console.error("Failed to save settings", err.message);
-      alert(err.response?.data?.message || "Cloud sync failed. Check connection.");
+      showAlert(err.response?.data?.message || "Cloud sync failed. Check connection.", "Sync Failed", "error");
     } finally {
       setSaving(false);
     }
@@ -342,14 +344,20 @@ const SystemSettingsPage = () => {
 
               <button 
                 onClick={async () => {
-                  if (window.confirm("FATAL ACTION: Are you sure you want to PERMANENTLY delete your Admin account? This action is irreversible.")) {
+                  const confirmed = await showConfirm(
+                    "FATAL ACTION: Are you sure you want to PERMANENTLY delete your Admin account?\nThis action is irreversible.",
+                    "Purge Account",
+                    "error",
+                    "Yes, Purge"
+                  );
+                  if (confirmed) {
                     setIsDeleting(true);
                     try {
                       await api.delete("/users/delete-account");
                       await logout();
                       navigate("/signin");
                     } catch (err) {
-                      alert("Deletion failed: " + (err.response?.data?.message || "Server Error"));
+                      showAlert("Deletion failed: " + (err.response?.data?.message || "Server Error"), "Error", "error");
                     } finally {
                       setIsDeleting(false);
                     }

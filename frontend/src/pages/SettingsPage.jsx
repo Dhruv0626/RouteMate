@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useDialog } from "../context/DialogContext";
 import {
   ArrowLeft,
   Bell,
@@ -22,7 +23,7 @@ import api from "../services/api";
 const SettingsPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const { showConfirm, showAlert } = useDialog();
   const [isDeleting, setIsDeleting] = useState(false);
   
   // Local state for toggles
@@ -171,14 +172,20 @@ const SettingsPage = () => {
               
               <button 
                 onClick={async () => {
-                   if (window.confirm("Are you absolutely sure you want to permanently delete your RouteMate account? This action cannot be undone.")) {
+                   const confirmed = await showConfirm(
+                      "Are you absolutely sure you want to permanently delete your RouteMate account?\nThis action cannot be undone.",
+                      "Delete Account",
+                      "error",
+                      "Yes, Delete My Account"
+                   );
+                   if (confirmed) {
                       setIsDeleting(true);
                       try {
                         await api.delete("/users/delete-account");
                         await logout();
                         navigate("/signin");
                       } catch (err) {
-                        alert("Account deletion failed. Please try again later.");
+                        showAlert("Account deletion failed. Please try again later.", "Error", "error");
                       } finally {
                         setIsDeleting(false);
                       }

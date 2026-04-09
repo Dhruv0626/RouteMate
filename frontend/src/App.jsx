@@ -631,6 +631,7 @@ function AppRoutes() {
   );
 }
 
+import { DialogProvider } from "./context/DialogContext";
 import { ToastProvider } from "./context/ToastContext";
 
 function InternalAppInitializer({ children }) {
@@ -676,13 +677,15 @@ function InternalAppInitializer({ children }) {
 function App() {
   return (
     <AuthProvider>
-      <ToastProvider>
-        <NotificationProvider>
-          <InternalAppInitializer>
-            <AppRoutes />
-          </InternalAppInitializer>
-        </NotificationProvider>
-      </ToastProvider>
+      <DialogProvider>
+        <ToastProvider>
+          <NotificationProvider>
+            <InternalAppInitializer>
+              <AppRoutes />
+            </InternalAppInitializer>
+          </NotificationProvider>
+        </ToastProvider>
+      </DialogProvider>
     </AuthProvider>
   );
 }

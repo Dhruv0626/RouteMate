@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDialog } from "../../context/DialogContext";
 import api from "../../services/api";
 import {
   ArrowLeft, MapPin, Navigation, Clock, Phone, Star, 
@@ -11,6 +12,7 @@ import ThemeToggle from "../../components/ui/ThemeToggle";
 
 const ActiveRidesPage = () => {
   const navigate = useNavigate();
+  const { showConfirm, showAlert } = useDialog();
   const [activeRides, setActiveRides] = useState([]);
   const [driverOnline, setDriverOnline] = useState(false);
   const [rideStats, setRideStats] = useState({
@@ -36,17 +38,18 @@ const ActiveRidesPage = () => {
       // Refresh data
       window.location.reload(); 
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to update status");
+      showAlert(err.response?.data?.message || "Failed to update status", "Update Failed", "error");
     }
   };
 
   const handleCancel = async (rideId) => {
-    if (!window.confirm("Are you sure you want to cancel this ride?")) return;
+    const confirmed = await showConfirm("Are you sure you want to cancel this ride?", "Cancel Ride", "warning", "Yes, Cancel");
+    if (!confirmed) return;
     try {
       await api.patch(`/published-rides/${rideId}/status`, { status: "cancelled" });
       window.location.reload();
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to cancel ride");
+      showAlert(err.response?.data?.message || "Failed to cancel ride", "Action Failed", "error");
     }
   };
 

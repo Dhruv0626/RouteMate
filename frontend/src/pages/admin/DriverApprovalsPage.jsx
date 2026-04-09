@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useDialog } from "../../context/DialogContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
 import api from "../../services/api";
@@ -217,10 +218,10 @@ const DriverCard = ({ driver, onApprove, onReject, loading }) => {
   );
 };
 
-// ─── Main Page ─────────────────────────────────────────────────────────────────
 const DriverApprovalsPage = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const { showConfirm } = useDialog();
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
@@ -263,7 +264,13 @@ const DriverApprovalsPage = () => {
   };
 
   const handleReject = async (profileId) => {
-    if (!window.confirm("Are you sure you want to revoke/reject this driver?")) return;
+    const confirmed = await showConfirm(
+      "Are you sure you want to revoke/reject this driver?",
+      "Revoke / Reject",
+      "warning",
+      "Yes, Revoke"
+    );
+    if (!confirmed) return;
     try {
       setActionLoading(profileId);
       await api.patch(`/driver-profiles/admin/approve/${profileId}`, { isApproved: false });

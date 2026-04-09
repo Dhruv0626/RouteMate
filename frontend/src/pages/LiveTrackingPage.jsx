@@ -6,6 +6,7 @@ import L from "leaflet";
 import socket from "../services/socket";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { useDialog } from "../context/DialogContext";
 
 // Icons setup
 const carIcon = L.divIcon({
@@ -20,6 +21,7 @@ const LiveTrackingPage = () => {
   const { rideId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { showAlert } = useDialog();
   
   const [ride, setRide] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
@@ -78,7 +80,7 @@ const LiveTrackingPage = () => {
     // Request permission if needed
     const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
     if (!appSettings.locationTracking) {
-      alert("Please enable Location Tracking in Settings to share live location.");
+      showAlert("Please enable Location Tracking in Settings to share live location.", "Location Required", "warning");
       return;
     }
 
@@ -99,7 +101,7 @@ const LiveTrackingPage = () => {
 
   const handleUpdateStatus = async (status) => {
     if (status === "active" && !otp) {
-        alert("Please enter the passenger's OTP to start the trip.");
+        showAlert("Please enter the passenger's OTP to start the trip.", "OTP Required", "warning");
         return;
     }
 
@@ -111,11 +113,11 @@ const LiveTrackingPage = () => {
       await api.patch(`/published-rides/${rideId}/status`, payload);
       setRide(prev => ({ ...prev, status }));
       if (status === "completed") {
-        alert("Ride Completed!");
+        showAlert("Ride Completed successfully!", "Trip Finished", "success");
         navigate("/driver/dashboard");
       }
     } catch (e) {
-      alert(e.response?.data?.message || "Failed to update status");
+      showAlert(e.response?.data?.message || "Failed to update status", "Failed", "error");
     } finally {
       setIsStartingRequest(false);
     }
