@@ -13,7 +13,8 @@ import {
     ResendVerificationOTP,
     FinalizeOAuthRegistration,
     UpdateMobileNumber,
-    UpdateProfileImage
+    UpdateProfileImage,
+    updateFCMToken
 } from "../controllers/UserController.js";
 import { GetSettings } from "../controllers/SystemSettingsController.js";
 import { ForgotPassword, ResetPassword } from "../controllers/PasswordController.js";
@@ -110,6 +111,7 @@ router.get(
 // ─── Protected Routes (JWT required) ─────────────────────────────────────────
 router.get("/profile", authMiddleware, GetProfile);
 router.post("/update-profile-image", authMiddleware, UpdateProfileImage);
+router.post("/update-fcm-token", authMiddleware, updateFCMToken);
 router.delete("/delete-account", authMiddleware, DeleteUserForSelf);
 
 // ─── System Settings (Read-only for all authenticated users) ─────────────────

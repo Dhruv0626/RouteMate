@@ -638,9 +638,13 @@ function InternalAppInitializer({ children }) {
   const [globalSuspended, setGlobalSuspended] = useState(false);
 
   useEffect(() => {
-    // 1. Request FCM Token on app load
+    // 1. Request FCM Token on app load and sync with backend
     requestForToken().then(token => {
-      // You can send this token to your API here if needed
+      if (token && user) {
+        // Sync token with server for top-bar native notifications
+        api.post("/users/update-fcm-token", { fcmToken: token })
+           .catch(() => {}); // Silent catch — if it fails, we'll try again next load
+      }
     });
 
     // 2. Listen for foreground messages

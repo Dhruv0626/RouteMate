@@ -50,14 +50,13 @@ export const NotificationProvider = ({ children }) => {
    * Triggers a browser native notification with sound
    */
   const showNativeNotification = useCallback((notification) => {
-    // Check App Settings Permission
-    const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{"pushNotifs":false}');
-    if (!appSettings.pushNotifs) return;
-
-    // 1. Play Sound
+    // 1. Play Sound (Global - doesn't depend on native push settings)
     playChime();
 
     // 2. Show System Notification (if permitted)
+    const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{"pushNotifs":true}');
+    if (!appSettings.pushNotifs) return;
+
     if ("Notification" in window && Notification.permission === "granted") {
       const { title, message, type } = notification;
       
@@ -196,23 +195,47 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user, showNativeNotification, showToast, deleteNotification]);
 
-  // Initial load and polling
+  // Initial load, Socket connection, and fallback Polling
   useEffect(() => {
     if (user) {
       fetchNotifications(true);
 
-      // Polling every 15 seconds for a snappy feel (reduced from 30)
+      // ─── Instant Signal Path (Socket.IO) ───
+      socket.connect();
+      socket.emit("join_user", user.id);
+
+      const handleFastNotification = (notification) => {
+        // Prevent duplicates (polling might also catch it)
+        setNotifications(prev => {
+          const exists = prev.find(n => n._id === notification._id || (n.createdAt === notification.createdAt && n.title === notification.title));
+          if (exists) return prev;
+          
+          // New notification arrives - Trigger tone and alert!
+          showNativeNotification(notification);
+          return [notification, ...prev];
+        });
+        setUnreadCount(prev => prev + 1);
+        showToast(notification.message, "info");
+      };
+
+      socket.on("new_notification", handleFastNotification);
+
+      // ─── Regular Fallback Path (Polling) ───
       const pollInterval = setInterval(() => {
         fetchNotifications(false);
       }, 15000);
 
-      return () => clearInterval(pollInterval);
+      return () => {
+        clearInterval(pollInterval);
+        socket.off("new_notification", handleFastNotification);
+        socket.disconnect();
+      };
     } else {
       setNotifications([]);
       setUnreadCount(0);
-      prevUnreadCountRef.current = 0;
+      socket.disconnect();
     }
-  }, [user, fetchNotifications]);
+  }, [user, fetchNotifications, showNativeNotification, showToast]);
 
   const value = {
     notifications,

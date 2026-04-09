@@ -796,3 +796,21 @@ export const UpdateProfileImage = async (req, res) => {
         res.status(500).json({ success: false, message: "Server error while updating profile image." });
     }
 };
+
+/**
+ * Update User FCM Token for Push Notifications
+ */
+export const updateFCMToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+        if (!fcmToken) {
+            return res.status(400).json({ success: false, message: "FCM Token is required" });
+        }
+
+        await UserModel.findByIdAndUpdate(req.user.id, { fcmToken });
+        res.json({ success: true, message: "FCM Token updated successfully" });
+    } catch (error) {
+        console.error("Update FCM Token Error:", error);
+        res.status(500).json({ success: false, message: "Server error updating token" });
+    }
+};
