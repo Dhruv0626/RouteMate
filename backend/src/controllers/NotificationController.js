@@ -1,4 +1,5 @@
 import NotificationModel from "../models/Notification.js";
+import { io } from "../../server.js";
 
 /**
  * Get all notifications for the authenticated user
@@ -106,9 +107,19 @@ export const DeleteNotification = async (req, res) => {
 export const createNotification = async (data) => {
     try {
         const notification = await NotificationModel.create(data);
+        
+        // ─── INSTANT DELIVERY VIA SOCKET.IO ───────────────────────────────────
+        // Emit to the user's private room
+        if (notification && notification.recipient) {
+            const recipientId = notification.recipient.toString();
+            io.to(recipientId).emit("new_notification", notification);
+            console.log(`🚀 Instant notification dispatched to User ${recipientId} via Socket`);
+        }
+
         return notification;
     } catch (error) {
         console.error("Create Notification Helper Error:", error);
         return null;
     }
 };
+

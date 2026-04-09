@@ -1,5 +1,5 @@
-import NotificationModel from "../models/Notification.js";
 import UserModel from "../models/User.js";
+import { io } from "../../server.js";
 
 // ─── Core Primitives ──────────────────────────────────────────────────────────
 
@@ -8,7 +8,10 @@ import UserModel from "../models/User.js";
  */
 export const notifyUser = async ({ userId, title, message, senderId = null, type = "info", link = null, metadata = {} }) => {
     try {
-        await NotificationModel.create({ recipient: userId, sender: senderId, title, message, type, link, metadata });
+        const notification = await NotificationModel.create({ recipient: userId, sender: senderId, title, message, type, link, metadata });
+        
+        // ─── INSTANT SOCKET DELIVERY ──────────────────────────────────────────
+        io.to(userId.toString()).emit("new_notification", notification);
     } catch (error) {
         console.error(`[NotifyUtil] Error notifying user ${userId}:`, error.message);
     }
@@ -32,7 +35,12 @@ export const notifyRole = async ({ role, title, message, senderId = null, type =
             metadata
         }));
 
-        await NotificationModel.insertMany(notifications);
+        const result = await NotificationModel.insertMany(notifications);
+        
+        // ─── INSTANT SOCKET DELIVERY (Multi-cast) ─────────────────────────────
+        result.forEach(notification => {
+            io.to(notification.recipient.toString()).emit("new_notification", notification);
+        });
     } catch (error) {
         console.error(`[NotifyUtil] Error notifying all ${role}s:`, error.message);
     }

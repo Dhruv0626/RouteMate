@@ -8,6 +8,7 @@ import {
   markAllAsRead as apiMarkAllAsRead, 
   deleteNotification as apiDeleteNotification 
 } from "../services/notificationService";
+import socket from "../services/socket";
 
 const ICONS = {
   ride_request: Zap,
@@ -166,23 +167,47 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user, showNativeNotification, showToast, deleteNotification]);
 
-  // Initial load and polling
+  // Initial load, polling, and Socket connection
   useEffect(() => {
     if (user) {
       fetchNotifications(true);
 
-      // Polling every 15 seconds for a snappy feel (reduced from 30)
+      // ─── Socket.IO Real-time Connection ────────────────────────────────────
+      socket.connect();
+      socket.emit("join_user", user.id);
+
+      const handleNewNotification = (notification) => {
+        // Add to list and update count instantly
+        setNotifications(prev => [notification, ...prev]);
+        setUnreadCount(prev => prev + 1);
+        prevUnreadCountRef.current += 1;
+        
+        // Show native/toast immediate
+        showNativeNotification(notification);
+        showToast(notification.message, notification.type === 'error' ? 'error' : (notification.type === 'warning' ? 'warning' : 'info'), 8000, {
+            onDismiss: () => deleteNotification(notification._id)
+        });
+      };
+
+      socket.on("new_notification", handleNewNotification);
+
+      // Polling every 30 seconds as a fallback (increased from 15 since socket is active)
       const pollInterval = setInterval(() => {
         fetchNotifications(false);
-      }, 15000);
+      }, 30000);
 
-      return () => clearInterval(pollInterval);
+      return () => {
+        clearInterval(pollInterval);
+        socket.off("new_notification", handleNewNotification);
+        socket.disconnect();
+      };
     } else {
       setNotifications([]);
       setUnreadCount(0);
       prevUnreadCountRef.current = 0;
+      socket.disconnect();
     }
-  }, [user, fetchNotifications]);
+  }, [user, fetchNotifications, showNativeNotification, showToast, deleteNotification]);
 
   const value = {
     notifications,
