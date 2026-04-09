@@ -108,7 +108,7 @@ export const CreateUser = async (req, res) => {
         const registrationToken = jwt.sign(
             registrationData,
             process.env.JWT_SECRET,
-            { expiresIn: "10m" }
+            { expiresIn: "5m" }
         );
 
         // 5. Send verification email
@@ -674,7 +674,7 @@ export const ResendVerificationOTP = async (req, res) => {
 
         // 3. Issue NEW Registration Token with updated OTP
         const newData = { ...decoded, otp: { code: hashedOtp, expiresAt: otpExpiry, purpose: "verification" } };
-        const newRegistrationToken = jwt.sign(newData, process.env.JWT_SECRET, { expiresIn: "10m" });
+        const newRegistrationToken = jwt.sign(newData, process.env.JWT_SECRET, { expiresIn: "5m" });
 
         // 4. Send email
         const htmlContent = getEmailTemplate({
