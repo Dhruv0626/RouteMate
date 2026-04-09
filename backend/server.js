@@ -18,6 +18,7 @@ import notificationRoutes from "./src/routes/Notification.js";
 import rideRoutes from "./src/routes/Ride.js";
 import publishedRideRoutes from "./src/routes/PublishedRide.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
+import { initSocket } from "./src/utils/SocketManager.js";
 
 // ─── Passport Configuration ───────────────────────────────────────────────────
 import passport from "./src/config/passport.js";
@@ -113,9 +114,12 @@ app.use((err, req, res, next) => {
 // ─── 8. Start Server ──────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 const httpServer = createServer(app);
-export const io = new Server(httpServer, {
+const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
+
+// Initialize Socket Manager
+initSocket(io);
 
 // Attach io to req for use in controllers
 app.use((req, res, next) => {
