@@ -30,8 +30,11 @@ export const useNotifications = () => {
   return context;
 };
 
-// Common notification sound URL (Standard ping)
-const NOTIFICATION_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
+// ─── Notification Sound Setup ───
+const NOTIFICATION_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"; 
+const notificationAudio = new Audio(NOTIFICATION_SOUND_URL);
+notificationAudio.preload = "auto";
+notificationAudio.load();
 
 export const NotificationProvider = ({ children }) => {
   const { user } = useAuth();
@@ -42,7 +45,6 @@ export const NotificationProvider = ({ children }) => {
   
   // Refs to track previous state for change detection
   const prevUnreadCountRef = useRef(0);
-  const audioRef = useRef(new Audio(NOTIFICATION_SOUND_URL));
 
   /**
    * Triggers a browser native notification with sound
@@ -53,12 +55,7 @@ export const NotificationProvider = ({ children }) => {
     if (!appSettings.pushNotifs) return;
 
     // 1. Play Sound
-    try {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {}); // Silent catch for browser policy
-    } catch (err) {
-      console.error("Sound playback error:", err.message);
-    }
+    playChime();
 
     // 2. Show System Notification (if permitted)
     if ("Notification" in window && Notification.permission === "granted") {
@@ -133,6 +130,39 @@ export const NotificationProvider = ({ children }) => {
       console.error("Failed to delete notification:", error.message);
     }
   }, [unreadCount]);
+
+  // ─── Mobile Audio Unlock ───
+  // Unlocks the audio context on first user interaction 
+  const unlockAudio = useCallback(() => {
+    notificationAudio.play().then(() => {
+      notificationAudio.pause();
+      notificationAudio.currentTime = 0;
+      console.log("🔊 Audio unlocked for mobile");
+      document.removeEventListener("click", unlockAudio);
+      document.removeEventListener("touchstart", unlockAudio);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("click", unlockAudio);
+    document.addEventListener("touchstart", unlockAudio);
+    return () => {
+      document.removeEventListener("click", unlockAudio);
+      document.removeEventListener("touchstart", unlockAudio);
+    };
+  }, [unlockAudio]);
+
+  // ─── Tone Trigger ───
+  const playChime = () => {
+    try {
+      // Re-initialize for better mobile reliability
+      notificationAudio.currentTime = 0;
+      notificationAudio.volume = 0.5;
+      notificationAudio.play().catch(err => {
+        console.warn("Mobile chime blocked (interaction required):", err.message);
+      });
+    } catch (err) {}
+  };
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async (isInitial = false) => {

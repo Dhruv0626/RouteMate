@@ -243,10 +243,10 @@ export const notifySettingsUpdated = async ({ adminId, updateData }) => {
         realTimeTracking: "Real-time GPS Tracking",
         maxRadius: "Maximum Ride Radius",
     };
-    
+
     const changedFields = Object.keys(updateData);
     const readableChanges = changedFields.map(key => keyMap[key] || key);
-    
+
     // 1. Notify Admins exactly what changed
     await notifyAdmins({
         title: "System Settings Adjusted ⚙️",
@@ -283,14 +283,14 @@ export const notifySettingsUpdated = async ({ adminId, updateData }) => {
             await notifyPassengers({ title: "Services Restored ✅", message: msg, senderId: adminId, type: "success" });
         }
     }
-    
+
     // Crypto payments toggle -> Inform Passengers
     if (updateData.enableCrypto !== undefined) {
         const on = updateData.enableCrypto === true || String(updateData.enableCrypto) === "true";
         const msg = on ? "Exciting news! We now support Web3 Crypto Payments for all your rides." : "Crypto payments are temporarily disabled. Please rely on card or fiat.";
         await notifyPassengers({ title: "Payment System 💳", message: msg, senderId: adminId, type: "info" });
     }
-    
+
     // Max radius change -> Inform Everyone
     if (updateData.maxRadius !== undefined) {
         await notifyDrivers({
