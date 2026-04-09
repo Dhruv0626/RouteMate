@@ -58,7 +58,7 @@ app.use(
 // ─── 2. CORS ──────────────────────────────────────────────────────────────────
 const allowedOrigins = isProduction
   ? [process.env.FRONTEND_URL || "https://your-production-domain.com"]
-  : ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"];
+  : ["http://localhost:5173", "http://127.0.0.1:5173"];
 
 app.use(
   cors({

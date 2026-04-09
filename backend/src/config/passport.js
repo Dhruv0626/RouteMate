@@ -48,18 +48,22 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                 return done(null, user);
             }
 
-            // New user — create with Google info
+            // New user — create with provider info immediately
             const name = profile.displayName || profile.name?.givenName || "Google User";
             user = await UserModel.create({
                 name,
                 email,
-                password: hashToken(accessToken), 
+                password: hashToken(accessToken), // Random/provider password
                 role: role || "passenger",
-                provider: "google"
+                provider: "google",
+                Mobile_no: "0000000000",
+                isVerified: true,
+                profileImage: profile.photos?.[0]?.value || ""
             });
 
             return done(null, user);
         } catch (error) {
+            console.error("Google OAuth Strategy Error:", error);
             return done(error, null);
         }
     }));
@@ -92,17 +96,22 @@ if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
                 return done(null, user);
             }
 
+            // New user — create with provider info immediately
             const name = profile.displayName || `${profile.name?.givenName} ${profile.name?.familyName}`.trim() || "Facebook User";
             user = await UserModel.create({
                 name,
                 email,
                 password: hashToken(accessToken),
                 role: role || "passenger",
-                provider: "facebook"
+                provider: "facebook",
+                Mobile_no: "0000000000",
+                isVerified: true,
+                profileImage: profile.photos?.[0]?.value || ""
             });
 
             return done(null, user);
         } catch (error) {
+            console.error("Facebook OAuth Strategy Error:", error);
             return done(error, null);
         }
     }));
@@ -144,7 +153,7 @@ export const issueOAuthTokens = async (user, res) => {
         maxAge: refreshMaxAge
     });
 
-    return { accessToken, user };
+    return { success: true, accessToken, user };
 };
 
 export default passport;

@@ -60,7 +60,6 @@ const setTokenCookies = (res, accessToken, refreshToken, role) => {
 export const CreateUser = async (req, res) => {
     try {
         const { name, email, Mobile_no, password, role, secretKey } = req.body;
-        // Note: Input validation is handled by ValidateMid.js middleware
 
         // 0. Admin Secret Key Check
         if (role === "admin") {
@@ -72,7 +71,8 @@ export const CreateUser = async (req, res) => {
             }
         }
 
-        // 1. Check for duplicate user (moved back for better UX and to avoid race conditions)
+        // 1. Check for duplicate user PRIOR to registration attempt
+        // Important: unverified users no longer exist in DB, so this only checks FINALIZED accounts
         const existingUser = await UserModel.findOne({ email }).lean();
         if (existingUser) {
             return res.status(409).json({
@@ -84,65 +84,61 @@ export const CreateUser = async (req, res) => {
         // 2. Hash password with bcrypt (cost factor 8)
         const hashedPassword = await bcrypt.hash(password, 8);
 
-        // 3. Prepare user data
-        const userData = {
+        // 3. Prepare OTP
+        const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpiry = Date.now() + 5 * 60 * 1000; // 5 mins
+        const hashedOtp = crypto.createHash("sha256").update(otpStr).digest("hex");
+
+        // 4. Generate Registration Token (JWT)
+        // This token contains ALL data required to create the account later.
+        // It's signed with a 10-minute expiry to ensure security.
+        const registrationData = {
             name,
             email,
             Mobile_no,
             password: hashedPassword,
             role: role || "passenger",
-            isVerified: false // Everyone needs verification for local registration
-        };
-        // 4. Handle Email Verification (OTP) for all local registrations
-        const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
-        userData.otp = {
-            code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 5 * 60 * 1000, // 5 mins (more stable for email delivery)
-            purpose: "verification"
+            otp: {
+                code: hashedOtp,
+                expiresAt: otpExpiry,
+                purpose: "verification"
+            }
         };
 
+        const registrationToken = jwt.sign(
+            registrationData,
+            process.env.JWT_SECRET,
+            { expiresIn: "10m" }
+        );
+
+        // 5. Send verification email
         const htmlContent = getEmailTemplate({
             title: "RouteMate Verification Required",
-            message: `To complete your RouteMate ${userData.role} registration, use the following OTP code to verify your email address.`,
+            message: `To complete your RouteMate ${registrationData.role} registration, use the following OTP code to verify your email address.`,
             otp: otpStr,
             expiry: 5
         });
 
-        // 5. Save user first, then send email in background (eliminate network wait)
-        const user = await UserModel.create(userData);
-
-        // Trigger email in background without awaiting, preventing a 10s wait on Render
+        // Background send (eliminates wait time)
         sendEmail({
-            email: userData.email,
+            email,
             subject: "RouteMate - Verify Your Email",
             html: htmlContent
-        }).catch(err => console.error("Background Verification Email Error:", err));
+        }).catch(err => console.error("Registration Email error:", err));
 
-        const userResponse = user.toObject();
-        delete userResponse.password;
-        delete userResponse.refreshToken;
-
-        return res.status(201).json({
+        return res.status(200).json({
             success: true,
-            message: "Registration successful. Please verify your email.",
+            message: "OTP sent to your email. Please verify to complete account creation.",
             needsVerification: true,
-            user: userResponse
+            registrationToken // Frontend will store this temporarily to send back with OTP
         });
 
     } catch (error) {
-        // Handle Duplicate Key Error (MongoDB 11000)
         if (error.code === 11000) {
-            const key = Object.keys(error.keyValue)[0];
-            return res.status(409).json({
-                success: false,
-                message: `User with this ${key} already exists.`
-            });
+            return res.status(409).json({ success: false, message: "User with this email or mobile already exists." });
         }
         console.error("Create User Error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "A database error occurred while registering your account. Please try again soon."
-        });
+        return res.status(500).json({ success: false, message: "Server error during registration." });
     }
 };
 
@@ -178,16 +174,6 @@ export const SignInUser = async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(401).json({ success: false, message: "Invalid email or password." });
-        }
-
-        // 3.1 Check if user is verified
-        if (!user.isVerified) {
-            return res.status(403).json({
-                success: false,
-                message: "Email verification required. Please check your inbox for the OTP.",
-                needsVerification: true,
-                email: user.email
-            });
         }
 
         // 4. Generate Access Token (15 min) + Refresh Token (7 days)
@@ -527,49 +513,52 @@ export const GetAllUsers = async (req, res) => {
     }
 };
 
-// ─── Verify Email OTP ─────────────────────────────────────────────────────────
+// ─── Verify Email OTP & FINALIZE REGISTRATION ───────────────────────────────
 export const VerifyEmailOTP = async (req, res) => {
     try {
-        const { email, otp } = req.body;
+        const { registrationToken, otp } = req.body;
 
-        if (!email || !otp) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and OTP are required."
-            });
+        if (!registrationToken || !otp) {
+            return res.status(400).json({ success: false, message: "Registration data and OTP are required." });
         }
 
+        // 1. Decode registration token
+        let decoded;
+        try {
+            decoded = jwt.verify(registrationToken, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(400).json({ success: false, message: "Registration session expired. Please sign up again." });
+        }
+
+        // 2. Verify OTP
         const hashedOtp = crypto.createHash("sha256").update(otp).digest("hex");
-        const user = await UserModel.findOne({ email }); // Non-lean because we call .save() later
-
-        if (!user) {
-            return res.status(404).json({ success: false, message: "User not found." });
-        }
-
-        if (user.isVerified) {
-            return res.status(400).json({ success: true, message: "User already verified." });
-        }
-
         if (
-            user.otp.purpose !== "verification" ||
-            user.otp.code !== hashedOtp ||
-            user.otp.expiresAt < Date.now()
+            decoded.otp.code !== hashedOtp ||
+            decoded.otp.expiresAt < Date.now()
         ) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid or expired OTP code."
-            });
+            return res.status(400).json({ success: false, message: "Invalid or expired OTP code." });
         }
 
-        // Success: Clear OTP and verify user
-        user.isVerified = true;
-        user.otp = { code: null, expiresAt: null, purpose: null };
-        await user.save();
+        // 3. CHECK DUPLICATE EMAIL (Just in case another signup finished during the timeframe)
+        const existing = await UserModel.findOne({ email: decoded.email });
+        if (existing) {
+            return res.status(409).json({ success: false, message: "User with this email was already registered." });
+        }
 
-        // 🧹 Invalidate cache as verification status changed
+        // 4. PERSIST USER TO DATABASE (First time storage!)
+        const user = await UserModel.create({
+            name: decoded.name,
+            email: decoded.email,
+            password: decoded.password, // Already hashed
+            Mobile_no: decoded.Mobile_no,
+            role: decoded.role,
+            isVerified: true
+        });
+
+        // 🧹 Update cache for Admin dashboard stats
         await cacheService.del("admin:dashboard-stats");
 
-        // Sign in user immediately after verification
+        // 5. Sign in user immediately
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
@@ -583,54 +572,127 @@ export const VerifyEmailOTP = async (req, res) => {
         delete userResponse.password;
         delete userResponse.refreshToken;
 
-        return res.status(200).json({
+        return res.status(201).json({
             success: true,
-            message: "Email verified and signed in successfully.",
+            message: "Account verified and created successfully.",
             accessToken,
             user: userResponse
         });
 
     } catch (err) {
         console.error("Verify OTP Error:", err);
-        return res.status(500).json({ success: false, message: "Internal server error." });
+        return res.status(500).json({ success: false, message: "Failed to finalize registration." });
     }
 };
 
-// ─── Resend Verification OTP ──────────────────────────────────────────────────
+// ─── Finalize OAuth Registration ───────────────────────────────────────────────
+export const FinalizeOAuthRegistration = async (req, res) => {
+    try {
+        const { registrationToken, Mobile_no } = req.body;
+
+        if (!registrationToken || !Mobile_no) {
+            return res.status(400).json({ success: false, message: "Registration token and mobile number are required." });
+        }
+
+        // 1. Decode token
+        let decoded;
+        try {
+            decoded = jwt.verify(registrationToken, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(400).json({ success: false, message: "Signup session expired. Please try OAuth again." });
+        }
+
+        // 2. Prevent creating duplicate account
+        const existing = await UserModel.findOne({ email: decoded.email });
+        if (existing) {
+            return res.status(409).json({ success: false, message: "User already registered." });
+        }
+
+        // 3. Create real user
+        const user = await UserModel.create({
+            name: decoded.name,
+            email: decoded.email,
+            password: decoded.password || crypto.randomBytes(16).toString("hex"),
+            Mobile_no,
+            role: decoded.role,
+            provider: decoded.provider,
+            profileImage: decoded.avatar || "",
+            isVerified: true
+        });
+
+        // 🧹 Update cache
+        await cacheService.del("admin:dashboard-stats");
+
+        // 4. Issue session tokens
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+
+        await UserModel.findByIdAndUpdate(user._id, {
+            refreshToken: hashToken(refreshToken)
+        });
+
+        setTokenCookies(res, accessToken, refreshToken, user.role);
+
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        delete userResponse.refreshToken;
+
+        return res.status(201).json({
+            success: true,
+            message: "Account created successfully.",
+            accessToken,
+            user: userResponse
+        });
+
+    } catch (err) {
+        console.error("Finalize OAuth Error:", err);
+        return res.status(500).json({ success: false, message: "Failed to finalize account." });
+    }
+};
+
+// ─── Resend Verification OTP (Stateless) ──────────────────────────────────────
 export const ResendVerificationOTP = async (req, res) => {
     try {
-        const { email } = req.body;
-        const user = await UserModel.findOne({ email });
+        const { registrationToken } = req.body;
 
-        if (!user) {
-            return res.status(404).json({ success: false, message: "User not found." });
+        if (!registrationToken) {
+            return res.status(400).json({ success: false, message: "Registration token is required." });
         }
 
-        if (user.isVerified) {
-            return res.status(400).json({ success: true, message: "User already verified." });
+        // 1. Decode current token to get user info
+        let decoded;
+        try {
+            decoded = jwt.verify(registrationToken, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(400).json({ success: false, message: "Session expired. Please sign up again." });
         }
 
+        // 2. Generate NEW OTP
         const otpStr = Math.floor(100000 + Math.random() * 900000).toString();
-        user.otp = {
-            code: crypto.createHash("sha256").update(otpStr).digest("hex"),
-            expiresAt: Date.now() + 5 * 60 * 1000,
-            purpose: "verification"
-        };
+        const otpExpiry = Date.now() + 5 * 60 * 1000;
+        const hashedOtp = crypto.createHash("sha256").update(otpStr).digest("hex");
 
-        await user.save();
+        // 3. Issue NEW Registration Token with updated OTP
+        const newData = { ...decoded, otp: { code: hashedOtp, expiresAt: otpExpiry, purpose: "verification" } };
+        const newRegistrationToken = jwt.sign(newData, process.env.JWT_SECRET, { expiresIn: "10m" });
 
+        // 4. Send email
         const htmlContent = getEmailTemplate({
-            title: "Verification Required",
-            message: "To complete your RouteMate registration, use the following OTP code to verify your email address.",
+            title: "New Verification OTP",
+            message: "To complete your registration, use the following new OTP code.",
             otp: otpStr,
             expiry: 5
         });
 
-        // Send email in background (no network wait for user)
-        sendEmail({ email: user.email, subject: "RouteMate - New Verification OTP", html: htmlContent })
-            .catch(err => console.error("Background Resend OTP Error:", err));
+        sendEmail({ email: decoded.email, subject: "RouteMate - New OTP Code", html: htmlContent })
+            .catch(err => console.error("Resend OTP Background Error:", err));
 
-        res.status(200).json({ success: true, message: "New verification OTP sent." });
+        res.status(200).json({
+            success: true,
+            message: "New verification OTP sent.",
+            registrationToken: newRegistrationToken
+        });
+
     } catch (error) {
         console.error("Resend OTP Error:", error.message);
         res.status(500).json({ success: false, message: "Server error during OTP resend." });

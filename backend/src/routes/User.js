@@ -11,6 +11,7 @@ import {
     UpdateUser,
     VerifyEmailOTP,
     ResendVerificationOTP,
+    FinalizeOAuthRegistration,
     UpdateMobileNumber,
     UpdateProfileImage
 } from "../controllers/UserController.js";
@@ -23,13 +24,14 @@ import { validateRegister, validateSignIn } from "../middlewares/ValidateMid.js"
 import passport, { issueOAuthTokens } from "../config/passport.js";
 
 const router = express.Router();
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
 
 // ─── Public Routes (with auth rate limiter + input validation) ────────────────
 router.post("/register", authLimiter, validateRegister, CreateUser);
 router.post("/signin", authLimiter, validateSignIn, SignInUser);
 router.post("/verify-otp", authLimiter, VerifyEmailOTP);
 router.post("/resend-otp", authLimiter, ResendVerificationOTP);
+router.post("/finalize-oauth", authLimiter, FinalizeOAuthRegistration);
 router.post("/update-mobile", authMiddleware, UpdateMobileNumber);
 
 // ─── Token Management ─────────────────────────────────────────────────────────
@@ -56,19 +58,16 @@ router.get(
         passport.authenticate("google", { session: false }, async (err, user, info) => {
             if (err) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
-            // Role mismatch — user exists but belongs to a different portal
             if (!user && info?.message?.startsWith("role_mismatch")) {
                 const [, existingRole, requestedRole] = info.message.split(":");
-                return res.redirect(
-                    `${FRONTEND_URL}/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
-                );
+                return res.redirect(`${FRONTEND_URL}/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`);
             }
 
             if (!user) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             await issueOAuthTokens(user, res);
 
-            // Redirect to complete profile if mobile number is missing
+            // Check if profile completion is needed
             const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000")
                 ? "/complete-profile"
                 : `/${user.role}/dashboard`;
@@ -78,13 +77,10 @@ router.get(
     }
 );
 
-router.get(
-    "/auth/facebook",
-    (req, res, next) => {
-        const role = req.query.role || "passenger";
-        passport.authenticate("facebook", { scope: ["email"], state: role })(req, res, next);
-    }
-);
+router.get("/auth/facebook", (req, res, next) => {
+    const role = req.query.role || "passenger";
+    passport.authenticate("facebook", { scope: ["email"], state: role })(req, res, next);
+});
 
 router.get(
     "/auth/facebook/callback",
@@ -92,19 +88,16 @@ router.get(
         passport.authenticate("facebook", { session: false }, async (err, user, info) => {
             if (err) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
-            // Role mismatch — user exists but belongs to a different portal
             if (!user && info?.message?.startsWith("role_mismatch")) {
                 const [, existingRole, requestedRole] = info.message.split(":");
-                return res.redirect(
-                    `${FRONTEND_URL}/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`
-                );
+                return res.redirect(`${FRONTEND_URL}/signin?error=role_mismatch&existing=${existingRole}&requested=${requestedRole}`);
             }
 
             if (!user) return res.redirect(`${FRONTEND_URL}/signin?error=oauth_failed`);
 
             await issueOAuthTokens(user, res);
 
-            // Redirect to complete profile if mobile number is missing
+            // Check if profile completion is needed
             const redirectPath = (!user.Mobile_no || user.Mobile_no === "0000000000")
                 ? "/complete-profile"
                 : `/${user.role}/dashboard`;

@@ -53,6 +53,7 @@ import SettingsPage from "./pages/SettingsPage";
 import { ShieldAlert } from "lucide-react";
 
 import { getMyDriverProfile } from "./services/driverProfileService";
+import { requestForToken, onMessageListener } from "./firebase";
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
@@ -624,12 +625,31 @@ function AppRoutes() {
 
 import { ToastProvider } from "./context/ToastContext";
 
+function InternalAppInitializer({ children }) {
+  useEffect(() => {
+    // 1. Request FCM Token on app load
+    requestForToken().then(token => {
+      // You can send this token to your API here if needed
+    });
+
+    // 2. Listen for foreground messages
+    onMessageListener().then(payload => {
+      // Handle foreground notification
+    }).catch(err => {});
+
+  }, []);
+
+  return children;
+}
+
 function App() {
   return (
     <AuthProvider>
       <ToastProvider>
         <NotificationProvider>
-          <AppRoutes />
+          <InternalAppInitializer>
+            <AppRoutes />
+          </InternalAppInitializer>
         </NotificationProvider>
       </ToastProvider>
     </AuthProvider>
