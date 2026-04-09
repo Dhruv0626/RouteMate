@@ -310,7 +310,7 @@ const DashboardPage = () => {
             const adminStats = statsRes.data.stats;
             setStats([
               { label: "Users", value: adminStats.counts.total.toLocaleString() },
-              { label: "Active", value: adminStats.drivers.online.toLocaleString() },
+              { label: "Active", value: adminStats.counts.activeUsers.toLocaleString() },
               { label: "Revenue", value: `₹${(adminStats.business.revenue / 1000).toFixed(1)}K` },
             ]);
           }

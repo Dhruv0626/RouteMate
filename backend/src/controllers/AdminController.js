@@ -32,6 +32,7 @@ export const GetDashboardStats = async (req, res) => {
             totalUsers,
             passengers,
             drivers,
+            activeUsers,
             approvedDrivers,
             onlineDrivers,
             tripStats,
@@ -43,6 +44,7 @@ export const GetDashboardStats = async (req, res) => {
             UserModel.countDocuments(),
             UserModel.countDocuments({ role: "passenger" }),
             UserModel.countDocuments({ role: "driver" }),
+            UserModel.countDocuments({ isBlocked: { $ne: true } }), // Active (unblocked) users
             DriverProfileModel.countDocuments({ isApproved: true }),
             DriverProfileModel.countDocuments({ isOnline: true }),
             
@@ -96,6 +98,7 @@ export const GetDashboardStats = async (req, res) => {
                 total: totalUsers,
                 passengers,
                 drivers,
+                activeUsers,
                 online: onlineDrivers
             },
             drivers: {
