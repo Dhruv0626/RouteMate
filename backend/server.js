@@ -118,24 +118,9 @@ const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Initialize Socket Manager
-initSocket(io);
-
-// Attach io to req for use in controllers
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
-
 // Socket.io namespaces or rooms logic
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
-
-  // Allow users to join a room based on their userID for private notifications
-  socket.on("join_user", (userId) => {
-    socket.join(userId);
-    console.log(`👤 User ${userId} joined their private notification room`);
-  });
 
   socket.on("join_ride", (rideId) => {
     socket.join(rideId);

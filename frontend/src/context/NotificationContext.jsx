@@ -8,7 +8,6 @@ import {
   markAllAsRead as apiMarkAllAsRead, 
   deleteNotification as apiDeleteNotification 
 } from "../services/notificationService";
-import socket from "../services/socket";
 
 const ICONS = {
   ride_request: Zap,
@@ -167,47 +166,23 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user, showNativeNotification, showToast, deleteNotification]);
 
-  // Initial load, polling, and Socket connection
+  // Initial load and polling
   useEffect(() => {
     if (user) {
       fetchNotifications(true);
 
-      // ─── Socket.IO Real-time Connection ────────────────────────────────────
-      socket.connect();
-      socket.emit("join_user", user.id);
-
-      const handleNewNotification = (notification) => {
-        // Add to list and update count instantly
-        setNotifications(prev => [notification, ...prev]);
-        setUnreadCount(prev => prev + 1);
-        prevUnreadCountRef.current += 1;
-        
-        // Show native/toast immediate
-        showNativeNotification(notification);
-        showToast(notification.message, notification.type === 'error' ? 'error' : (notification.type === 'warning' ? 'warning' : 'info'), 8000, {
-            onDismiss: () => deleteNotification(notification._id)
-        });
-      };
-
-      socket.on("new_notification", handleNewNotification);
-
-      // Polling every 30 seconds as a fallback (increased from 15 since socket is active)
+      // Polling every 15 seconds for a snappy feel (reduced from 30)
       const pollInterval = setInterval(() => {
         fetchNotifications(false);
-      }, 30000);
+      }, 15000);
 
-      return () => {
-        clearInterval(pollInterval);
-        socket.off("new_notification", handleNewNotification);
-        socket.disconnect();
-      };
+      return () => clearInterval(pollInterval);
     } else {
       setNotifications([]);
       setUnreadCount(0);
       prevUnreadCountRef.current = 0;
-      socket.disconnect();
     }
-  }, [user, fetchNotifications, showNativeNotification, showToast, deleteNotification]);
+  }, [user, fetchNotifications]);
 
   const value = {
     notifications,
