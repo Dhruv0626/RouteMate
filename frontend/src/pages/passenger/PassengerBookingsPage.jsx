@@ -106,11 +106,42 @@ const PassengerBookingsPage = () => {
                  </span>
                </div>
 
-               {(isConfirmed || ride.status === 'active') && (
-                 <button onClick={() => navigate(`/live-tracking/${ride._id}`)} 
-                   className="w-full py-3 bg-primary text-black font-black rounded-xl hover:scale-105 transition-all text-sm flex items-center justify-center gap-2">
-                   <Navigation size={18} /> Live Track Ride
-                 </button>
+               {/* ── Ride Status Action ── */}
+               {isConfirmed && (
+                 <div className="mt-2 flex flex-col gap-2">
+                   {/* Status-aware banner */}
+                   <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold ${
+                     ride.status === 'arrived' ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20'
+                     : ride.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                     : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                   }`}>
+                     <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                       ride.status === 'arrived' ? 'bg-violet-500'
+                       : ride.status === 'active' ? 'bg-emerald-500'
+                       : 'bg-amber-500'
+                     }`} />
+                     {ride.status === 'arrived' ? '🎯 Driver has arrived — share your OTP to start'
+                      : ride.status === 'active' ? '🚀 Ride in progress'
+                      : '🚗 Driver is heading to your pickup'}
+                   </div>
+
+                   {/* Action buttons */}
+                   <div className="flex gap-2">
+                     <button
+                       onClick={() => navigate(`/pickup-map/${ride._id}`)}
+                       className="flex-1 py-3 bg-primary text-black font-black rounded-xl hover:scale-105 active:scale-95 transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                     >
+                       <Navigation size={16} /> Track Driver Live
+                     </button>
+                     {ride.driver?.Mobile_no && (
+                       <a href={`tel:${ride.driver.Mobile_no}`}
+                         className="py-3 px-4 bg-emerald-500 text-white font-black rounded-xl hover:scale-105 active:scale-95 transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                       >
+                         <Car size={16} />
+                       </a>
+                     )}
+                   </div>
+                 </div>
                )}
             </div>
           )

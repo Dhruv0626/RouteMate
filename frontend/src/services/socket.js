@@ -5,6 +5,9 @@ const SOCKET_URL = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://
 
 const socket = io(SOCKET_URL, {
   autoConnect: false, // Wait until explicit connection
+  transports: ["websocket", "polling"], // Allow fallback
+  forceNew: true, // Prevent reusing old dead connections 
+  reconnectionAttempts: 5,
 });
 
 export default socket;

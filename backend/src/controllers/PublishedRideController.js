@@ -42,7 +42,7 @@ const isNightTime = () => {
 const calcFare = async ({
     category,
     distanceKm,
-    timeMin = 20, 
+    timeMin = 20,
     demandRatio = 1.0,
     isNight = false
 }) => {
@@ -130,8 +130,8 @@ const calcFare = async ({
     } catch (error) {
         console.error("🔴 RouteMate Fare Engine Error:", error.message);
         console.error("Context:", { category, distanceKm, timeMin, demandRatio, isNight });
-        return { 
-            error: "Calculation failed", 
+        return {
+            error: "Calculation failed",
             message: error.message,
             final_price: 0 // Return 0 so it's visible something is wrong
         };
@@ -167,7 +167,7 @@ export const PublishRide = async (req, res) => {
             departureTime,
             totalSeats: 1,
             availableSeats: 1,
-            vehicleType: driverProfile.vehicle?.type || "Sedan",
+            vehicleType: (driverProfile.vehicle?.type || "PRIME").toUpperCase(),
             routeCoords: sampledCoords,
             status: "open",
             bookings: []
@@ -252,6 +252,10 @@ export const GetAvailableRides = async (req, res) => {
             // ── LIVE DISTANCE ──
             const driverCoords = profile?.currentLocation?.coordinates;
             const isValidGps = driverCoords && driverCoords[0] !== 0 && driverCoords[1] !== 0;
+            
+            if (isValidGps) {
+                rideObj.driverLocation = driverCoords; // [lng, lat] used for precise ETA calculation on frontend
+            }
 
             if (pSrc && isValidGps) {
                 const distToDriver = haversineKm(pSrc, driverCoords);
@@ -462,6 +466,7 @@ export const RespondToBooking = async (req, res) => {
                 driver: ride.driver,
                 publishedRide: ride._id, // LINK TO PUBLISHED RIDE
                 phase: "matched",
+                vehicleTypeRequested: (ride.vehicleType || "PRIME").toUpperCase(),
                 source: {
                     address: booking.passengerSource?.address || ride.source.address,
                     location: {
@@ -543,7 +548,7 @@ export const UpdateRideStatus = async (req, res) => {
         // ── VERIFY OTP IF STARTING RIDE ──
         if (status === "active") {
             if (!otp) return res.status(400).json({ success: false, message: "OTP is required to start the ride" });
-            
+
             // Find matched or arrived trips for this ride
             const tripsToStart = await TripModel.find({ publishedRide: rideId, phase: { $in: ["matched", "arrived"] } });
             if (tripsToStart.length === 0) return res.status(400).json({ success: false, message: "No trips to start" });
@@ -559,13 +564,13 @@ export const UpdateRideStatus = async (req, res) => {
         // ── UPDATE ASSOCIATED TRIPS ──
         // Mapping PublishedRide status to Trip phase
         const tripPhase = status === "active" ? "ongoing" : (status === "completed" ? "completed" : (status === "arrived" ? "arrived" : "matched"));
-        
+
         // If starting with OTP, only start the one that matches!
         const query = { publishedRide: rideId, phase: { $ne: "cancelled" } };
         if (status === "active") query.otp = otp; // Only the one with this OTP
 
         const trips = await TripModel.find(query);
-        
+
         for (const trip of trips) {
             trip.phase = tripPhase;
             if (status === "completed") {
@@ -576,19 +581,19 @@ export const UpdateRideStatus = async (req, res) => {
                 });
             }
             if (status === "active") trip.startedAt = new Date();
-            
+
             if (status === "arrived") {
                 trip.driverArrivedAt = new Date();
-                
-                // NOTIFY PASSENGER THAT DRIVER ARRIVED
+
+                // NOTIFY PASSENGER THAT DRIVER ARRIVED (Simple prompt without duplicate OTP)
                 await NotificationModel.create({
                     recipient: trip.passenger,
                     sender: req.user.id,
                     title: "Driver Arrived! 🚗",
-                    message: `Your driver has arrived at the pickup location. Share the OTP: ${trip.otp} with the driver to start.`,
+                    message: "Your driver has arrived at the pickup location. Please meet your driver to start the trip.",
                     type: "driver_arrived",
                     link: "/passenger/dashboard/my-rides",
-                    metadata: { rideId, otp: trip.otp }
+                    metadata: { rideId }
                 });
             }
             await trip.save();
@@ -598,11 +603,11 @@ export const UpdateRideStatus = async (req, res) => {
         if (status === "completed") {
             await DriverProfileModel.findOneAndUpdate(
                 { user: req.user.id },
-                { 
-                    $inc: { 
-                        "stats.totalRides": 1, 
-                        "stats.completedRides": 1 
-                    } 
+                {
+                    $inc: {
+                        "stats.totalRides": 1,
+                        "stats.completedRides": 1
+                    }
                 }
             );
         }

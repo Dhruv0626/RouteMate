@@ -305,14 +305,23 @@ const HistoryPage = () => {
                           </div>
                         )}
                       </div>
-                      <div className="space-y-1 mb-2">
-                        <div className="flex items-start gap-2 text-sm text-(--text-dim)">
-                          <MapPin size={14} className={`flex-shrink-0 mt-0.5 ${role === "passenger" ? "text-emerald-500" : ""}`} />
-                          <span>{ride.pickup}</span>
+                      <div className="flex gap-4 mb-4 relative">
+                        <div className="flex flex-col items-center flex-shrink-0 py-1">
+                          <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
+                          <div className="flex-1 w-[1px] border-l-2 border-dashed border-gray-300 dark:border-gray-600 my-1"></div>
+                          <MapPin size={16} className="text-red-500 flex-shrink-0" />
                         </div>
-                        <div className="flex items-start gap-2 text-sm text-(--text-dim)">
-                          <ArrowLeft size={14} className={`flex-shrink-0 mt-0.5 rotate-90 ${role === "passenger" ? "text-red-500" : ""}`} />
-                          <span>{ride.dropoff}</span>
+                        <div className="flex flex-col justify-between py-1 flex-1 min-h-[4.5rem]">
+                          <div>
+                            <p className="text-sm font-bold text-(--text-main) line-clamp-2 leading-tight">
+                              {ride.pickup}
+                            </p>
+                          </div>
+                          <div className="mt-4">
+                            <p className="text-sm font-bold text-(--text-main) line-clamp-2 leading-tight">
+                              {ride.dropoff}
+                            </p>
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 text-xs flex-wrap">

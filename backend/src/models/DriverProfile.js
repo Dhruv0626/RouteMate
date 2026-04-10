@@ -55,7 +55,7 @@ const DriverProfileSchema = new Schema(
 
     averageRating:        { type: Number, default: 0.0 },
     totalRatingsReceived: { type: Number, default: 0 },
-    trustScore:           { type: Number, default: 100 },
+    trustScore:           { type: Number, default: 0 },
 
     // ── Weekly Schedule (embedded) ─────────────────────────────────────────
     shifts: [

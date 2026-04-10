@@ -78,8 +78,12 @@ export const NotificationProvider = ({ children }) => {
   // Request Notification Permission only if user has push notifications enabled in settings
   useEffect(() => {
     const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{"pushNotifs":false}');
-    if (appSettings.pushNotifs && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+    if (showNativeNotification && "Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+      try {
+        Notification.requestPermission().catch(() => {
+          // silently catch browser anti-spam denial
+        });
+      } catch(e) {}
     }
   }, []);
 

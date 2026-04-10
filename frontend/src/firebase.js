@@ -39,11 +39,15 @@ export const requestForToken = async () => {
         return null;
       }
     } else {
-      console.error('❌ Notification permission denied.');
+      console.warn('⚠️ Push notifications are blocked by the browser.');
       return null;
     }
   } catch (err) {
-    console.error('❌ An error occurred while retrieving token:', err);
+    if (err.message && err.message.includes('blocked')) {
+      console.warn("⚠️ Push notifications are blocked by browser settings.");
+    } else {
+      console.warn('⚠️ Push tokens could not be retrieved. Falling back to in-app alerts.');
+    }
     return null;
   }
 };

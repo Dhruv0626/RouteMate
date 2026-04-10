@@ -26,22 +26,6 @@ const ActiveRidesPage = () => {
   const [expandedRide, setExpandedRide] = useState(null);
   const [showNavigation, setShowNavigation] = useState(false);
 
-  const handleUpdateStatus = async (rideId, status) => {
-    if (status === "arrived" || status === "matched") {
-        // Navigate to the live tracking page for deeper interaction (OTP, arrived state etc)
-        navigate(`/live-tracking/${rideId}`);
-        return;
-    }
-
-    try {
-      await api.patch(`/published-rides/${rideId}/status`, { status });
-      // Refresh data
-      window.location.reload(); 
-    } catch (err) {
-      showAlert(err.response?.data?.message || "Failed to update status", "Update Failed", "error");
-    }
-  };
-
   const handleCancel = async (rideId) => {
     const confirmed = await showConfirm("Are you sure you want to cancel this ride?", "Cancel Ride", "warning", "Yes, Cancel");
     if (!confirmed) return;
@@ -89,6 +73,8 @@ const ActiveRidesPage = () => {
         return "bg-blue-100/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300";
       case "matched":
         return "bg-amber-100/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300";
+      case "arrived":
+        return "bg-violet-100/50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-300";
       case "completed":
         return "bg-emerald-100/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300";
       default:
@@ -102,6 +88,8 @@ const ActiveRidesPage = () => {
         return <Activity className="w-4 h-4" />;
       case "matched":
         return <Clock className="w-4 h-4" />;
+      case "arrived":
+        return <MapPin className="w-4 h-4" />;
       case "completed":
         return <CheckCircle className="w-4 h-4" />;
       default:
@@ -115,6 +103,8 @@ const ActiveRidesPage = () => {
         return "Ride Ongoing";
       case "matched":
         return "Heading to Pickup";
+      case "arrived":
+        return "At Pickup Point";
       case "completed":
         return "Completed";
       default:
@@ -247,7 +237,7 @@ const ActiveRidesPage = () => {
                           {getStatusLabel(ride.phase)}
                         </span>
                         <span className="text-[10px] px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full font-semibold uppercase">
-                          {ride.vehicleTypeRequested || "Sedan"}
+                          {(ride.vehicleTypeRequested || ride.publishedRide?.vehicleType || "PRIME").toUpperCase()}
                         </span>
                       </div>
 
@@ -270,18 +260,25 @@ const ActiveRidesPage = () => {
                       </div>
 
                       {/* Route Info */}
-                      <div className="flex items-start gap-3 mb-4">
-                        <MapPin className="w-5 h-5 text-emerald-500 mt-1 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-(--text-main) line-clamp-1">
-                            {ride.source?.address}
-                          </p>
-                          <div className="flex items-center gap-1 my-1">
-                            <div className="h-4 border-l-2 border-dashed border-gray-300 dark:border-gray-600 ml-0.5"></div>
+                      <div className="flex gap-4 mb-6 relative">
+                        <div className="flex flex-col items-center flex-shrink-0 py-1">
+                          <MapPin className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                          <div className="flex-1 w-[1px] border-l-2 border-dashed border-gray-300 dark:border-gray-600 my-1"></div>
+                          <MapPin className="w-5 h-5 text-red-500 flex-shrink-0" />
+                        </div>
+                        <div className="flex flex-col justify-between py-1 flex-1 min-h-[5rem]">
+                          <div>
+                            <p className="text-sm font-bold text-(--text-main) line-clamp-2 leading-tight">
+                              {ride.source?.address}
+                            </p>
+                            <p className="text-[10px] text-(--text-dim) font-black tracking-tighter uppercase mt-0.5">Pickup Location</p>
                           </div>
-                          <p className="text-sm text-(--text-dim) line-clamp-1">
-                            {ride.destination?.address}
-                          </p>
+                          <div className="mt-4">
+                            <p className="text-sm font-bold text-(--text-main) line-clamp-2 leading-tight">
+                              {ride.destination?.address}
+                            </p>
+                            <p className="text-[10px] text-(--text-dim) font-black tracking-tighter uppercase mt-0.5">Dropoff Destination</p>
+                          </div>
                         </div>
                       </div>
 
@@ -310,12 +307,12 @@ const ActiveRidesPage = () => {
                   <div className="border-t border-(--card-border) p-6 bg-black/5 dark:bg-white/5 space-y-6">
                     {/* Quick Actions */}
                     <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => navigate(`/live-tracking/${ride.publishedRide || ride._id}`)}
+                      <button 
+                        onClick={() => navigate(`/pickup-map/${ride.publishedRide?._id || ride.publishedRide || ride._id}`)}
                         className="flex items-center justify-center gap-2 py-3 px-4 bg-amber-400 hover:bg-amber-500 text-black rounded-lg font-bold transition"
                       >
                         <Navigation className="w-5 h-5" />
-                        Navigation
+                        Pickup Point
                       </button>
                       <a 
                         href={`tel:${ride.passenger?.Mobile_no}`}
@@ -328,13 +325,13 @@ const ActiveRidesPage = () => {
 
                     {/* Control Buttons based on Phase */}
                     <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      {ride.phase === "matched" && (
+                    {(ride.phase === "matched" || ride.phase === "arrived") && (
                         <>
                           <button 
-                            onClick={() => navigate(`/live-tracking/${ride.publishedRide || ride._id}`)}
+                            onClick={() => navigate(`/start-ride/${ride.publishedRide?._id || ride.publishedRide || ride._id}`)}
                             className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition"
                           >
-                            Start Ride
+                            {ride.phase === "arrived" ? "Enter OTP & Start" : "Start Ride"}
                           </button>
                           <button 
                             onClick={() => handleCancel(ride._id)}
@@ -347,10 +344,10 @@ const ActiveRidesPage = () => {
                       {ride.phase === "ongoing" && (
                         <>
                           <button 
-                            onClick={() => handleUpdateStatus(ride._id, "completed")}
-                            className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition"
+                            onClick={() => navigate(`/start-ride/${ride.publishedRide || ride._id}`)}
+                            className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition flex justify-center items-center gap-2"
                           >
-                            Complete Ride
+                            <Navigation size={18} /> Live Map
                           </button>
                           <button className="flex-1 py-3 px-4 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold transition">
                             Emergency

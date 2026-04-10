@@ -356,42 +356,103 @@ const DashboardPage = () => {
               ]);
             }
 
-            // Map live rides to activity format (Include cancelled so they don't disappear)
-            const activeActivities = liveRides
-              .filter(r => r.status !== 'completed')
-              .map(ride => {
-                const myBooking = ride.myBookings?.[0];
-                const displayStatus = myBooking?.status === 'cancelled' ? 'REJECTED' : ride.status.toUpperCase();
-                
+            if (user.role === "driver") {
+              // ── DRIVER: Merge published rides + trip history into one unified timeline ──
+
+              // Published rides → simplified for single fixed-price booking
+              const publishedActivities = liveRides.map(ride => {
+                const confirmedBooking = (ride.bookings || []).find(b => b.status === "confirmed");
+                const passengerName = confirmedBooking?.passenger?.name || null;
+                const dep = new Date(ride.departureTime);
+                const isToday = dep.toDateString() === new Date().toDateString();
+                const statusLabel = ride.status === "active" ? "Active"
+                  : ride.status === "arrived" ? "At Pickup"
+                  : ride.status === "completed" ? "Completed"
+                  : ride.status === "open" ? "Open"
+                  : ride.status.charAt(0).toUpperCase() + ride.status.slice(1);
+
                 return {
                   id: ride._id,
-                  type: "Live Ride",
+                  type: ride.vehicleType?.toUpperCase() || "RIDE",
+                  subType: passengerName ? `Passenger: ${passengerName}` : confirmedBooking ? "1 booking" : "No booking yet",
                   from: ride.source?.address?.split(',')[0] || "Unknown",
                   to: ride.destination?.address?.split(',')[0] || "Unknown",
-                  date: "Now",
-                  rawDate: new Date(ride.departureTime),
-                  status: displayStatus,
-                  amount: ride.vehicleType || "Ride",
+                  date: isToday
+                    ? dep.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                    : dep.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+                  rawDate: dep,
+                  status: statusLabel,
+                  amount: ride.price ? `₹${ride.price}` : "—",
                   icon: Car,
-                  isLive: true,
-                  bookingStatus: myBooking?.status
+                  isLive: ride.status !== "completed",
+                  rideId: ride._id,
                 };
-            });
+              });
 
-            // For Activity, we'll use a mix of recent rides and live ones
-            const activityHistory = rides.map(ride => ({
-              id: ride._id,
-              type: "Trip",
-              from: ride.source?.address?.split(',')[0] || "Unknown",
-              to: ride.destination?.address?.split(',')[0] || "Unknown",
-              date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-              rawDate: new Date(ride.createdAt),
-              status: ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
-              amount: `₹${ride.fare?.total || 0}`,
-              icon: Navigation
-            }));
+              // Trip history → completed trips with fare
+              const tripActivities = rides.map(ride => ({
+                id: ride._id,
+                type: "Trip",
+                subType: "Completed",
+                from: ride.source?.address?.split(',')[0] || "Unknown",
+                to: ride.destination?.address?.split(',')[0] || "Unknown",
+                date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+                rawDate: new Date(ride.createdAt),
+                status: ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
+                amount: `₹${ride.fare?.total || 0}`,
+                icon: Navigation,
+                isLive: false,
+              }));
 
-            setActivities([...activeActivities, ...activityHistory].slice(0, 8));
+              // Merge and sort newest first — deduplicate by id
+              const seenIds = new Set();
+              const merged = [...publishedActivities, ...tripActivities]
+                .filter(a => { if (seenIds.has(a.id)) return false; seenIds.add(a.id); return true; })
+                .sort((a, b) => b.rawDate - a.rawDate)
+                .slice(0, 10);
+
+              setActivities(merged);
+            } else {
+              // ── PASSENGER: live bookings shown above, history below ──
+              const activeActivities = liveRides
+                .filter(r => r.status !== 'completed')
+                .map(ride => {
+                  const myBooking = ride.myBookings?.[0];
+                  const displayStatus = myBooking?.status === 'cancelled' ? 'REJECTED' : ride.status.toUpperCase();
+                  // Use passenger's own pickup/dropoff — NOT the driver's published route endpoints
+                  const from = myBooking?.passengerSource?.address?.split(',')[0]
+                    || ride.source?.address?.split(',')[0] || 'Unknown';
+                  const to = myBooking?.passengerDestination?.address?.split(',')[0]
+                    || ride.destination?.address?.split(',')[0] || 'Unknown';
+                  return {
+                    id: ride._id,
+                    type: (ride.vehicleType || 'RIDE').toUpperCase(),
+                    from,
+                    to,
+                    date: new Date(ride.departureTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                    rawDate: new Date(ride.departureTime),
+                    status: displayStatus,
+                    amount: myBooking?.amountPaid ? `₹${myBooking.amountPaid}` : (ride.vehicleType || 'PRIME').toUpperCase(),
+                    icon: Car,
+                    isLive: true,
+                    bookingStatus: myBooking?.status
+                  };
+                });
+
+              const activityHistory = rides.map(ride => ({
+                id: ride._id,
+                type: "Trip",
+                from: ride.source?.address?.split(',')[0] || "Unknown",
+                to: ride.destination?.address?.split(',')[0] || "Unknown",
+                date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+                rawDate: new Date(ride.createdAt),
+                status: ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
+                amount: `₹${ride.fare?.total || 0}`,
+                icon: Navigation
+              }));
+
+              setActivities([...activeActivities, ...activityHistory].slice(0, 8));
+            }
           }
         }
       } catch (err) {
@@ -605,7 +666,7 @@ const DashboardPage = () => {
                {activities.filter(a => a.isLive).map((item) => (
                  <div 
                    key={item.id} 
-                   onClick={() => navigate(`/live-tracking/${item.id}`)}
+                 onClick={() => navigate(`/pickup-map/${item.id}`)}
                    className={`glass-card group relative overflow-hidden rounded-3xl p-5 border cursor-pointer hover:scale-[1.01] transition-all ${item.bookingStatus === 'cancelled' ? 'border-red-500/30 bg-red-500/5' : 'border-primary/30 bg-primary/5'}`}
                  >
                     <div className="flex items-center justify-between mb-3">
@@ -613,9 +674,16 @@ const DashboardPage = () => {
                         <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all group-hover:scale-110 ${item.bookingStatus === 'cancelled' ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'}`}>
                           <Car size={20} />
                         </div>
-                        <div>
-                          <p className="text-sm font-black text-(--text-main)">{item.from} → {item.to}</p>
-                          <p className="text-[10px] font-bold text-(--text-dim) uppercase tracking-widest leading-none">{item.amount}</p>
+                        <div className="flex flex-col gap-2 flex-1">
+                          <div className="flex items-start gap-3">
+                            <MapPin size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm font-black text-(--text-main) line-clamp-1">{item.from}</p>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <MapPin size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
+                            <p className="text-[11px] font-bold text-(--text-dim) line-clamp-1">{item.to}</p>
+                          </div>
+                          <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest leading-none mt-1 ml-6">{item.amount}</p>
                         </div>
                       </div>
                       <div className={`px-4 py-1.5 rounded-full border text-[10px] font-black tracking-widest uppercase ${item.bookingStatus === 'cancelled' ? 'bg-red-500/20 text-red-500 border-red-500/30' : item.bookingStatus === 'confirmed' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' : 'bg-amber-500/20 text-amber-500 border-amber-500/30'}`}>
@@ -630,7 +698,7 @@ const DashboardPage = () => {
                     ) : item.bookingStatus === 'confirmed' ? (
                       <div className="flex items-center gap-2 mt-2 pt-2 border-t border-emerald-500/10">
                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                         <p className="text-[10px] font-bold text-emerald-500/80 italic">Verified! Tap to track your ride and share OTP.</p>
+                         <p className="text-[10px] font-bold text-emerald-500/80 italic">Booking confirmed! Tap to track driver live.</p>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 mt-2 pt-2 border-t border-amber-500/10">
@@ -657,42 +725,100 @@ const DashboardPage = () => {
 
           <div className="glass-card overflow-hidden rounded-3xl">
             <div className="divide-y divide-(--card-border)">
-              {(activities || []).length > 0 ? activities.map((item) => (
-                <div
-                  key={item.id}
-                  className="group flex items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-xl transition-all">
-                      <item.icon size={18} />
+              {/* Passengers: only show trip history (not live bookings, already shown above) */}
+              {role === "passenger" && (
+                activities.filter(a => !a.isLive).length > 0
+                  ? activities.filter(a => !a.isLive).map((item) => (
+                    <div
+                      key={item.id}
+                      className="group flex items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-start gap-2">
+                             <MapPin size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                             <p className="text-sm font-bold text-(--text-main) line-clamp-1">{item.from}</p>
+                          </div>
+                          <div className="flex items-start gap-2 mt-0.5">
+                             <MapPin size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
+                             <p className="text-[11px] font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
+                          </div>
+                          <p className="text-[10px] font-medium text-(--text-dim) uppercase tracking-wider mt-1 ml-6">
+                            {item.date} • {item.type}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-black text-(--text-main)">{item.amount || item.status}</p>
+                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500">
+                          <Circle size={4} fill="currentColor" /> {item.status || "Completed"}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-(--text-main)">
-                        {role === "admin" ? item.action : `${item.from} → ${item.to}`}
-                      </p>
-                      <p className="text-[10px] font-medium text-(--text-dim) uppercase tracking-wider">
-                        {item.date} • {role === "admin" ? item.user : item.type}
-                      </p>
+                  ))
+                  : (
+                    <div className="p-10 text-center opacity-50">
+                      <p className="text-xs font-bold uppercase tracking-widest">No Past Trips Found</p>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-black text-(--text-main)">
-                      {item.amount || item.status}
-                    </p>
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500">
-                      <Circle size={4} fill="currentColor" /> {item.status || "Completed"}
-                    </span>
-                  </div>
-                </div>
-              )) : (
-                <div className="p-10 text-center opacity-50">
-                   <p className="text-xs font-bold uppercase tracking-widest">No Recent Activity Found</p>
-                </div>
+                  )
+              )}
+
+              {/* Drivers & Admins: show full unified activity list */}
+              {role !== "passenger" && (
+                activities.length > 0
+                  ? activities.map((item) => (
+                    <div
+                      key={item.id}
+                      className="group flex items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                      onClick={() => {
+                        if (item.rideId && role === "driver") navigate(`/driver/dashboard/active-rides`);
+                      }}
+                    >
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        {/* Live indicator dot */}
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          item.isLive ? "bg-emerald-500 animate-pulse" : "bg-white/20"
+                        }`} />
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                             <MapPin size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                             <p className="text-sm font-bold text-(--text-main) line-clamp-1">
+                               {role === "admin" ? item.action : item.from}
+                             </p>
+                          </div>
+                          {role !== "admin" && (
+                             <div className="flex items-start gap-2">
+                               <MapPin size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
+                               <p className="text-[11px] font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
+                             </div>
+                          )}
+                          <p className="text-[10px] font-medium text-(--text-dim) uppercase tracking-wider ml-6">
+                            {item.date} • {role === "admin" ? item.user : item.type}
+                            {item.subType && <span className="ml-1 opacity-60">• {item.subType}</span>}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <p className="text-sm font-black text-(--text-main)">{item.amount || "—"}</p>
+                        <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${
+                          item.isLive ? "text-emerald-500" 
+                          : item.status === "Completed" ? "text-emerald-500"
+                          : "text-white/40"
+                        }`}>
+                          <Circle size={4} fill="currentColor" /> {item.status || "Completed"}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                  : (
+                    <div className="p-10 text-center opacity-50">
+                      <p className="text-xs font-bold uppercase tracking-widest">No Recent Activity Found</p>
+                    </div>
+                  )
               )}
             </div>
           </div>
         </section>
-
       </main>
 
       {/* Settings Permission Modal Workflow */}

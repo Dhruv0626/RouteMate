@@ -154,7 +154,7 @@ const DriverBookingsPage = () => {
                 </div>
 
                 <div className="mt-3">
-                  <button onClick={() => navigate(`/live-tracking/${ride._id}`)} className="px-4 py-2 bg-primary/20 text-primary border border-primary/30 font-bold rounded-xl text-xs hover:bg-primary/30 transition-all flex items-center gap-2">
+                  <button onClick={() => navigate(`/start-ride/${ride._id}`)} className="px-4 py-2 bg-primary/20 text-primary border border-primary/30 font-bold rounded-xl text-xs hover:bg-primary/30 transition-all flex items-center gap-2">
                     <Navigation size={14} /> View Live Map & Controls
                   </button>
                 </div>

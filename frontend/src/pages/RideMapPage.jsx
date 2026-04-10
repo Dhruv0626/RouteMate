@@ -16,7 +16,7 @@ const VEHICLE_METADATA = {
   EVMOTO: { name: "Electric Bike", capacity: 1, desc: "Eco-friendly bike rides", icon: "🌱🏍️", tag: "Eco" },
   AUTO: { name: "Auto", capacity: 3, desc: "Quick city transport", icon: "🛺", tag: "" },
   EVAUTO: { name: "Electric Auto", capacity: 3, desc: "Green city transport", icon: "🌱🛺", tag: "Eco" },
-  GO: { name: "GO", capacity: 4, desc: "Affordable Hatchback", icon: "🚕", tag: "" },
+  GO: { name: "GO", capacity: 4, desc: "Affordable Hatchback", image: "/images/Go.png", tag: "" },
   EVGO: { name: "Electric GO", capacity: 4, desc: "Sustainable Hatchback", icon: "🌱🚕", tag: "Eco" },
   PRIME: { name: "Prime Sedan", capacity: 4, desc: "Top-rated comfort sedans", icon: "🚗", tag: "Premium" },
   XL: { name: "SUV XL", capacity: 6, desc: "Spacious SUVs for clans", icon: "🚙", tag: "Spacious" }
@@ -100,12 +100,89 @@ function RouteCard({ route, isSelected, onClick }) {
 }
 
 // ─── Published Ride Card ──────────────────────────────────────────────────────
-function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0 }) {
+function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passengerPickup }) {
   const meta = VEHICLE_METADATA[ride.vehicleType?.toUpperCase()] || { name: ride.vehicleType, capacity: 4, desc: "Safe city ride", icon: "🚗" };
-  const arrivalText = "2 mins away"; // Mocked dynamic arrival
-  const dropTime = durationMin > 0 
-    ? new Date(Date.now() + durationMin * 60000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
-    : "";
+  const [travelToPickupMins, setTravelToPickupMins] = useState(null);
+
+  // ── Real Timing from departure time + OSRM route ──
+  useEffect(() => {
+    // Prefer driver's live GPS coordinates (if active) over static published source
+    const driverSrc = ride.driverLocation || ride.source?.location?.coordinates; // [lng, lat]
+    const passPickup = passengerPickup; // { lat, lng } passenger's pickup
+
+    if (!driverSrc || !passPickup || !ride.departureTime) return;
+
+    let cancelled = false;
+    const fetchEta = async () => {
+      try {
+        // OSRM: Driver source → Passenger pickup travel time
+        const url = `https://router.project-osrm.org/route/v1/driving/${driverSrc[0]},${driverSrc[1]};${passPickup.lng},${passPickup.lat}?overview=false`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!cancelled && data.code === "Ok" && data.routes?.[0]) {
+          const travelSecs = data.routes[0].duration;
+          const travelMins = Math.round(travelSecs / 60);
+          setTravelToPickupMins(travelMins);
+        }
+      } catch (e) {
+        // silently fail
+      }
+    };
+    fetchEta();
+    return () => { cancelled = true; };
+  }, [ride._id, passengerPickup?.lat, passengerPickup?.lng, ride.departureTime]);
+
+  // ── Derived timing values with smart delay detection ──
+  const { pickupEstText, dropEstText, minsUntilPickup, delayMins } = (() => {
+    const dep = ride.departureTime ? new Date(ride.departureTime) : null;
+    if (!dep) return { pickupEstText: null, dropEstText: null, minsUntilPickup: null, delayMins: 0 };
+
+    const now = Date.now();
+    const fmtTime = (d) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
+    // Pickup estimated time = departure + OSRM travel to pickup
+    const pickupArrival = travelToPickupMins !== null
+      ? new Date(dep.getTime() + travelToPickupMins * 60000)
+      : null;
+
+    // Raw signed mins until pickup (can be negative if overdue)
+    const rawMinsLeft = pickupArrival
+      ? Math.round((pickupArrival.getTime() - now) / 60000)
+      : null;
+
+    // If departure has passed and driver is overdue by >3 min, estimate a delay
+    const isOverdue = rawMinsLeft !== null && rawMinsLeft < -3;
+
+    // Revised pickup: if overdue, assume 3-5 min avg delay from original pickup time
+    const estimatedDelay = isOverdue
+      ? Math.min(Math.abs(rawMinsLeft) + 3, 10) // cap delay at 10 mins
+      : 0;
+
+    const revisedPickupArrival = isOverdue && pickupArrival
+      ? new Date(pickupArrival.getTime() + estimatedDelay * 60000)
+      : pickupArrival;
+
+    // Drop time based on revised pickup
+    const dropArrival = revisedPickupArrival && durationMin
+      ? new Date(revisedPickupArrival.getTime() + durationMin * 60000)
+      : (dep && durationMin ? new Date(dep.getTime() + durationMin * 60000) : null);
+
+    return {
+      pickupEstText: revisedPickupArrival ? fmtTime(revisedPickupArrival) : null,
+      dropEstText: dropArrival ? fmtTime(dropArrival) : null,
+      minsUntilPickup: rawMinsLeft,
+      delayMins: estimatedDelay,
+    };
+  })();
+
+  // ── Arrival chip text (handles delays) ──
+  const arrivalText = travelToPickupMins === null
+    ? "Calculating…"
+    : minsUntilPickup === null ? `~${travelToPickupMins} min${travelToPickupMins > 1 ? "s" : ""} from departure`
+    : minsUntilPickup <= 0 && delayMins === 0 ? "Arriving now"
+    : minsUntilPickup > 0 ? `~${minsUntilPickup} min${minsUntilPickup > 1 ? "s" : ""} away`
+    : delayMins > 0 ? `~${delayMins} min delay expected`
+    : "Arriving soon";
 
   return (
     <button onClick={onClick} style={{
@@ -124,13 +201,18 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0 }) {
         {/* Left: Icon/Badge */}
         <div style={{ 
           width: "56px", height: "56px", 
-          display: "flex", alignItems: "center", justifyItems: "center",
+          display: "flex", alignItems: "center", justifyContent: "center",
           background: isSelected ? "rgba(37,99,235,0.1)" : "var(--bg-main)",
-          borderRadius: "16px", flexShrink: 0
+          borderRadius: "16px", flexShrink: 0,
+          overflow: 'hidden'
         }}>
-          <div style={{ width: '100%', textAlign: 'center', fontSize: '28px' }}>
-            {meta.icon}
-          </div>
+          {meta.image ? (
+            <img src={meta.image} alt={meta.name} style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
+          ) : (
+            <div style={{ width: '100%', textAlign: 'center', fontSize: '28px' }}>
+              {meta.icon}
+            </div>
+          )}
         </div>
 
         {/* Middle: Data */}
@@ -156,10 +238,31 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0 }) {
             {meta.desc}
           </p>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: 700 }}>
-             <span style={{ color: "var(--text-dim)" }}>{arrivalText}</span>
-             <span style={{ color: "var(--text-dim)", opacity: 0.3 }}>•</span>
-             <span style={{ color: "var(--text-dim)" }}>{dropTime ? `Drop ${dropTime}` : "Arriving soon"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: 700, flexWrap: 'wrap' }}>
+             {/* Mins away chip */}
+             <span style={{ 
+               color: delayMins > 0 ? "#f59e0b"
+                 : minsUntilPickup !== null && minsUntilPickup <= 5 ? "#4ade80" 
+                 : "var(--text-dim)" 
+             }}>
+               {arrivalText}
+             </span>
+             {pickupEstText && (
+               <>
+                 <span style={{ color: "var(--text-dim)", opacity: 0.3 }}>•</span>
+                 <span style={{ color: delayMins > 0 ? "#f59e0b80" : "var(--text-dim)" }}>
+                   Pickup ~{pickupEstText}
+                   {delayMins > 0 && <span style={{ fontSize: "9px", marginLeft: "2px", opacity: 0.7 }}>⚠️</span>}
+                 </span>
+               </>
+             )}
+             {dropEstText && (
+               <>
+                 <span style={{ color: "var(--text-dim)", opacity: 0.3 }}>•</span>
+                 <span style={{ color: "var(--text-dim)" }}>Drop ~{dropEstText}</span>
+               </>
+             )}
+             <span style={{ fontSize: "9px", color: "var(--text-dim)", opacity: 0.5, fontStyle: "italic" }}>(est.)</span>
           </div>
         </div>
       </div>
@@ -536,11 +639,11 @@ const RideMapPage = () => {
                       key={ride._id}
                       ride={{
                         ...ride,
-                        // If selected, use the precise calculated fare instead of the general estimate
                         price: (idx === selectedRideIdx && fareEstimate) ? fareEstimate.totalFare : ride.price
                       }}
                       isSelected={idx === selectedRideIdx}
                       durationMin={selectedRoute.durationMin}
+                      passengerPickup={pickup}
                       onClick={() => setSelectedRideIdx(idx)}
                     />
                   ))}

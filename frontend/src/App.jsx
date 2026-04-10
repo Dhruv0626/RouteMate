@@ -39,7 +39,8 @@ import RideRequestDetailsPage from "./pages/driver/RideRequestDetailsPage";
 import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
 import AvailableRidesPage from "./pages/passenger/AvailableRidesPage";
 import PassengerBookingsPage from "./pages/passenger/PassengerBookingsPage";
-import LiveTrackingPage from "./pages/LiveTrackingPage";
+import PickupMap from './pages/PickupMap';
+import StartRide from './pages/StartRide';
 import HistoryPage from "./pages/HistoryPage";
 import AdminHistoryPage from "./pages/admin/AdminHistoryPage";
 import Loader from "./components/ui/Loader";
@@ -404,10 +405,18 @@ function AppContent() {
           }
         />
         <Route
-          path="/live-tracking/:rideId"
+          path="/pickup-map/:rideId"
           element={
             <ProtectedRoute>
-              <LiveTrackingPage />
+              <PickupMap />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/start-ride/:rideId"
+          element={
+            <ProtectedRoute>
+              <StartRide />
             </ProtectedRoute>
           }
         />
@@ -635,7 +644,7 @@ import { DialogProvider } from "./context/DialogContext";
 import { ToastProvider } from "./context/ToastContext";
 
 function InternalAppInitializer({ children }) {
-  const { setUser } = useAuth();
+  const { user, setUser } = useAuth();
   const [globalSuspended, setGlobalSuspended] = useState(false);
 
   useEffect(() => {

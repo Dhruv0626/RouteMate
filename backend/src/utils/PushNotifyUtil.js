@@ -48,7 +48,7 @@ export const sendPushNotification = async (userId, notification) => {
         notification: {
           sound: "default",
           defaultSound: true,
-          notificationPriority: "priorityHigh",
+          notificationPriority: "PRIORITY_HIGH",
           visibility: "public",
           channelId: "high_priority_notifications" // Important for Android 8.0+
         },

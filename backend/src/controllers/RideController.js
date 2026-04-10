@@ -156,8 +156,9 @@ export const GetActiveTrips = async (req, res) => {
         const userId = req.user.id;
         const trips = await TripModel.find({ 
             driver: userId, 
-            phase: { $in: ["matched", "ongoing"] } 
-        }).populate("passenger", "name profileImage Mobile_no passengerStats");
+            phase: { $in: ["matched", "arrived", "ongoing"] } 
+        }).populate("passenger", "name profileImage Mobile_no passengerStats")
+          .populate("publishedRide", "vehicleType");
 
         // Simple aggregation for today's stats to show on the dashboard
         const now = new Date();
@@ -192,7 +193,7 @@ export const GetFareEstimate = async (req, res) => {
             return res.status(400).json({ success: false, message: "Missing required parameters (distanceKm, vehicleType)" });
         }
 
-        const fare = await calculateFare(parseFloat(distanceKm), vehicleType);
+        const fare = await calculateFare(parseFloat(distanceKm), vehicleType || "PRIME");
         res.status(200).json({ success: true, fare });
     } catch (error) {
         console.error("Fare Estimate Error:", error.message);
@@ -205,7 +206,7 @@ export const CreateDemoRide = async (req, res) => {
   try {
     const { passengerId, driverId, totalFare, phase, pickupAddress, destAddress, vehicleType, distanceKm } = req.body;
 
-    const vType = vehicleType || "Sedan";
+    const vType = vehicleType || "PRIME";
     const dist = parseFloat(distanceKm) || 5;
 
     // Calculate fare dynamically if not provided
