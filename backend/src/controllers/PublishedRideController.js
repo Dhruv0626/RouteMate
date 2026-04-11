@@ -562,30 +562,43 @@ export const UpdateRideStatus = async (req, res) => {
         await ride.save();
 
         // ── UPDATE ASSOCIATED TRIPS ──
-        // Mapping PublishedRide status to Trip phase
-        const tripPhase = status === "active" ? "ongoing" : (status === "completed" ? "completed" : (status === "arrived" ? "arrived" : "matched"));
+        // Map each status to the correct target phase AND the phases that are eligible
+        // to be updated — this prevents dropped/unstarted trips from being swept up.
+        const tripPhase = status === "active" ? "ongoing"
+            : status === "completed" ? "completed"
+            : status === "arrived"   ? "arrived"
+            : "matched";
 
-        // If starting with OTP, only start the one that matches!
-        const query = { publishedRide: rideId, phase: { $ne: "cancelled" } };
-        if (status === "active") query.otp = otp; // Only the one with this OTP
+        // Only touch trips that are in the EXPECTED phase for this transition:
+        //  arrived   → only "matched" trips
+        //  active    → only the specific OTP trip (matched / arrived)
+        //  completed → only "ongoing" trips  ← KEY FIX: never touch matched/cancelled stays
+        const eligiblePhases = {
+            arrived:   { $in: ["matched"] },
+            active:    { $in: ["matched", "arrived"] },
+            completed: "ongoing",
+        };
+
+        const query = { publishedRide: rideId, phase: eligiblePhases[status] || { $ne: "cancelled" } };
+        if (status === "active") query.otp = otp; // Must match the passenger's OTP
 
         const trips = await TripModel.find(query);
 
         for (const trip of trips) {
             trip.phase = tripPhase;
+
             if (status === "completed") {
+                // Only rides the driver explicitly completed via the map button
                 trip.completedAt = new Date();
-                // Update passenger stats
                 await UserModel.findByIdAndUpdate(trip.passenger, {
                     $inc: { "passengerStats.totalTrips": 1 }
                 });
             }
+
             if (status === "active") trip.startedAt = new Date();
 
             if (status === "arrived") {
                 trip.driverArrivedAt = new Date();
-
-                // NOTIFY PASSENGER THAT DRIVER ARRIVED (Simple prompt without duplicate OTP)
                 await NotificationModel.create({
                     recipient: trip.passenger,
                     sender: req.user.id,
@@ -596,17 +609,19 @@ export const UpdateRideStatus = async (req, res) => {
                     metadata: { rideId }
                 });
             }
+
             await trip.save();
         }
 
         // ── UPDATE DRIVER STATS ──
-        if (status === "completed") {
+        // Only count stats for rides that had at least one trip that was actually ongoing
+        if (status === "completed" && trips.length > 0) {
             await DriverProfileModel.findOneAndUpdate(
                 { user: req.user.id },
                 {
                     $inc: {
-                        "stats.totalRides": 1,
-                        "stats.completedRides": 1
+                        "stats.totalRides": trips.length,
+                        "stats.completedRides": trips.length
                     }
                 }
             );
