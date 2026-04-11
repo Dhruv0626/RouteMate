@@ -252,7 +252,7 @@ export const GetAvailableRides = async (req, res) => {
             // ── LIVE DISTANCE ──
             const driverCoords = profile?.currentLocation?.coordinates;
             const isValidGps = driverCoords && driverCoords[0] !== 0 && driverCoords[1] !== 0;
-            
+
             if (isValidGps) {
                 rideObj.driverLocation = driverCoords; // [lng, lat] used for precise ETA calculation on frontend
             }

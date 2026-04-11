@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Navigation, Play, Square, Loader2, User as UserIcon, Lock, MapPin, IndianRupee, Phone } from "lucide-react";
+import { ArrowLeft, Navigation, Loader2, User as UserIcon, MapPin, IndianRupee, Phone, RefreshCw } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import L from "leaflet";
 import socket from "../services/socket";
@@ -8,436 +8,501 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
 
-// Icons setup
+// ─── Map Icons ────────────────────────────────────────────────────────────────
 const carIcon = L.divIcon({
-  html: `<div style="font-size:24px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">🚗</div>`,
+  html: `<div style="font-size:28px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); transform: translateY(-4px);">🚗</div>`,
   className: "",
-  iconSize: [24,24],
-});
-const greenIcon = L.divIcon({
-  html: `<div style="color:#10b981; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="white"/></svg>
-         </div>`,
-  className: "",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
 });
 
-const redIcon = L.divIcon({
-  html: `<div style="color:#ef4444; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="white"/></svg>
-         </div>`,
+const makePin = (color, label) => L.divIcon({
+  html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.4))">
+    <div style="background:${color};color:white;font-size:10px;font-weight:900;padding:2px 6px;border-radius:6px;white-space:nowrap;margin-bottom:2px">${label}</div>
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="white"/></svg>
+  </div>`,
   className: "",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
+  iconSize: [80, 50],
+  iconAnchor: [40, 50],
 });
 
+const redPin  = makePin("#ef4444", "PICKUP");
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Haversine distance in metres between two [lat,lng] points */
+const distanceMetres = (lat1, lng1, lat2, lng2) => {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLng = (lng2 - lng1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+/** Minimum distance (metres) from a point to any segment on a polyline */
+const distanceToPolyline = (lat, lng, polyline) => {
+  if (!polyline || polyline.length < 2) return Infinity;
+  let min = Infinity;
+  for (let i = 0; i < polyline.length - 1; i++) {
+    const [aLat, aLng] = polyline[i];
+    const [bLat, bLng] = polyline[i + 1];
+    const seg = distanceMetres(aLat, aLng, bLat, bLng);
+    if (seg === 0) {
+      min = Math.min(min, distanceMetres(lat, lng, aLat, aLng));
+      continue;
+    }
+    const t = Math.max(0, Math.min(1,
+      ((lat - aLat) * (bLat - aLat) + (lng - aLng) * (bLng - aLng)) / (seg * seg)
+    ));
+    const proj = [aLat + t * (bLat - aLat), aLng + t * (bLng - aLng)];
+    min = Math.min(min, distanceMetres(lat, lng, proj[0], proj[1]));
+  }
+  return min;
+};
+
+// ─── OSRM fetch with retry ─────────────────────────────────────────────────────
+const OSRM_BASE = "https://router.project-osrm.org/route/v1/driving";
+
+const fetchOSRM = async (fromLat, fromLng, toLat, toLng, signal) => {
+  const url = `${OSRM_BASE}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
+  const res = await fetch(url, signal ? { signal } : undefined);
+  const data = await res.json();
+  if (data.code === "Ok" && data.routes?.[0]?.geometry?.coordinates) {
+    const path   = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+    const etaMins = Math.round(data.routes[0].duration / 60);
+    return { path, etaMins };
+  }
+  return null;
+};
+
+// ─── Component ────────────────────────────────────────────────────────────────
 const PickupMap = () => {
-  const { rideId } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { rideId }  = useParams();
+  const navigate    = useNavigate();
+  const { user }    = useAuth();
   const { showAlert } = useDialog();
-  
-  const [ride, setRide] = useState(null);
+
+  const [ride, setRide]                 = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
-  const [isDriver, setIsDriver] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showOtpBox, setShowOtpBox] = useState(false);
-  const [otpSlots, setOtpSlots] = useState(["", "", "", ""]);
-  const [isStartingRequest, setIsStartingRequest] = useState(false);
-  const [isNavigatingInternal, setIsNavigatingInternal] = useState(false);
-  const [driverToPickupRoute, setDriverToPickupRoute] = useState([]);
-  const [liveEtaMins, setLiveEtaMins] = useState(null);       // ETA to pickup
-  const [destEtaMins, setDestEtaMins] = useState(null);       // ETA to destination when active
+  const [isDriver, setIsDriver]         = useState(false);
+  const [loading, setLoading]           = useState(true);
+  const [route, setRoute]               = useState([]);        // [[lat,lng], ...]
+  const [liveEtaMins, setLiveEtaMins]   = useState(null);
+  const [destEtaMins, setDestEtaMins]   = useState(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [gpsReady, setGpsReady]         = useState(false);     // first GPS fix received
+  const [map, setMap]                   = useState(null);
 
-  // Detect if it's a PublishedRide (has bookings) or a Trip (has single passenger)
-  const firstPassenger = ride?.bookings 
+  const abortRef   = useRef(null);
+  const prevLocRef = useRef(null);   // last location that triggered a route fetch
+  const REROUTE_THRESHOLD_M = 60;    // metres off-route before rerouting
+
+  // ─── Derived ──────────────────────────────────────────────────────────────
+  const firstPassenger = ride?.bookings
     ? ride.bookings.find(b => b.status === "confirmed" || b.status === "pending")
-    : (ride?.passenger ? { 
-        passenger: ride.passenger, 
-        passengerSource: ride.source, 
-        passengerDestination: ride.destination,
-        amountPaid: ride.fare?.total 
-      } : null);
-  // On this specific PickupMap page, we always want to show the path to the pickup source
-  const isHeadingToPickup = ride && !!firstPassenger;
+    : ride?.passenger
+      ? { passenger: ride.passenger, passengerSource: ride.source, passengerDestination: ride.destination, amountPaid: ride.fare?.total }
+      : null;
 
-  // Initialize and connect socket
+  const pickupCoords    = firstPassenger?.passengerSource?.location?.coordinates;      // [lng, lat]
+  const destCoords      = firstPassenger?.passengerDestination?.location?.coordinates; // [lng, lat]
+
+  // ─── Socket ───────────────────────────────────────────────────────────────
   useEffect(() => {
     socket.connect();
     socket.emit("join_ride", rideId);
-    return () => socket.disconnect();
+    socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
+    return () => { socket.off("location_update"); socket.disconnect(); };
   }, [rideId]);
 
-  // Listen for incoming location updates from driver
+  // ─── Fetch ride ───────────────────────────────────────────────────────────
   useEffect(() => {
-    socket.on("location_update", (data) => {
-      setDriverLocation({ lat: data.lat, lng: data.lng });
-    });
-    return () => { socket.off("location_update"); };
-  }, []);
-
-  // ─── Real-time ETA: recalculate from driver's live position ──────
-  useEffect(() => {
-    if (!driverLocation || isDriver) return;
-
-    const isActive = ride?.status === 'active';
-    // When active: calc to destination. Otherwise: calc to pickup.
-    const targetCoords = isActive
-      ? firstPassenger?.passengerDestination?.location?.coordinates
-      : firstPassenger?.passengerSource?.location?.coordinates;
-
-    if (!targetCoords) return;
-    let cancelled = false;
-
-    const calcEta = async () => {
+    const go = async () => {
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${driverLocation.lng},${driverLocation.lat};${targetCoords[0]},${targetCoords[1]}?overview=false`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!cancelled && data.code === "Ok" && data.routes?.[0]) {
-          const mins = Math.round(data.routes[0].duration / 60);
-          if (isActive) setDestEtaMins(mins);
-          else setLiveEtaMins(mins);
-        }
-      } catch (_) {}
-    };
-    calcEta();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driverLocation?.lat, driverLocation?.lng, isDriver, ride?.status]);
-
-  // AUTO-FIT MAP BOUNDS
-  const [map, setMap] = useState(null);
-  useEffect(() => {
-    if (!map || !driverLocation || !firstPassenger?.passengerSource?.location?.coordinates) return;
-    
-    const passCoords = firstPassenger.passengerSource.location.coordinates;
-    const bounds = L.latLngBounds([
-      [driverLocation.lat, driverLocation.lng],
-      [passCoords[1], passCoords[0]]
-    ]);
-    
-    map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
-  }, [map, driverLocation?.lat, driverLocation?.lng, firstPassenger?.passengerSource?.address]);
-
-  // ─── Block browser back navigation until driver clicks Pickup ────────────
-  useEffect(() => {
-    if (!isDriver) return;
-
-    const blockBack = (e) => {
-      e.preventDefault();
-      window.history.pushState(null, "", window.location.href);
-    };
-
-    window.history.pushState(null, "", window.location.href);
-    window.addEventListener("popstate", blockBack);
-
-    return () => window.removeEventListener("popstate", blockBack);
-  }, [isDriver]);
-
-  // Fetch ride details
-  useEffect(() => {
-    const fetchRide = async () => {
-      try {
-        // Driver can get it from my-published. Passenger from my-booked.
-        let foundRide = null;
+        let found = null;
         if (user.role === "driver") {
-          const res1 = await api.get("/published-rides/my-published");
-          foundRide = res1.data.data.find(r => r._id === rideId);
-          
-          if (!foundRide) {
-            const resTrips = await api.get("/rides/active-trips");
-            const trip = resTrips.data.data.find(t => t._id === rideId || t.publishedRide === rideId || t.publishedRide?._id === rideId);
-            if (trip) {
-               if (trip.publishedRide && typeof trip.publishedRide === 'object') {
-                   foundRide = trip.publishedRide;
-               } else if (trip.publishedRide) {
-                   const prRes = await api.get("/published-rides/my-published");
-                   foundRide = prRes.data.data.find(r => r._id === trip.publishedRide);
-               }
+          const r1 = await api.get("/published-rides/my-published");
+          found = r1.data.data.find(r => r._id === rideId);
+          if (!found) {
+            const r2 = await api.get("/rides/active-trips");
+            const trip = r2.data.data.find(t => t._id === rideId || t.publishedRide === rideId || t.publishedRide?._id === rideId);
+            if (trip?.publishedRide) {
+              found = typeof trip.publishedRide === "object"
+                ? trip.publishedRide
+                : (await api.get("/published-rides/my-published")).data.data.find(r => r._id === trip.publishedRide);
             }
           }
-          if(foundRide) setIsDriver(true);
+          if (found) setIsDriver(true);
         } else {
-          const res2 = await api.get("/published-rides/my-booked");
-          foundRide = res2.data.data.find(r => r._id === rideId);
+          const r3 = await api.get("/published-rides/my-booked");
+          found = r3.data.data.find(r => r._id === rideId);
           setIsDriver(false);
         }
-        
-        setRide(foundRide);
+        setRide(found);
       } catch (err) {
         console.error("Failed to load ride", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchRide();
+    go();
   }, [rideId, user.role]);
 
-  // If driver, watch position and emit
+  // ─── Driver GPS: immediate fix + continuous watch ─────────────────────────
   useEffect(() => {
     if (!isDriver) return;
-    
-    // Request permission if needed
-    const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
-    if (!appSettings.locationTracking) {
+
+    const settings = JSON.parse(localStorage.getItem("appSettings") || "{}");
+    if (!settings.locationTracking) {
       showAlert("Please enable Location Tracking in Settings to share live location.", "Location Required", "warning");
       return;
     }
-
     if (!navigator.geolocation) return;
 
+    // 1. Immediate one-shot to get a fast first fix
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const coords = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setDriverLocation(coords);
+        setGpsReady(true);
+        socket.emit("driver_location_update", { rideId, lat: coords.lat, lng: coords.lng });
+      },
+      (e) => console.warn("GPS initial fix error:", e.message),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+
+    // 2. Continuous watch
     const wid = navigator.geolocation.watchPosition(
       (p) => {
         const coords = { lat: p.coords.latitude, lng: p.coords.longitude };
         setDriverLocation(coords);
+        setGpsReady(true);
         socket.emit("driver_location_update", { rideId, lat: coords.lat, lng: coords.lng });
       },
-      (e) => console.warn("GPS error:", e.message),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+      (e) => console.warn("GPS watch error:", e.message),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
     );
 
     return () => navigator.geolocation.clearWatch(wid);
   }, [isDriver, rideId]);
 
-  const handleUpdateStatus = async (status) => {
-    const fullOtp = otpSlots.join("");
-    if (status === "active" && fullOtp.length !== 4) {
-        showAlert("Please enter the complete 4-digit passenger OTP.", "OTP Required", "warning");
-        return;
-    }
+  // ─── Route fetching with smart rerouting ──────────────────────────────────
+  const fetchRoute = useCallback(async (dLat, dLng, targetCoords, isActive) => {
+    if (!targetCoords || targetCoords[0] === 0) return;
 
-    setIsStartingRequest(true);
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
+    setRouteLoading(true);
     try {
-      const payload = { status };
-      if (status === "active") payload.otp = fullOtp;
-
-      await api.patch(`/published-rides/${rideId}/status`, payload);
-      setRide(prev => ({ ...prev, status }));
-      if (status === "completed") {
-        showAlert("Ride Completed successfully!", "Trip Finished", "success");
-        navigate("/driver/dashboard");
-      }
-      if (status === "active") {
-        setShowOtpBox(false);
+      const result = await fetchOSRM(dLat, dLng, targetCoords[1], targetCoords[0], abortRef.current.signal);
+      if (result) {
+        setRoute(result.path);
+        if (isActive) setDestEtaMins(result.etaMins);
+        else setLiveEtaMins(result.etaMins);
+        prevLocRef.current = { lat: dLat, lng: dLng };
       }
     } catch (e) {
-      showAlert(e.response?.data?.message || "Failed to update status", "Failed", "error");
+      if (e.name !== "AbortError") console.error("OSRM error:", e);
     } finally {
-      setIsStartingRequest(false);
+      setRouteLoading(false);
     }
-  };
+  }, []);
 
-  const handleOtpChange = (index, value) => {
-    const val = value.replace(/[^0-9]/g, "");
-    if (!val && value !== "") return;
-    
-    const newSlots = [...otpSlots];
-    newSlots[index] = val;
-    setOtpSlots(newSlots);
-
-    // Auto focus next
-    if (val && index < 3) {
-      const nextId = `otp-${index + 1}`;
-      document.getElementById(nextId)?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otpSlots[index] && index > 0) {
-      const prevId = `otp-${index - 1}`;
-      document.getElementById(prevId)?.focus();
-    }
-  };
-
-
-
-  // Fetch true OSRM route for Driver -> Pickup (Road-wise Navigation)
   useEffect(() => {
-    const passCoords = firstPassenger?.passengerSource?.location?.coordinates;
-    const isReady = isHeadingToPickup && driverLocation && passCoords && passCoords[0] !== 0;
+    if (!driverLocation) return;
+    const { lat, lng } = driverLocation;
 
-    if (!isReady) {
-      if (driverToPickupRoute.length > 0) setDriverToPickupRoute([]);
+    const isActive    = ride?.status === "active";
+    const targetCoords = isActive ? destCoords : pickupCoords;
+    if (!targetCoords) return;
+
+    // First fetch: no route yet
+    if (route.length === 0) {
+      fetchRoute(lat, lng, targetCoords, isActive);
       return;
     }
 
-    const fetchPickupRoute = async () => {
-      // Abort previous request using a ref-like approach
-      if (window.pickupAbortController) window.pickupAbortController.abort();
-      window.pickupAbortController = new AbortController();
+    // Reroute if driver deviated > threshold from current route
+    const deviance = distanceToPolyline(lat, lng, route);
+    if (deviance > REROUTE_THRESHOLD_M) {
+      console.log(`Rerouting: deviance ${Math.round(deviance)}m > ${REROUTE_THRESHOLD_M}m`);
+      fetchRoute(lat, lng, targetCoords, isActive);
+    } else {
+      // Still on route — just refresh ETA cheaply (no polyline re-draw)
+      const prev = prevLocRef.current;
+      if (prev && distanceMetres(prev.lat, prev.lng, lat, lng) < 20) return; // too close, skip
+      (async () => {
+        try {
+          const url = `${OSRM_BASE}/${lng},${lat};${targetCoords[0]},${targetCoords[1]}?overview=false`;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data.code === "Ok" && data.routes?.[0]) {
+            const mins = Math.round(data.routes[0].duration / 60);
+            if (isActive) setDestEtaMins(mins);
+            else setLiveEtaMins(mins);
+          }
+        } catch (_) {}
+      })();
+      prevLocRef.current = { lat, lng };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverLocation?.lat, driverLocation?.lng, ride?.status]);
 
-      try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${driverLocation.lng},${driverLocation.lat};${passCoords[0]},${passCoords[1]}?overview=full&geometries=geojson`;
-        const res = await fetch(url, { signal: window.pickupAbortController.signal });
-        const data = await res.json();
-        
-        if (data.code === "Ok" && data.routes?.[0]?.geometry?.coordinates) {
-          const roadPath = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-          setDriverToPickupRoute(roadPath);
-        }
-      } catch (e) {
-        if (e.name !== 'AbortError') console.error("OSRM fetch error:", e);
-      }
-    };
-    
-    fetchPickupRoute();
-    return () => { if (window.pickupAbortController) window.pickupAbortController.abort(); };
-  }, [driverLocation?.lat, driverLocation?.lng, isHeadingToPickup, firstPassenger?.passengerSource?.address]);
+  // Reset route when ride transitions from pickup → active
+  const prevStatus = useRef(null);
+  useEffect(() => {
+    if (!ride) return;
+    if (prevStatus.current && prevStatus.current !== ride.status) {
+      setRoute([]);
+      setLiveEtaMins(null);
+      setDestEtaMins(null);
+    }
+    prevStatus.current = ride.status;
+  }, [ride?.status]);
 
-  if (loading) {
+  // ─── Auto-fit map bounds ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!map || !driverLocation) return;
+    const isActive = ride?.status === "active";
+    const target   = isActive ? destCoords : pickupCoords;
+    if (!target) return;
 
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#05080f]">
-        <Loader2 className="animate-spin text-primary w-8 h-8" />
-      </div>
-    );
-  }
+    const bounds = L.latLngBounds([
+      [driverLocation.lat, driverLocation.lng],
+      [target[1], target[0]],
+    ]);
+    map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
+  }, [map, driverLocation?.lat, driverLocation?.lng, ride?.status]);
 
-  if (!ride) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#05080f] text-white">
-        Ride not found
-      </div>
-    );
-  }
+  // ─── Block browser back ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isDriver) return;
+    const block = (e) => { e.preventDefault(); window.history.pushState(null, "", window.location.href); };
+    window.history.pushState(null, "", window.location.href);
+    window.addEventListener("popstate", block);
+    return () => window.removeEventListener("popstate", block);
+  }, [isDriver]);
 
-  const mapCenter = driverLocation || 
-    (ride.source && ride.source.location.coordinates ? [ride.source.location.coordinates[1], ride.source.location.coordinates[0]] : [23.0225, 72.5714]);
+  // ─── Manual reroute button ────────────────────────────────────────────────
+  const handleManualReroute = () => {
+    if (!driverLocation) return;
+    const isActive    = ride?.status === "active";
+    const targetCoords = isActive ? destCoords : pickupCoords;
+    setRoute([]);
+    fetchRoute(driverLocation.lat, driverLocation.lng, targetCoords, isActive);
+  };
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#05080f] gap-3">
+      <Loader2 className="animate-spin text-primary w-8 h-8" />
+      <p className="text-white/40 text-sm">Loading ride data…</p>
+    </div>
+  );
+
+  if (!ride) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#05080f] text-white">
+      Ride not found
+    </div>
+  );
+
+  const mapCenter = driverLocation ||
+    (ride.source?.location?.coordinates
+      ? [ride.source.location.coordinates[1], ride.source.location.coordinates[0]]
+      : [23.0225, 72.5714]);
+
+  const isActive = ride.status === "active";
+  const targetForMarker = isActive ? destCoords : pickupCoords;
+  const targetAddress   = isActive
+    ? (firstPassenger?.passengerDestination?.address || ride.destination?.address)
+    : (firstPassenger?.passengerSource?.address || ride.source?.address);
 
   return (
     <div className="relative flex flex-col h-screen text-white bg-black">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="absolute top-0 w-full z-50 p-4 shrink-0 flex items-center justify-between pointer-events-none">
-        <button onClick={() => navigate(-1)} className="pointer-events-auto bg-black/50 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition">
+        <button
+          onClick={() => navigate(-1)}
+          className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition"
+        >
           <ArrowLeft size={20} />
         </button>
-        <div className="bg-black/50 backdrop-blur border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${ride.status === "active" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`}></span>
-          <span className="text-xs font-bold uppercase tracking-wider">
-            {ride.status === "active" ? "Pickup Ongoing" : ride.status === "arrived" ? "Wait for OTP" : ride.status === "full" || ride.status === "open" ? "Heading to Pickup" : "Ride Tracker"}
-          </span>
+
+        <div className="flex items-center gap-2">
+          {/* Status pill */}
+          <div className="bg-black/60 backdrop-blur border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${isActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`} />
+            <span className="text-xs font-black uppercase tracking-wider">
+              {isActive ? "Trip Ongoing" : ride.status === "arrived" ? "Arrived – Wait OTP" : "Heading to Pickup"}
+            </span>
+          </div>
+
+          {/* Route loading indicator */}
+          {routeLoading && (
+            <div className="bg-blue-500/20 backdrop-blur border border-blue-500/30 p-2 rounded-full pointer-events-auto">
+              <RefreshCw size={14} className="text-blue-400 animate-spin" />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Map Area */}
-      <div className="flex-1 w-full relative z-0">
-        <MapContainer 
-          center={mapCenter} 
-          zoom={14} 
-          className="w-full h-full" 
-          zoomControl={false}
-          ref={setMap}
-        >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' maxZoom={19} />
-          
-          {/* Main Driver Start marker removed to focus on Passenger Pickup */}
+      {/* ── No GPS Banner (driver only) ── */}
+      {isDriver && !gpsReady && (
+        <div className="absolute top-20 left-4 right-4 z-50 bg-amber-500/90 backdrop-blur text-black text-xs font-black px-4 py-2.5 rounded-xl flex items-center gap-2 animate-pulse">
+          <span>📡 Acquiring GPS signal… Please stay on this screen.</span>
+        </div>
+      )}
 
-          {/* Passenger Pickup "Sign" - ALWAYS SHOW IF TARGET EXISTS */}
-          {firstPassenger?.passengerSource?.location?.coordinates && (
-             <Marker 
-               position={[firstPassenger.passengerSource.location.coordinates[1], firstPassenger.passengerSource.location.coordinates[0]]} 
-               icon={redIcon}
-             >
-                <Popup>
-                  <b style={{ color: '#ef4444' }}>Passenger Pickup</b><br/>
-                  {firstPassenger.passengerSource.address}
-                </Popup>
-             </Marker>
+      {/* ── Map ── */}
+      <div className="flex-1 w-full relative z-0">
+        <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution="&copy; OpenStreetMap"
+            maxZoom={19}
+          />
+
+          {/* Target pin (pickup or destination) */}
+          {targetForMarker && (
+            <Marker position={[targetForMarker[1], targetForMarker[0]]} icon={redPin}>
+              <Popup><b style={{ color: "#ef4444" }}>{isActive ? "Destination" : "Passenger Pickup"}</b><br />{targetAddress}</Popup>
+            </Marker>
           )}
 
-          {/* Driver Live Marker */}
+          {/* Driver marker */}
           {driverLocation && (
             <Marker position={[driverLocation.lat, driverLocation.lng]} icon={carIcon}>
               <Popup><b>Your Location</b></Popup>
             </Marker>
           )}
 
-          {/* Route line: ALWAYS Driver -> Passenger Pickup on this page */}
-          {driverLocation && firstPassenger?.passengerSource?.location?.coordinates && (
+          {/* Route polyline – only drawn when we have a real road path */}
+          {route.length > 1 && driverLocation && (
             <>
-                <Polyline 
-                    positions={driverToPickupRoute.length > 0 ? driverToPickupRoute : [[driverLocation.lat, driverLocation.lng], [firstPassenger.passengerSource.location.coordinates[1], firstPassenger.passengerSource.location.coordinates[0]]]}
-                    pathOptions={{ color: "#1e3a8a", weight: 9, opacity: 0.15, lineCap: 'round', lineJoin: 'round' }}
-                />
-                <Polyline 
-                    positions={driverToPickupRoute.length > 0 ? driverToPickupRoute : [[driverLocation.lat, driverLocation.lng], [firstPassenger.passengerSource.location.coordinates[1], firstPassenger.passengerSource.location.coordinates[0]]]}
-                    pathOptions={{ color: "#3b82f6", weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' }}
-                />
+              {/* Glow / shadow layer */}
+              <Polyline
+                positions={route}
+                pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }}
+              />
+              {/* Main line */}
+              <Polyline
+                positions={route}
+                pathOptions={{ color: isActive ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }}
+              />
+              {/* Animated dashes */}
+              <Polyline
+                positions={route}
+                pathOptions={{ color: "white", weight: 2, opacity: 0.5, lineCap: "round", lineJoin: "round", dashArray: "8 16" }}
+              />
             </>
+          )}
+
+          {/* Loading placeholder – thin dashed line while waiting for OSRM */}
+          {route.length === 0 && driverLocation && targetForMarker && (
+            <Polyline
+              positions={[
+                [driverLocation.lat, driverLocation.lng],
+                [targetForMarker[1], targetForMarker[0]],
+              ]}
+              pathOptions={{ color: "#6b7280", weight: 3, opacity: 0.5, dashArray: "6 10" }}
+            />
           )}
         </MapContainer>
       </div>
 
-      {/* Bottom HUD */}
+      {/* ── Bottom HUD ── */}
       <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none">
-        <div className="bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl">
-          {isDriver ? (
-            <div className="flex flex-col gap-3">
-              {/* Quick Actions Group - ONLY FOR PICKUP PHASE */}
-              {ride.status !== "active" && (
-                <div className="flex gap-3">
-                    <button 
-                      onClick={() => setIsNavigatingInternal(!isNavigatingInternal)} 
-                      className={`flex-1 ${isNavigatingInternal ? 'bg-primary text-black' : 'bg-amber-400 text-black'} font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg transition-all text-sm pointer-events-auto`}
-                    >
-                      <Navigation size={18} className={isNavigatingInternal ? "animate-pulse" : ""} />
-                      {isNavigatingInternal ? "Exit Nav" : "Navigation"}
-                    </button>
-                    <a 
-                      href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
-                      className="flex-1 bg-emerald-500 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm pointer-events-auto"
-                    >
-                      <Phone size={18} />
-                      Call
-                    </a>
-                </div>
-              )}
+        <div className="bg-black/85 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl">
 
-                   <button 
-                      onClick={() => navigate('/driver/dashboard/active-rides')} 
-                      className="flex-1 bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-amber-500/20"
-                    >
-                      <MapPin size={20} />
-                      Pickup
-                    </button>
+          {isDriver ? (
+            /* ─── DRIVER HUD ─── */
+            <div className="flex flex-col gap-3">
+              {/* ETA row */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-white/40 tracking-widest">
+                    {isActive ? "ETA to Destination" : "ETA to Pickup"}
+                  </p>
+                  <p className="text-lg font-black text-white">
+                    {(isActive ? destEtaMins : liveEtaMins) !== null
+                      ? `~${isActive ? destEtaMins : liveEtaMins} min`
+                      : routeLoading ? "Calculating…" : gpsReady ? "Route loading…" : "Acquiring GPS…"}
+                  </p>
+                </div>
+                {/* Reroute button */}
+                <button
+                  onClick={handleManualReroute}
+                  disabled={!driverLocation || routeLoading}
+                  className="bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-black disabled:opacity-40 transition hover:bg-blue-500/30"
+                >
+                  <RefreshCw size={13} className={routeLoading ? "animate-spin" : ""} />
+                  Reroute
+                </button>
+              </div>
+
+              {/* Destination info */}
+              <div className="flex items-start gap-2 bg-white/5 px-3 py-2 rounded-xl border border-white/10">
+                <MapPin size={14} className="text-red-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-white/70 leading-snug">{targetAddress || "Loading address…"}</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => navigate("/driver/dashboard/active-rides")}
+                  className="flex-1 bg-amber-500 text-black font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all text-sm"
+                >
+                  <MapPin size={18} />
+                  Pickup Done
+                </button>
+                {firstPassenger?.passenger?.Mobile_no && (
+                  <a
+                    href={`tel:${firstPassenger.passenger.Mobile_no}`}
+                    className="flex-1 bg-emerald-500 text-white font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm"
+                  >
+                    <Phone size={18} />
+                    Call
+                  </a>
+                )}
+              </div>
             </div>
           ) : (
-            /* ─── PASSENGER LIVE TRACKING ───────────────────────────── */
+            /* ─── PASSENGER HUD ─── */
             <div className="flex flex-col gap-3">
-
-              {/* Status Banner */}
+              {/* Status banner */}
               <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                ride.status === "arrived" 
-                  ? "bg-violet-500/10 border-violet-500/30" 
+                ride.status === "arrived"
+                  ? "bg-violet-500/10 border-violet-500/30"
                   : ride.status === "active"
                   ? "bg-emerald-500/10 border-emerald-500/30"
                   : "bg-amber-500/10 border-amber-500/30"
               }`}>
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 animate-pulse ${
-                  ride.status === "arrived" ? "bg-violet-500" 
-                  : ride.status === "active" ? "bg-emerald-500" 
+                <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                  ride.status === "arrived" ? "bg-violet-500"
+                  : ride.status === "active" ? "bg-emerald-500"
                   : "bg-amber-500"
                 }`} />
                 <span className={`text-xs font-black uppercase tracking-widest ${
-                  ride.status === "arrived" ? "text-violet-400" 
-                  : ride.status === "active" ? "text-emerald-400" 
+                  ride.status === "arrived" ? "text-violet-400"
+                  : ride.status === "active" ? "text-emerald-400"
                   : "text-amber-400"
                 }`}>
-                  {ride.status === "arrived" ? "🎯 Driver has arrived at pickup!" 
-                   : ride.status === "active" ? "🚀 Ride in progress" 
+                  {ride.status === "arrived" ? "🎯 Driver has arrived at pickup!"
+                   : ride.status === "active" ? "🚀 Ride in progress"
                    : "🚗 Driver is on the way"}
                 </span>
               </div>
 
-              {/* Driver Info Card */}
+              {/* Driver info */}
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
-                  {ride.driver?.profileImage 
+                  {ride.driver?.profileImage
                     ? <img src={ride.driver.profileImage} alt="" className="w-full h-full object-cover" />
-                    : <UserIcon size={22} className="text-primary" />
-                  }
+                    : <UserIcon size={22} className="text-primary" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
@@ -446,7 +511,6 @@ const PickupMap = () => {
                       <p className="text-[10px] text-white/40 font-medium">{(ride.vehicleType || "Vehicle").toUpperCase()}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {/* Live ping if driver location exists */}
                       {driverLocation && (
                         <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/30">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
@@ -462,7 +526,7 @@ const PickupMap = () => {
                 </div>
               </div>
 
-              {/* Status Specific Info */}
+              {/* ETA / OTP info */}
               {ride.status === "arrived" ? (
                 <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3 text-center">
                   <p className="text-sm font-black text-violet-300">Share your OTP with the driver</p>
@@ -476,37 +540,28 @@ const PickupMap = () => {
                       : `~${destEtaMins} min to destination`
                       : "Trip is ongoing — relax!"}
                   </p>
-                  <p className="text-[11px] text-white/50 mt-1 text-center">
-                    {destEtaMins !== null
-                      ? "Live ETA · Updates as driver moves"
-                      : "The driver is taking you to your destination."}
-                  </p>
+                  <p className="text-[11px] text-white/50 mt-1 text-center">Live ETA · Updates as driver moves</p>
                 </div>
               ) : (
                 <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-black text-white">
-                          {liveEtaMins !== null
-                            ? liveEtaMins === 0 ? "Driver is arriving now!"
-                            : `~${liveEtaMins} min away (live)`
-                            : driverLocation ? "Calculating ETA..."
-                            : "Waiting for driver GPS signal"
-                          }
-                        </p>
-                        {liveEtaMins !== null && (
-                          <span className="text-[8px] text-white/40 italic">(est.)</span>
-                        )}
-                      </div>
+                      <p className="text-xs font-black text-white">
+                        {liveEtaMins !== null
+                          ? liveEtaMins === 0 ? "Driver is arriving now!"
+                          : `~${liveEtaMins} min away (live)`
+                          : driverLocation ? "Calculating ETA…"
+                          : "Waiting for driver GPS signal"}
+                      </p>
                       <p className="text-[10px] text-white/40 mt-0.5">
                         {driverLocation
-                          ? "Driver is visible on map above ↑ · Updates as driver moves"
-                          : "Driver location will appear on map once GPS connects"}
+                          ? "Updates live as driver moves"
+                          : "Driver location will appear once GPS connects"}
                       </p>
                     </div>
                     {ride.driver?.Mobile_no && (
-                      <a href={`tel:${ride.driver.Mobile_no}`}
+                      <a
+                        href={`tel:${ride.driver.Mobile_no}`}
                         className="bg-emerald-500 text-white p-2.5 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex-shrink-0 ml-3"
                       >
                         <Phone size={16} />
