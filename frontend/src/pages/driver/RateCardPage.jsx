@@ -9,14 +9,14 @@ import { getMyDriverProfile } from "../../services/driverProfileService";
 import Loader from "../../components/ui/Loader";
 
 const VEHICLE_META = {
-    MOTO: { label: "MOTO", icon: "🏍️", color: "primary", desc: "Petrol Bike - Fast & Economical" },
-    EVMOTO: { label: "EVMOTO", icon: "⚡🏍️", color: "emerald-500", desc: "Electric Bike - Sustainable Travel" },
-    AUTO: { label: "AUTO", icon: "🛺", color: "amber-500", desc: "Classic Rickshaw - Urban Explorer" },
-    EVAUTO: { label: "EVAUTO", icon: "⚡🛺", color: "emerald-500", desc: "Electric Auto - Silent & Smooth" },
-    GO: { label: "GO", icon: "🚕", color: "blue-400", desc: "Hatchback - Comfortable City Ride" },
-    EVGO: { label: "EVGO", icon: "⚡🚕", color: "emerald-500", desc: "Electric Hatch - Modern Efficiency" },
-    PRIME: { label: "PRIME", icon: "🚗", color: "indigo-500", desc: "Premium Sedan - Executive Comfort" },
-    XL: { label: "XL", icon: "🚙", color: "violet-500", desc: "SUV - Extra Space for Everyone" },
+    MOTO: { label: "MOTO", image: "/images/Moto.png", color: "primary", desc: "Petrol Bike - Fast & Economical" },
+    EVMOTO: { label: "EVMOTO", image: "/images/EVmoto.png", color: "emerald-500", desc: "Electric Bike - Sustainable Travel" },
+    AUTO: { label: "AUTO", image: "/images/Auto.png", color: "amber-500", desc: "Classic Rickshaw - Urban Explorer" },
+    EVAUTO: { label: "EVAUTO", image: "/images/EVauto.png", color: "emerald-500", desc: "Electric Auto - Silent & Smooth" },
+    GO: { label: "GO", image: "/images/Go.png", color: "blue-400", desc: "Hatchback - Comfortable City Ride" },
+    EVGO: { label: "EVGO", image: "/images/EVgo.png", color: "emerald-500", desc: "Electric Hatch - Modern Efficiency" },
+    PRIME: { label: "PRIME", image: "/images/Prime.png", color: "indigo-500", desc: "Premium Sedan - Executive Comfort" },
+    XL: { label: "XL", image: "/images/XL.png", color: "violet-500", desc: "SUV - Extra Space for Everyone" },
 };
 
 const RateCardPage = () => {
@@ -94,23 +94,15 @@ const RateCardPage = () => {
                     </div>
                 </div>
 
-                {/* Tax & Commission Info */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="glass-card p-5 rounded-3xl border-(--card-border) flex flex-col items-center justify-center text-center space-y-2">
-                        <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Platform Fee</p>
-                        <div className="flex items-center gap-2">
-                            <Zap size={16} className="text-amber-500" />
-                            <span className="text-2xl font-display font-black text-white">{config?.commission || '0%'}</span>
-                        </div>
-                        <p className="text-[9px] text-(--text-dim) font-medium italic">Taken from final fare</p>
-                    </div>
-                    <div className="glass-card p-5 rounded-3xl border-(--card-border) flex flex-col items-center justify-center text-center space-y-2">
+                {/* Tax Info */}
+                <div className="flex justify-center">
+                    <div className="glass-card w-full p-5 rounded-3xl border-(--card-border) flex flex-col items-center justify-center text-center space-y-2 max-w-sm">
                         <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Taxes (incl.)</p>
                         <div className="flex items-center gap-2">
                             <ShieldCheck size={16} className="text-emerald-500" />
                             <span className="text-2xl font-display font-black text-white">{config?.taxPercentage || '5'}%</span>
                         </div>
-                        <p className="text-[9px] text-(--text-dim) font-medium italic">State & Service Tax</p>
+                        <p className="text-[9px] text-(--text-dim) font-medium italic">Standard Service Tax applied after surge</p>
                     </div>
                 </div>
 
@@ -126,14 +118,16 @@ const RateCardPage = () => {
                     {Object.entries(pricing)
                         .filter(([key]) => !driverType || key === driverType)
                         .map(([key, data]) => {
-                        const meta = VEHICLE_META[key] || { label: key, icon: "🚗", color: "primary", desc: "Standard Vehicle" };
+                        const meta = VEHICLE_META[key] || { label: key, image: "/images/Prime.png", color: "primary", desc: "Standard Vehicle" };
                         return (
                             <div key={key} className="glass-card group rounded-4xl border-(--card-border) overflow-hidden hover:border-primary/30 transition-all duration-500">
                                 <div className={`h-1.5 w-full bg-${meta.color}`} />
                                 <div className="p-6">
                                     <div className="flex justify-between items-start mb-6">
                                         <div className="flex items-center gap-4">
-                                            <div className="text-3xl filter select-none">{meta.icon}</div>
+                                            <div className="w-16 h-12 flex items-center justify-center p-1 bg-black/5 rounded-xl border border-white/5 overflow-hidden">
+                                                <img src={meta.image} alt={meta.label} className="w-full h-full object-contain filter group-hover:scale-110 transition-transform duration-500" />
+                                            </div>
                                             <div>
                                                 <h3 className="text-lg font-display font-black text-white">{meta.label}</h3>
                                                 <p className="text-[10px] text-(--text-dim) font-bold uppercase tracking-wider">{meta.desc}</p>
@@ -173,7 +167,7 @@ const RateCardPage = () => {
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <TrendingUp size={10} className="text-indigo-400" />
-                                            <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Surge Cap: {data.surgeCap || "1.8"}x</span>
+                                            <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Max Surge Cap: {data.surgeCap || "1.8"}x</span>
                                         </div>
                                     </div>
                                 </div>
@@ -183,8 +177,8 @@ const RateCardPage = () => {
                 </div>
 
                 <div className="text-center space-y-2 opacity-50 pt-10">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Platform Kernel v5.1 — RouteMate Protocol</p>
-                    <p className="text-[9px] italic">Automated calculation logic enforced by smart contract systems.</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em]">RouteMate Protocol</p>
+                    <p className="text-[9px] italic">Automated calculation logic enforced by Routemate systems.</p>
                 </div>
             </main>
         </div>
