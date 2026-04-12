@@ -37,6 +37,7 @@ import GoOnlinePage from "./pages/driver/GoOnlinePage";
 import DriverBookingsPage from "./pages/driver/DriverBookingsPage";
 import RideRequestDetailsPage from "./pages/driver/RideRequestDetailsPage";
 import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
+import RateCardPage from "./pages/driver/RateCardPage";
 import AvailableRidesPage from "./pages/passenger/AvailableRidesPage";
 import PassengerBookingsPage from "./pages/passenger/PassengerBookingsPage";
 import PickupMap from './pages/PickupMap';
@@ -574,6 +575,14 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <PayoutRequestPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/rate-card"
+          element={
+            <DriverProtectedRoute>
+              <RateCardPage />
             </DriverProtectedRoute>
           }
         />

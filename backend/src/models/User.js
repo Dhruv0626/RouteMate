@@ -44,6 +44,8 @@ const UserSchema = new Schema(
       expiresAt: { type: Date, default: null },
       purpose: { type: String, enum: ["verification", "reset"], default: null }
     },
+
+    walletBalance: { type: Number, default: 0 }
   },
   { timestamps: true }
 );

@@ -102,7 +102,7 @@ const PickupMap = () => {
   const firstPassenger = ride?.bookings
     ? ride.bookings.find(b => b.status === "confirmed" || b.status === "pending")
     : ride?.passenger
-      ? { passenger: ride.passenger, passengerSource: ride.source, passengerDestination: ride.destination, amountPaid: ride.fare?.total }
+      ? { passenger: ride.passenger, passengerSource: ride.source, passengerDestination: ride.destination, amountPaid: ride.fare?.totalWithTax || ride.fare?.total }
       : null;
 
   const pickupCoords    = firstPassenger?.passengerSource?.location?.coordinates;      // [lng, lat]
@@ -216,7 +216,7 @@ const PickupMap = () => {
     if (!driverLocation) return;
     const { lat, lng } = driverLocation;
 
-    const isActive     = ride?.status === "active";
+    const isActive     = ride?.status === "in_progress";
     const targetCoords = isActive ? destCoords : pickupCoords;
     if (!targetCoords) return;
 
@@ -269,7 +269,7 @@ const PickupMap = () => {
   const fallbackFetchedRef = useRef(false);
   useEffect(() => {
     if (!ride || isDriver || fallbackFetchedRef.current || driverLocation) return;
-    const isActive = ride.status === "active";
+    const isActive = ride.status === "in_progress";
     const targetCoords = isActive ? destCoords : pickupCoords;
     if (!targetCoords) return;
 
@@ -283,9 +283,15 @@ const PickupMap = () => {
   }, [ride, isDriver, driverLocation]);
 
   // ─── Auto-fit map bounds ───────────────────────────────────────────────────
+  const hasFittedBounds = useRef(null);
   useEffect(() => {
     if (!map) return;
-    const isActive = ride?.status === "active";
+    const isActive = ride?.status === "in_progress";
+    const phaseKey = ride?.status || "unknown";
+    
+    // Only auto-fit once per phase
+    if (hasFittedBounds.current === phaseKey) return;
+    
     const target   = isActive ? destCoords : pickupCoords;
     if (!target) return;
 
@@ -298,7 +304,18 @@ const PickupMap = () => {
 
     const bounds = L.latLngBounds([from, [target[1], target[0]]]);
     map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
+    
+    hasFittedBounds.current = phaseKey;
   }, [map, driverLocation?.lat, driverLocation?.lng, ride?.status]);
+  
+  const handleRecenter = () => {
+    if (!map) return;
+    const isActive = ride?.status === "in_progress";
+    const target = isActive ? destCoords : pickupCoords;
+    if (!target || !driverLocation) return;
+    const bounds = L.latLngBounds([[driverLocation.lat, driverLocation.lng], [target[1], target[0]]]);
+    map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
+  };
 
   // ─── Block browser back ────────────────────────────────────────────────────
   useEffect(() => {
@@ -312,7 +329,7 @@ const PickupMap = () => {
   // ─── Manual reroute button ────────────────────────────────────────────────
   const handleManualReroute = () => {
     if (!driverLocation) return;
-    const isActive    = ride?.status === "active";
+    const isActive    = ride?.status === "in_progress";
     const targetCoords = isActive ? destCoords : pickupCoords;
     setRoute([]);
     fetchRoute(driverLocation.lat, driverLocation.lng, targetCoords, isActive);
@@ -337,7 +354,7 @@ const PickupMap = () => {
       ? [ride.source.location.coordinates[1], ride.source.location.coordinates[0]]
       : [23.0225, 72.5714]);
 
-  const isActive = ride.status === "active";
+  const isActive = ride.status === "in_progress";
   const targetForMarker = isActive ? destCoords : pickupCoords;
   const targetAddress   = isActive
     ? (firstPassenger?.passengerDestination?.address || ride.destination?.address)
@@ -444,7 +461,17 @@ const PickupMap = () => {
       </div>
 
       {/* ── Bottom HUD ── */}
-      <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none">
+      <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none flex flex-col gap-3">
+        {/* Recenter Button */}
+        <div className="flex justify-end">
+             <button
+                onClick={handleRecenter}
+                className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full shadow-lg hover:bg-white/10 transition text-white"
+             >
+                <RefreshCw size={20} />
+             </button>
+        </div>
+        
         <div className="bg-black/85 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl">
 
           {isDriver ? (
@@ -506,22 +533,22 @@ const PickupMap = () => {
               <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
                 ride.status === "arrived"
                   ? "bg-violet-500/10 border-violet-500/30"
-                  : ride.status === "active"
+                  : ride.status === "in_progress"
                   ? "bg-emerald-500/10 border-emerald-500/30"
                   : "bg-amber-500/10 border-amber-500/30"
               }`}>
                 <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
                   ride.status === "arrived" ? "bg-violet-500"
-                  : ride.status === "active" ? "bg-emerald-500"
+                  : ride.status === "in_progress" ? "bg-emerald-500"
                   : "bg-amber-500"
                 }`} />
                 <span className={`text-xs font-black uppercase tracking-widest ${
                   ride.status === "arrived" ? "text-violet-400"
-                  : ride.status === "active" ? "text-emerald-400"
+                  : ride.status === "in_progress" ? "text-emerald-400"
                   : "text-amber-400"
                 }`}>
                   {ride.status === "arrived" ? "🎯 Driver has arrived at pickup!"
-                   : ride.status === "active" ? "🚀 Ride in progress"
+                   : ride.status === "in_progress" ? "🚀 Ride in progress"
                    : "🚗 Driver is on the way"}
                 </span>
               </div>
@@ -561,7 +588,7 @@ const PickupMap = () => {
                   <p className="text-sm font-black text-violet-300">Share your OTP with the driver</p>
                   <p className="text-[11px] text-white/50 mt-1">Your OTP was sent in your booking confirmation notification.</p>
                 </div>
-              ) : ride.status === "active" ? (
+              ) : ride.status === "in_progress" ? (
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
                   <p className="text-sm font-black text-emerald-400 text-center">
                     {destEtaMins !== null

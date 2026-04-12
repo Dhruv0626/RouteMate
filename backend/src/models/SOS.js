@@ -5,6 +5,7 @@ const SOSSchema = new Schema(
   {
     trip:      { type: Schema.Types.ObjectId, ref: "Trip", required: true },
     passenger: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    driver:    { type: Schema.Types.ObjectId, ref: "User", required: true },
     location: {
       type:        { type: String, default: "Point" },
       coordinates: { type: [Number] },                        // [lng, lat] at SOS trigger time

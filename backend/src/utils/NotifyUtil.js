@@ -335,7 +335,7 @@ export const notifyPricingUpdated = async ({ adminId, newPricing, surgeMultiplie
         message,
         senderId: adminId,
         type: isIncrease ? "success" : "warning",
-        link: "/driver/dashboard",
+        link: "/driver/dashboard/rate-card",
         metadata: { newPricing, surgeMultiplier, isIncrease }
     });
 

@@ -1,0 +1,194 @@
+import { useState, useEffect } from "react";
+import { 
+  ChevronLeft, Info, Zap, IndianRupee, Clock, MapPin, 
+  ShieldCheck, AlertCircle, TrendingUp, RefreshCw
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import api from "../../services/api";
+import { getMyDriverProfile } from "../../services/driverProfileService";
+import Loader from "../../components/ui/Loader";
+
+const VEHICLE_META = {
+    MOTO: { label: "MOTO", icon: "🏍️", color: "primary", desc: "Petrol Bike - Fast & Economical" },
+    EVMOTO: { label: "EVMOTO", icon: "⚡🏍️", color: "emerald-500", desc: "Electric Bike - Sustainable Travel" },
+    AUTO: { label: "AUTO", icon: "🛺", color: "amber-500", desc: "Classic Rickshaw - Urban Explorer" },
+    EVAUTO: { label: "EVAUTO", icon: "⚡🛺", color: "emerald-500", desc: "Electric Auto - Silent & Smooth" },
+    GO: { label: "GO", icon: "🚕", color: "blue-400", desc: "Hatchback - Comfortable City Ride" },
+    EVGO: { label: "EVGO", icon: "⚡🚕", color: "emerald-500", desc: "Electric Hatch - Modern Efficiency" },
+    PRIME: { label: "PRIME", icon: "🚗", color: "indigo-500", desc: "Premium Sedan - Executive Comfort" },
+    XL: { label: "XL", icon: "🚙", color: "violet-500", desc: "SUV - Extra Space for Everyone" },
+};
+
+const RateCardPage = () => {
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [config, setConfig] = useState(null);
+    const [driverType, setDriverType] = useState(null);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                const [configRes, profileRes] = await Promise.all([
+                    api.get("/users/system-settings"),
+                    getMyDriverProfile()
+                ]);
+
+                if (configRes.data.success) {
+                    setConfig(configRes.data.settings);
+                }
+                
+                if (profileRes.data.success && profileRes.data.data) {
+                    setDriverType(profileRes.data.data.vehicle?.type?.toUpperCase());
+                }
+            } catch (err) {
+                console.error("Failed to fetch rates or profile:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    if (loading) return <Loader fullPage text="Fetching latest platform rates..." />;
+
+    const pricing = config?.pricing || {};
+
+    return (
+        <div className="mesh-bg min-h-screen font-sans text-(--text-main) pb-20">
+            {/* Header */}
+            <header className="sticky top-0 z-50 border-b border-(--card-border) bg-(--bg-main)/80 backdrop-blur-md">
+                <div className="mx-auto flex h-16 max-w-2xl items-center justify-between px-6">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="p-2 hover:bg-(--card-bg) rounded-xl border border-(--card-border) text-(--text-dim) hover:text-(--text-main) transition-all"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                        <div>
+                            <h1 className="text-lg font-display font-black tracking-tight leading-none">Rate Card</h1>
+                            <p className="text-[10px] text-(--text-dim) font-bold uppercase tracking-widest">Pricing Structure</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                         <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-tighter">
+                            Active v{config?.version || 1}
+                         </div>
+                    </div>
+                </div>
+            </header>
+
+            <main className="max-w-2xl mx-auto px-6 py-8 space-y-8">
+                
+                {/* Info Alert */}
+                <div className="glass-card p-4 rounded-3xl border-(--card-border) bg-blue-500/5 flex gap-4 items-start">
+                    <div className="bg-blue-500/20 p-2 rounded-xl text-blue-400">
+                        <Info size={18} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-blue-100">Dynamic Pricing Active</p>
+                        <p className="text-[11px] text-blue-300/70 leading-relaxed font-medium">
+                            Rates shown are base values. Final fares may include surge multipliers (up to {config?.surgeMultiplier || '1.8x'}) during high demand or night hours.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Tax & Commission Info */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="glass-card p-5 rounded-3xl border-(--card-border) flex flex-col items-center justify-center text-center space-y-2">
+                        <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Platform Fee</p>
+                        <div className="flex items-center gap-2">
+                            <Zap size={16} className="text-amber-500" />
+                            <span className="text-2xl font-display font-black text-white">{config?.commission || '0%'}</span>
+                        </div>
+                        <p className="text-[9px] text-(--text-dim) font-medium italic">Taken from final fare</p>
+                    </div>
+                    <div className="glass-card p-5 rounded-3xl border-(--card-border) flex flex-col items-center justify-center text-center space-y-2">
+                        <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Taxes (incl.)</p>
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck size={16} className="text-emerald-500" />
+                            <span className="text-2xl font-display font-black text-white">{config?.taxPercentage || '5'}%</span>
+                        </div>
+                        <p className="text-[9px] text-(--text-dim) font-medium italic">State & Service Tax</p>
+                    </div>
+                </div>
+
+                {/* Rates List */}
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between px-2">
+                        <h2 className="text-sm font-black uppercase tracking-widest text-(--text-dim)">
+                            {driverType ? `Your Rates (${driverType})` : "Vehicle Categories"}
+                        </h2>
+                        <RefreshCw size={14} className="text-(--text-dim) opacity-30" />
+                    </div>
+
+                    {Object.entries(pricing)
+                        .filter(([key]) => !driverType || key === driverType)
+                        .map(([key, data]) => {
+                        const meta = VEHICLE_META[key] || { label: key, icon: "🚗", color: "primary", desc: "Standard Vehicle" };
+                        return (
+                            <div key={key} className="glass-card group rounded-4xl border-(--card-border) overflow-hidden hover:border-primary/30 transition-all duration-500">
+                                <div className={`h-1.5 w-full bg-${meta.color}`} />
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-3xl filter select-none">{meta.icon}</div>
+                                            <div>
+                                                <h3 className="text-lg font-display font-black text-white">{meta.label}</h3>
+                                                <p className="text-[10px] text-(--text-dim) font-bold uppercase tracking-wider">{meta.desc}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] font-black text-(--text-dim) uppercase mb-1">Base Price</span>
+                                            <div className="flex items-center text-xl font-display font-black text-primary">
+                                                <IndianRupee size={16} />
+                                                {data.baseFare?.replace(/[^\d.]/g, "") || "0"}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-3 border-t border-(--card-border) pt-6">
+                                        <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                                            <MapPin size={12} className="text-(--text-dim) mb-1" />
+                                            <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-tighter mb-0.5">Per KM</span>
+                                            <span className="text-xs font-black text-white">{data.costPerKm || "₹0/km"}</span>
+                                        </div>
+                                        <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                                            <Clock size={12} className="text-(--text-dim) mb-1" />
+                                            <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-tighter mb-0.5">Per MIN</span>
+                                            <span className="text-xs font-black text-white">{data.perMinRate || "₹0/min"}</span>
+                                        </div>
+                                        <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                                            <IndianRupee size={12} className="text-(--text-dim) mb-1" />
+                                            <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-tighter mb-0.5">Min Fare</span>
+                                            <span className="text-xs font-black text-white">{data.minFare || "₹0"}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 flex items-center justify-between px-2 pt-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <AlertCircle size={10} className="text-amber-500" />
+                                            <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Night Charge: {data.nightCharge || "₹0"}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <TrendingUp size={10} className="text-indigo-400" />
+                                            <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">Surge Cap: {data.surgeCap || "1.8"}x</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className="text-center space-y-2 opacity-50 pt-10">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Platform Kernel v5.1 — RouteMate Protocol</p>
+                    <p className="text-[9px] italic">Automated calculation logic enforced by smart contract systems.</p>
+                </div>
+            </main>
+        </div>
+    );
+};
+
+export default RateCardPage;

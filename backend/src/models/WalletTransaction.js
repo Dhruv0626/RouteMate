@@ -19,4 +19,30 @@ const WalletTransactionSchema = new Schema(
 
 WalletTransactionSchema.index({ user: 1, createdAt: -1 });
 
+import User from "./User.js";
+
+WalletTransactionSchema.statics.createTransaction = async function(txData) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const user = await User.findById(txData.user).session(session);
+        if (!user) throw new Error("User not found for wallet transaction");
+
+        const delta = txData.type === "credit" ? txData.amount : -txData.amount;
+        user.walletBalance = (user.walletBalance || 0) + delta;
+        txData.balanceAfter = user.walletBalance;
+
+        const [tx] = await this.create([txData], { session });
+        await user.save({ session });
+        
+        await session.commitTransaction();
+        session.endSession();
+        return tx;
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        throw error;
+    }
+};
+
 export default mongoose.model("WalletTransaction", WalletTransactionSchema);

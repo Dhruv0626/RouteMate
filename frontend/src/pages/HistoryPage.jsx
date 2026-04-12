@@ -60,7 +60,7 @@ const HistoryPage = () => {
                duration = Math.round(distance * 2.5);
             }
             
-            const totalAmount = ride.fare?.total || 0;
+            const totalAmount = ride.fare?.totalWithTax || ride.fare?.total || 0;
             let baseFare = ride.fare?.baseFare || 0;
             let distanceFare = ride.fare?.distanceFare || 0;
             let timeFare = ride.fare?.timeFare || 0;

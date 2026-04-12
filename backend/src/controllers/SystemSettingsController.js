@@ -53,6 +53,7 @@ export const UpdateSettings = async (req, res) => {
         if (updateData.commission) updateData.commission = ensureSymbol(updateData.commission, "", "%");
         if (updateData.surgeMultiplier) updateData.surgeMultiplier = ensureSymbol(updateData.surgeMultiplier, "", "x");
         if (updateData.maxRadius) updateData.maxRadius = ensureSymbol(updateData.maxRadius, "", "km");
+        if (updateData.taxPercentage !== undefined) updateData.taxPercentage = parseFloat(updateData.taxPercentage || "0");
 
         // Differentiate actual changes by comparing with current DB settings
         const actualChanges = {};

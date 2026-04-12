@@ -21,18 +21,24 @@ const BookingSchema = new Schema({
     },
 
     // Fare computed at booking time from passenger's actual travel distance
-    distanceKm:  { type: Number, default: 0 },
-    amountPaid:  { type: Number, required: true },
+    distanceKm: { type: Number, default: 0 },
+    amountPaid: { type: Number, required: true },
     fareBreakdown: {
-        baseFare:        { type: Number },
-        perKmRate:       { type: Number },
-        distanceKm:      { type: Number },
+        baseFare: { type: Number },
+        distanceFare: { type: Number },
+        timeFare: { type: Number },
+        surgeFare: { type: Number },
         surgeMultiplier: { type: Number },
+        surgedTotal: { type: Number },
+        taxAmount: { type: Number },
+        totalWithTax: { type: Number },
+        co2Saved: { type: Number }
     },
 
     paymentMethod: { type: String, enum: ["cash", "wallet", "upi"], default: "cash" },
     status: { type: String, enum: ["pending", "confirmed", "cancelled"], default: "pending" },
-    bookedAt: { type: Date, default: Date.now }
+    bookedAt: { type: Date, default: Date.now },
+    rejectedAt: { type: Date, default: null }
 });
 
 const PublishedRideSchema = new Schema(
@@ -56,18 +62,18 @@ const PublishedRideSchema = new Schema(
         },
 
         departureTime: { type: Date, required: true },
-        vehicleType:   { type: String },
+        vehicleType: { type: String },
 
         status: {
             type: String,
-            enum: ["open", "full", "active", "arrived", "completed", "cancelled"],
+            enum: ["open", "booked", "active", "arrived", "in_progress", "completed", "cancelled", "expired"],
             default: "open"
         },
 
         // Full list of route waypoints [lng, lat] from OSRM
         routeCoords: {
-             type: [[Number]], 
-             default: []
+            type: [[Number]],
+            default: []
         },
 
         bookings: [BookingSchema]

@@ -26,6 +26,7 @@ import {
   FileCheck,
   User,
   Mail,
+  IndianRupee,
 } from "lucide-react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
@@ -147,7 +148,13 @@ const ROLE_CARDS = {
       color: "violet",
       href: "/driver/dashboard/profile",
     },
-
+    {
+      icon: IndianRupee,
+      title: "Rate Card",
+      desc: "View platform fare structure",
+      color: "emerald",
+      href: "/driver/dashboard/rate-card",
+    },
   ],
   admin: [
     {

@@ -102,7 +102,7 @@ const StartRide = () => {
   const firstPassenger = ride?.bookings
     ? ride.bookings.find(b => b.status === "confirmed" || b.status === "pending")
     : ride?.passenger
-      ? { passenger: ride.passenger, passengerSource: ride.source, passengerDestination: ride.destination, amountPaid: ride.fare?.total }
+      ? { passenger: ride.passenger, passengerSource: ride.source, passengerDestination: ride.destination, amountPaid: ride.fare?.totalWithTax || ride.fare?.total }
       : null;
 
   const isHeadingToPickup = ride && (ride.status === "open" || ride.status === "full" || ride.status === "arrived") && !!firstPassenger;
@@ -111,7 +111,7 @@ const StartRide = () => {
 
   // Whether driver arrived within 2 km of destination
   let isNearDestination = false;
-  if (driverLocation && destCoords && ride?.status === "active") {
+  if (driverLocation && destCoords && ride?.status === "in_progress") {
     isNearDestination = distanceMetres(driverLocation.lat, driverLocation.lng, destCoords[1], destCoords[0]) <= 2000;
   }
 
@@ -169,7 +169,7 @@ const StartRide = () => {
   useEffect(() => {
     if (!ride || !isDriver || !rideId) return;
     if (!showOtpBox) return;
-    if (["arrived", "active", "completed"].includes(ride.status)) return;
+    if (["arrived", "in_progress", "completed"].includes(ride.status)) return;
     api.patch(`/published-rides/${rideId}/status`, { status: "arrived" })
       .then(() => setRide(prev => ({ ...prev, status: "arrived" })))
       .catch(err => console.error("Auto-arrived error:", err));
@@ -302,21 +302,21 @@ const StartRide = () => {
   // ─── Status update ────────────────────────────────────────────────────────
   const handleUpdateStatus = async (status) => {
     const fullOtp = otpSlots.join("");
-    if (status === "active" && fullOtp.length !== 4) {
+    if (status === "in_progress" && fullOtp.length !== 4) {
       showAlert("Please enter the complete 4-digit passenger OTP.", "OTP Required", "warning");
       return;
     }
     setIsStartingRequest(true);
     try {
       const payload = { status };
-      if (status === "active") payload.otp = fullOtp;
+      if (status === "in_progress") payload.otp = fullOtp;
       await api.patch(`/published-rides/${rideId}/status`, payload);
       setRide(prev => ({ ...prev, status }));
       if (status === "completed") {
         showAlert("Ride Completed successfully!", "Trip Finished", "success");
         navigate("/driver/dashboard");
       }
-      if (status === "active") setShowOtpBox(false);
+      if (status === "in_progress") setShowOtpBox(false);
     } catch (e) {
       showAlert(e.response?.data?.message || "Failed to update status", "Failed", "error");
     } finally {
@@ -367,9 +367,9 @@ const StartRide = () => {
         </button>
         <div className="flex items-center gap-2">
           <div className="bg-black/60 backdrop-blur border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${ride.status === "active" ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`} />
+            <span className={`w-2 h-2 rounded-full ${ride.status === "in_progress" ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`} />
             <span className="text-xs font-black uppercase tracking-wider">
-              {ride.status === "active" ? "Mission Ongoing"
+              {ride.status === "in_progress" ? "Mission Ongoing"
                : ride.status === "arrived" ? "Wait for OTP"
                : "Heading to Pickup"}
             </span>
@@ -395,14 +395,14 @@ const StartRide = () => {
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" maxZoom={19} />
 
           {/* Pickup marker – show before active */}
-          {ride.status !== "active" && pickupMarkerCoords && (
+          {ride.status !== "in_progress" && pickupMarkerCoords && (
             <Marker position={pickupMarkerCoords} icon={greenPin}>
               <Popup><b style={{ color: "#10b981" }}>Passenger Pickup</b><br />{firstPassenger?.passengerSource?.address}</Popup>
             </Marker>
           )}
 
           {/* Destination marker – show when active */}
-          {ride.status === "active" && destMarkerCoords && (
+          {ride.status === "in_progress" && destMarkerCoords && (
             <Marker position={destMarkerCoords} icon={redPin}>
               <Popup><b style={{ color: "#ef4444" }}>Passenger Destination</b><br />{firstPassenger?.passengerDestination?.address || ride.destination?.address}</Popup>
             </Marker>
@@ -419,7 +419,7 @@ const StartRide = () => {
           {route.length > 1 && driverLocation && (
             <>
               <Polyline positions={route} pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
-              <Polyline positions={route} pathOptions={{ color: ride.status === "active" ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
+              <Polyline positions={route} pathOptions={{ color: ride.status === "in_progress" ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
               <Polyline positions={route} pathOptions={{ color: "white", weight: 2, opacity: 0.4, dashArray: "8 16", lineCap: "round", lineJoin: "round" }} />
             </>
           )}
@@ -440,7 +440,7 @@ const StartRide = () => {
           {isDriver ? (
             <div className="flex flex-col gap-3">
               {/* ETA + Reroute row – only show when navigating */}
-              {(isHeadingToPickup || ride.status === "active") && (
+              {(isHeadingToPickup || ride.status === "in_progress") && (
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase text-white/40 tracking-widest">
@@ -465,7 +465,7 @@ const StartRide = () => {
               )}
 
               {/* Pickup phase actions */}
-              {ride.status !== "active" && (
+              {ride.status !== "in_progress" && (
                 <>
                   <div className="flex gap-3">
                     <a
@@ -494,7 +494,7 @@ const StartRide = () => {
               )}
 
               {/* Active trip status */}
-              {ride.status === "active" && (
+              {ride.status === "in_progress" && (
                 <>
                   <div className="flex items-center justify-between px-1">
                     <div className="flex items-center gap-2">
@@ -540,7 +540,7 @@ const StartRide = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  {ride.status !== "active" ? (
+                  {ride.status !== "in_progress" ? (
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
                         {ride.status === "arrived" ? "Driver has arrived!" : "Driver is heading to your pickup"}
@@ -598,7 +598,7 @@ const StartRide = () => {
                 </div>
               </div>
               <button
-                onClick={() => handleUpdateStatus("active")}
+                onClick={() => handleUpdateStatus("in_progress")}
                 disabled={otpSlots.join("").length !== 4 || isStartingRequest}
                 className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-black py-4 rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2"
               >

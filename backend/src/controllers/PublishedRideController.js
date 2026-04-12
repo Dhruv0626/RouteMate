@@ -98,31 +98,42 @@ const calcFare = async ({
             surge_multiplier = surge_cap;
         }
 
-        // Step 4: Final Price = MAX(Subtotal × Surge Multiplier, Min Fare)
-        let final_price_raw = subtotal * surge_multiplier;
-        const min_fare_applied = final_price_raw < min_fare;
-        let final_price = Math.max(final_price_raw, min_fare);
+        // Step 4: Surged Total (MAX of Surge or Min Fare)
+        let surgedTotalRaw = subtotal * surge_multiplier;
+        const min_fare_applied = surgedTotalRaw < min_fare;
+        let surgedTotal = Math.max(surgedTotalRaw, min_fare);
 
-        // Step 5: Round Final Price to nearest whole Rupee (₹)
-        final_price = Math.round(final_price);
+        // Step 5: Apply Flat Tax from System Config
+        const taxPercentage = sys.taxPercentage != null ? sys.taxPercentage : 5;
+        const taxAmount = surgedTotal * (taxPercentage / 100);
+        
+        // Step 6: Final Total
+        let totalWithTax = surgedTotal + taxAmount;
 
         // EV SPECIAL RULES: Calculate CO2 Saved
         const is_ev = ["EVMOTO", "EVAUTO", "EVGO"].includes(catKey);
         const co2_saved_kg = is_ev ? (distanceKm * 0.12) : 0;
+        
+        const distance_charge = distanceKm * per_km_rate;
+        const time_charge = timeMin * per_min_rate;
+        const surge_fare_real = surge_multiplier > 1.0 ? Math.max(0, surgedTotal - subtotal) : 0;
 
         return {
             category: category.toLowerCase(),
             is_ev,
             distance_km: Math.round(distanceKm * 10) / 10,
             time_min: Math.round(timeMin),
-            base_fare,
-            distance_charge: Math.round(distanceKm * per_km_rate),
-            time_charge: Math.round(timeMin * per_min_rate),
-            night_charge: night_val,
-            subtotal: Math.round(subtotal),
-            surge_multiplier,
+            baseFare: Number(base_fare.toFixed(2)),
+            distanceFare: Number(distance_charge.toFixed(2)),
+            timeFare: Number(time_charge.toFixed(2)),
+            night_charge: Number(night_val.toFixed(2)),
+            subtotal: Number(subtotal.toFixed(2)),
+            surgeMultiplier: Number(surge_multiplier.toFixed(2)),
+            surgeFare: Number(surge_fare_real.toFixed(2)),
             surge_label,
-            final_price,
+            surgedTotal: Number(surgedTotal.toFixed(2)),
+            taxAmount: Number(taxAmount.toFixed(2)),
+            totalWithTax: Number(totalWithTax.toFixed(2)),
             min_fare_applied,
             co2_saved_kg: Number(co2_saved_kg.toFixed(3)),
             currency: "INR"
@@ -385,9 +396,19 @@ export const BookRide = async (req, res) => {
             demandRatio,
             isNight: isNightTime()
         });
-        const amountPaid = fareData.final_price;
+        const amountPaid = fareData.totalWithTax;
 
-        const fareBreakdown = fareData;
+        const mappedFareBreakdown = {
+             baseFare: fareData.baseFare || 0,
+             distanceFare: fareData.distanceFare || 0,
+             timeFare: fareData.timeFare || 0,
+             surgeFare: fareData.surgeFare || 0,
+             surgeMultiplier: fareData.surgeMultiplier || 1.0,
+             surgedTotal: fareData.surgedTotal || 0,
+             taxAmount: fareData.taxAmount || 0,
+             totalWithTax: fareData.totalWithTax || 0,
+             co2Saved: fareData.co2_saved_kg || 0
+        };
 
         // Push booking (status = pending until driver confirms)
         ride.bookings.push({
@@ -398,18 +419,21 @@ export const BookRide = async (req, res) => {
             passengerDestination: passengerDestination || ride.destination,
             distanceKm: Math.round(distanceKm * 10) / 10,
             amountPaid,
-            fareBreakdown,
+            fareBreakdown: mappedFareBreakdown,
             status: "pending",
         });
 
         ride.availableSeats = 0;
-        ride.status = "full";
+        ride.status = "booked";
 
         await ride.save();
 
         // ── Notify the driver ─────────────────────────────────────────────────
         const from = passengerSource?.address || ride.source.address;
         const to = passengerDestination?.address || ride.destination.address;
+
+        const sys = await SystemConfig.findOne();
+        const platformCommission = sys ? parseFloat(sys.commission || "0") : 0;
 
         await NotificationModel.create({
             recipient: ride.driver._id,
@@ -421,7 +445,9 @@ export const BookRide = async (req, res) => {
             metadata: {
                 rideId: ride._id,
                 bookingId: ride.bookings[ride.bookings.length - 1]._id,
-                amountPaid
+                amountPaid,
+                platformFeePercentage: platformCommission,
+                motive: "booking_request"
             }
         });
 
@@ -483,22 +509,30 @@ export const RespondToBooking = async (req, res) => {
                 },
                 distanceEstimate: booking.distanceKm,
                 fare: {
-                    total: booking.amountPaid,
-                    baseFare: booking.fareBreakdown?.base_fare || 0,
-                    distanceFare: booking.fareBreakdown?.distance_charge || 0,
-                    timeFare: booking.fareBreakdown?.time_charge || 0,
-                    surgeFare: 0, // already included in breakdown if calculated that way
-                    co2Saved: booking.fareBreakdown?.co2_saved_kg || 0
+                    total: booking.amountPaid, // backward compat
+                    baseFare: booking.fareBreakdown?.baseFare || 0,
+                    distanceFare: booking.fareBreakdown?.distanceFare || 0,
+                    timeFare: booking.fareBreakdown?.timeFare || 0,
+                    surgeFare: booking.fareBreakdown?.surgeFare || 0,
+                    surgedTotal: booking.fareBreakdown?.surgedTotal || 0,
+                    taxAmount: booking.fareBreakdown?.taxAmount || 0,
+                    totalWithTax: booking.fareBreakdown?.totalWithTax || booking.amountPaid,
+                    co2Saved: booking.fareBreakdown?.co2Saved || 0
                 },
+                surgeMultiplier: booking.fareBreakdown?.surgeMultiplier || 1.0,
                 otp: Math.floor(1000 + Math.random() * 9000).toString(), // Generate 4-digit OTP
                 paymentStatus: "pending"
             });
         } else {
             booking.status = "cancelled";
+            booking.rejectedAt = new Date();
             ride.status = "open";
         }
 
         await ride.save();
+
+        const sys = await SystemConfig.findOne();
+        const platformCommission = sys ? parseFloat(sys.commission || "0") : 0;
 
         // Notify passenger
         await NotificationModel.create({
@@ -510,7 +544,14 @@ export const RespondToBooking = async (req, res) => {
                 : `Your ride booking was rejected by the driver. Please search for another ride.`,
             type: action === "confirm" ? "booking_confirmed" : "booking_rejected",
             link: `/passenger/dashboard/my-rides`,
-            metadata: { rideId, bookingId, amountPaid: booking.amountPaid, otp: trip?.otp }
+            metadata: { 
+                 rideId, 
+                 bookingId, 
+                 amountPaid: booking.amountPaid, 
+                 otp: trip?.otp,
+                 platformFeePercentage: platformCommission,
+                 motive: action === "confirm" ? "booking_confirmed" : "booking_rejected"
+            }
         });
 
         res.status(200).json({
@@ -546,7 +587,7 @@ export const UpdateRideStatus = async (req, res) => {
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found or unauthorized" });
 
         // ── VERIFY OTP IF STARTING RIDE ──
-        if (status === "active") {
+        if (status === "in_progress") {
             if (!otp) return res.status(400).json({ success: false, message: "OTP is required to start the ride" });
 
             // Find matched or arrived trips for this ride
@@ -564,23 +605,23 @@ export const UpdateRideStatus = async (req, res) => {
         // ── UPDATE ASSOCIATED TRIPS ──
         // Map each status to the correct target phase AND the phases that are eligible
         // to be updated — this prevents dropped/unstarted trips from being swept up.
-        const tripPhase = status === "active" ? "ongoing"
+        const tripPhase = status === "in_progress" ? "ongoing"
             : status === "completed" ? "completed"
                 : status === "arrived" ? "arrived"
                     : "matched";
 
         // Only touch trips that are in the EXPECTED phase for this transition:
         //  arrived   → only "matched" trips
-        //  active    → only the specific OTP trip (matched / arrived)
+        //  in_progress    → only the specific OTP trip (matched / arrived)
         //  completed → only "ongoing" trips  ← KEY FIX: never touch matched/cancelled stays
         const eligiblePhases = {
             arrived: { $in: ["matched"] },
-            active: { $in: ["matched", "arrived"] },
+            in_progress: { $in: ["matched", "arrived"] },
             completed: "ongoing",
         };
 
         const query = { publishedRide: rideId, phase: eligiblePhases[status] || { $ne: "cancelled" } };
-        if (status === "active") query.otp = otp; // Must match the passenger's OTP
+        if (status === "in_progress") query.otp = otp; // Must match the passenger's OTP
 
         const trips = await TripModel.find(query);
 
@@ -595,10 +636,17 @@ export const UpdateRideStatus = async (req, res) => {
                 });
             }
 
-            if (status === "active") trip.startedAt = new Date();
+            if (status === "in_progress") {
+                trip.startedAt = new Date();
+                trip.otp = "-";
+            }
 
             if (status === "arrived") {
                 trip.driverArrivedAt = new Date();
+                
+                const sys = await SystemConfig.findOne();
+                const platformCommission = sys ? parseFloat(sys.commission || "0") : 0;
+                
                 await NotificationModel.create({
                     recipient: trip.passenger,
                     sender: req.user.id,
@@ -606,7 +654,11 @@ export const UpdateRideStatus = async (req, res) => {
                     message: "Your driver has arrived at the pickup location. Please meet your driver to start the trip.",
                     type: "driver_arrived",
                     link: "/passenger/dashboard/my-rides",
-                    metadata: { rideId }
+                    metadata: { 
+                        rideId,
+                        platformFeePercentage: platformCommission,
+                        motive: "driver_arrived"
+                    }
                 });
             }
 
@@ -614,14 +666,13 @@ export const UpdateRideStatus = async (req, res) => {
         }
 
         // ── UPDATE DRIVER STATS ──
-        // Only count stats for rides that had at least one trip that was actually ongoing
-        if (status === "completed" && trips.length > 0) {
+        if (status === "completed") {
             await DriverProfileModel.findOneAndUpdate(
                 { user: req.user.id },
                 {
                     $inc: {
-                        "stats.totalRides": trips.length,
-                        "stats.completedRides": trips.length
+                        "stats.totalRides": 1,
+                        "stats.completedRides": 1
                     }
                 }
             );

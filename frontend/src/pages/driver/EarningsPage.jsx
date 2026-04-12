@@ -72,7 +72,7 @@ const EarningsPage = () => {
             type: "ride",
             from: r.source.address,
             to: r.destination.address,
-            amount: r.fare.total,
+            amount: r.fare.totalWithTax || r.fare.total,
             date: new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
             distance: `${r.distanceActual || 0} km`,
             rating: 0.0 // Default to 0.0 before review

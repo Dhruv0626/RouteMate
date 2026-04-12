@@ -100,6 +100,7 @@ const SystemSettingsPage = () => {
   // Configuration State
   const [config, setConfig] = useState({
     commission: "",
+    taxPercentage: "",
     maxRadius: "",
     surgeMultiplier: "",
     pricing: {
@@ -274,6 +275,11 @@ const SystemSettingsPage = () => {
              label="Commission Fees" desc="Platform cut"
              value={config.commission} icon={Smartphone} suffix="%"
              onChange={(v) => setConfig({...config, commission: v})}
+           />
+           <ConfigInput
+             label="Total Calculation %" desc="Global flat tax rate"
+             value={config.taxPercentage ?? ""} icon={IndianRupee} suffix="%"
+             onChange={(v) => setConfig({...config, taxPercentage: v})}
            />
         </SettingGroup>
 
