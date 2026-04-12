@@ -4,8 +4,8 @@ const { Schema } = mongoose;
 const TripSchema = new Schema(
   {
     passenger: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    driver: { type: Schema.Types.ObjectId, ref: "User" },   // null until matched
-    publishedRide: { type: Schema.Types.ObjectId, ref: "PublishedRide" }, // if created from a shared ride
+    driver: { type: Schema.Types.ObjectId, ref: "User" },          // null until matched
+    publishedRide: { type: Schema.Types.ObjectId, ref: "PublishedRide" }, // the driver's published ride this trip belongs to
 
     // ── Full lifecycle tracked by phase ────────────────────────────────────
     phase: {
@@ -73,7 +73,7 @@ const TripSchema = new Schema(
 
     // ── Payment ────────────────────────────────────────────────────────────
     paymentMethod: { type: String, enum: ["wallet", "cash", "upi"] },
-    paymentStatus: { type: String, enum: ["pending", "paid", "failed"], default: "pending" },
+    payment: { type: Schema.Types.ObjectId, ref: "Payment" },      // linked Payment record (created on completion)
 
     // ── Cancellation ───────────────────────────────────────────────────────
     cancelledBy: { type: String, enum: ["passenger", "driver", "system"] },

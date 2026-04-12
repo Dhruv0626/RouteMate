@@ -566,16 +566,16 @@ export const UpdateRideStatus = async (req, res) => {
         // to be updated — this prevents dropped/unstarted trips from being swept up.
         const tripPhase = status === "active" ? "ongoing"
             : status === "completed" ? "completed"
-            : status === "arrived"   ? "arrived"
-            : "matched";
+                : status === "arrived" ? "arrived"
+                    : "matched";
 
         // Only touch trips that are in the EXPECTED phase for this transition:
         //  arrived   → only "matched" trips
         //  active    → only the specific OTP trip (matched / arrived)
         //  completed → only "ongoing" trips  ← KEY FIX: never touch matched/cancelled stays
         const eligiblePhases = {
-            arrived:   { $in: ["matched"] },
-            active:    { $in: ["matched", "arrived"] },
+            arrived: { $in: ["matched"] },
+            active: { $in: ["matched", "arrived"] },
             completed: "ongoing",
         };
 

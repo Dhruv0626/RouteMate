@@ -259,6 +259,7 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const role = user?.role || "passenger";
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -360,7 +361,9 @@ const DashboardPage = () => {
               // ── DRIVER: Merge published rides + trip history into one unified timeline ──
 
               // Published rides → simplified for single fixed-price booking
-              const publishedActivities = liveRides.map(ride => {
+              const publishedActivities = liveRides
+                .filter(r => r.status !== "completed" && r.status !== "cancelled")
+                .map(ride => {
                 const confirmedBooking = (ride.bookings || []).find(b => b.status === "confirmed");
                 const passengerName = confirmedBooking?.passenger?.name || null;
                 const dep = new Date(ride.departureTime);
@@ -384,7 +387,7 @@ const DashboardPage = () => {
                   status: statusLabel,
                   amount: ride.price ? `₹${ride.price}` : "—",
                   icon: Car,
-                  isLive: ride.status !== "completed",
+                  isLive: true,
                   rideId: ride._id,
                 };
               });
@@ -728,34 +731,48 @@ const DashboardPage = () => {
               {/* Passengers: only show trip history (not live bookings, already shown above) */}
               {role === "passenger" && (
                 activities.filter(a => !a.isLive).length > 0
-                  ? activities.filter(a => !a.isLive).map((item) => (
+                  ? (
+                    <>
+                    {activities.filter(a => !a.isLive).slice(0, isHistoryExpanded ? undefined : 3).map((item) => (
                     <div
                       key={item.id}
-                      className="group flex items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                      className="group flex items-start justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-start gap-2">
-                             <MapPin size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-                             <p className="text-sm font-bold text-(--text-main) line-clamp-1">{item.from}</p>
+                      <div className="flex items-start gap-4 flex-1">
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-6 bg-white/10" />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                             <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
+                             <p className="text-[17px] leading-none font-bold text-(--text-main) line-clamp-1">{item.from}</p>
                           </div>
-                          <div className="flex items-start gap-2 mt-0.5">
-                             <MapPin size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
-                             <p className="text-[11px] font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
+                          <div className="flex items-center gap-2">
+                             <MapPin size={14} className="text-red-500 flex-shrink-0" />
+                             <p className="text-sm font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
                           </div>
-                          <p className="text-[10px] font-medium text-(--text-dim) uppercase tracking-wider mt-1 ml-6">
+                          <p className="text-[11px] font-bold text-(--text-dim) uppercase tracking-wider pl-6 pt-1">
                             {item.date} • {item.type}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-(--text-main)">{item.amount || item.status}</p>
-                        <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500">
-                          <Circle size={4} fill="currentColor" /> {item.status || "Completed"}
+                      <div className="text-right flex flex-col justify-between h-full min-h-[60px] pl-4">
+                        <p className="text-lg leading-none font-black text-(--text-main)">{item.amount || item.status}</p>
+                        <span className="inline-flex items-center justify-end gap-1.5 text-[11px] font-bold text-emerald-500 pt-2">
+                          <Circle size={5} fill="currentColor" /> {item.status || "Completed"}
                         </span>
                       </div>
                     </div>
-                  ))
+                  ))}
+                  {activities.filter(a => !a.isLive).length > 3 && (
+                    <button 
+                      onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                      className="w-full p-4 flex items-center justify-center gap-2 text-(--text-main) rounded-b-3xl font-bold text-xs uppercase tracking-widest bg-(--card-bg) hover:bg-primary/5 transition-colors border-t border-(--card-border)"
+                    >
+                      {isHistoryExpanded ? "Hide Past Trips" : "View More Past Trips"}
+                      <ChevronRight size={14} className={`transition-transform duration-300 ${isHistoryExpanded ? "-rotate-90" : "rotate-90"}`} />
+                    </button>
+                  )}
+                  </>
+                  )
                   : (
                     <div className="p-10 text-center opacity-50">
                       <p className="text-xs font-bold uppercase tracking-widest">No Past Trips Found</p>
@@ -766,50 +783,63 @@ const DashboardPage = () => {
               {/* Drivers & Admins: show full unified activity list */}
               {role !== "passenger" && (
                 activities.length > 0
-                  ? activities.map((item) => (
+                  ? (
+                    <>
+                    {activities.slice(0, isHistoryExpanded ? undefined : 3).map((item) => (
                     <div
                       key={item.id}
-                      className="group flex items-center justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                      className="group flex items-start justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
                       onClick={() => {
                         if (item.rideId && role === "driver") navigate(`/driver/dashboard/active-rides`);
                       }}
                     >
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
                         {/* Live indicator dot */}
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          item.isLive ? "bg-emerald-500 animate-pulse" : "bg-white/20"
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-6 ${
+                          item.isLive ? "bg-emerald-500 animate-pulse" : "bg-white/10 dark:bg-white/20"
                         }`} />
-                        <div className="flex-1 min-w-0 space-y-1.5">
-                          <div className="flex items-start gap-2">
-                             <MapPin size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-                             <p className="text-sm font-bold text-(--text-main) line-clamp-1">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                             <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
+                             <p className="text-[17px] leading-none font-bold text-(--text-main) line-clamp-1">
                                {role === "admin" ? item.action : item.from}
                              </p>
                           </div>
                           {role !== "admin" && (
-                             <div className="flex items-start gap-2">
-                               <MapPin size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
-                               <p className="text-[11px] font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
+                             <div className="flex items-center gap-2">
+                               <MapPin size={14} className="text-red-500 flex-shrink-0" />
+                               <p className="text-sm font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
                              </div>
                           )}
-                          <p className="text-[10px] font-medium text-(--text-dim) uppercase tracking-wider ml-6">
+                          <p className="text-[11px] font-bold text-(--text-dim) uppercase tracking-wider pl-6 pt-1">
                             {item.date} • {role === "admin" ? item.user : item.type}
-                            {item.subType && <span className="ml-1 opacity-60">• {item.subType}</span>}
+                            {item.subType && <span className="ml-1 uppercase">• {item.subType}</span>}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0 ml-3">
-                        <p className="text-sm font-black text-(--text-main)">{item.amount || "—"}</p>
-                        <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${
+                      <div className="text-right flex flex-col justify-between h-full min-h-[60px] flex-shrink-0 pl-4">
+                        <p className="text-lg leading-none font-black text-(--text-main)">{item.amount || "—"}</p>
+                        <span className={`inline-flex items-center justify-end gap-1.5 text-[11px] font-bold pt-2 ${
                           item.isLive ? "text-emerald-500" 
-                          : item.status === "Completed" ? "text-emerald-500"
+                          : (item.status === "Completed" || item.status === "COMPLETED") ? "text-emerald-500"
                           : "text-white/40"
                         }`}>
-                          <Circle size={4} fill="currentColor" /> {item.status || "Completed"}
+                          <Circle size={5} fill="currentColor" /> {item.status || "Completed"}
                         </span>
                       </div>
                     </div>
-                  ))
+                  ))}
+                  {activities.length > 3 && (
+                    <button 
+                      onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
+                      className="w-full p-4 flex items-center rounded-b-3xl justify-center gap-2 text-(--text-main) font-bold text-xs uppercase tracking-widest bg-(--card-bg) hover:bg-primary/5 transition-colors border-t border-(--card-border)"
+                    >
+                      {isHistoryExpanded ? "Hide Past Activity" : "View More Past Activity"}
+                      <ChevronRight size={14} className={`transition-transform duration-300 ${isHistoryExpanded ? "-rotate-90" : "rotate-90"}`} />
+                    </button>
+                  )}
+                  </>
+                  )
                   : (
                     <div className="p-10 text-center opacity-50">
                       <p className="text-xs font-bold uppercase tracking-widest">No Recent Activity Found</p>

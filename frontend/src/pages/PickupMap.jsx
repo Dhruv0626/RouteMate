@@ -26,7 +26,7 @@ const makePin = (color, label) => L.divIcon({
   iconAnchor: [40, 50],
 });
 
-const redPin  = makePin("#ef4444", "PICKUP");
+const makeDestPin = (isActive) => makePin("#ef4444", isActive ? "DEST" : "PICKUP");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -197,6 +197,7 @@ const PickupMap = () => {
 
     setRouteLoading(true);
     try {
+      // OSRM: [lng,lat] format — targetCoords is [lng, lat]
       const result = await fetchOSRM(dLat, dLng, targetCoords[1], targetCoords[0], abortRef.current.signal);
       if (result) {
         setRoute(result.path);
@@ -215,11 +216,11 @@ const PickupMap = () => {
     if (!driverLocation) return;
     const { lat, lng } = driverLocation;
 
-    const isActive    = ride?.status === "active";
+    const isActive     = ride?.status === "active";
     const targetCoords = isActive ? destCoords : pickupCoords;
     if (!targetCoords) return;
 
-    // First fetch: no route yet
+    // First fetch: no route yet — fetch for BOTH driver and passenger views
     if (route.length === 0) {
       fetchRoute(lat, lng, targetCoords, isActive);
       return;
@@ -263,17 +264,39 @@ const PickupMap = () => {
     prevStatus.current = ride.status;
   }, [ride?.status]);
 
+  // ─── Passenger fallback: show route immediately from ride's stored source ──
+  // Fires once ride data is loaded; replaced by live-location route when socket arrives
+  const fallbackFetchedRef = useRef(false);
+  useEffect(() => {
+    if (!ride || isDriver || fallbackFetchedRef.current || driverLocation) return;
+    const isActive = ride.status === "active";
+    const targetCoords = isActive ? destCoords : pickupCoords;
+    if (!targetCoords) return;
+
+    // Use the driver's published source as a rough starting point
+    const srcCoords = ride.source?.location?.coordinates; // [lng, lat]
+    if (!srcCoords) return;
+
+    fallbackFetchedRef.current = true;
+    fetchRoute(srcCoords[1], srcCoords[0], targetCoords, isActive);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ride, isDriver, driverLocation]);
+
   // ─── Auto-fit map bounds ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!map || !driverLocation) return;
+    if (!map) return;
     const isActive = ride?.status === "active";
     const target   = isActive ? destCoords : pickupCoords;
     if (!target) return;
 
-    const bounds = L.latLngBounds([
-      [driverLocation.lat, driverLocation.lng],
-      [target[1], target[0]],
-    ]);
+    // Use live driver location if available, else fall back to ride source
+    const srcCoords = ride?.source?.location?.coordinates; // [lng, lat]
+    const from = driverLocation
+      ? [driverLocation.lat, driverLocation.lng]
+      : srcCoords ? [srcCoords[1], srcCoords[0]] : null;
+    if (!from) return;
+
+    const bounds = L.latLngBounds([from, [target[1], target[0]]]);
     map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
   }, [map, driverLocation?.lat, driverLocation?.lng, ride?.status]);
 
@@ -368,7 +391,7 @@ const PickupMap = () => {
 
           {/* Target pin (pickup or destination) */}
           {targetForMarker && (
-            <Marker position={[targetForMarker[1], targetForMarker[0]]} icon={redPin}>
+            <Marker position={[targetForMarker[1], targetForMarker[0]]} icon={makeDestPin(isActive)}>
               <Popup><b style={{ color: "#ef4444" }}>{isActive ? "Destination" : "Passenger Pickup"}</b><br />{targetAddress}</Popup>
             </Marker>
           )}
@@ -380,8 +403,8 @@ const PickupMap = () => {
             </Marker>
           )}
 
-          {/* Route polyline – only drawn when we have a real road path */}
-          {route.length > 1 && driverLocation && (
+          {/* Route polyline – drawn as soon as OSRM returns the path */}
+          {route.length > 1 && (
             <>
               {/* Glow / shadow layer */}
               <Polyline
@@ -401,16 +424,22 @@ const PickupMap = () => {
             </>
           )}
 
-          {/* Loading placeholder – thin dashed line while waiting for OSRM */}
-          {route.length === 0 && driverLocation && targetForMarker && (
-            <Polyline
-              positions={[
-                [driverLocation.lat, driverLocation.lng],
-                [targetForMarker[1], targetForMarker[0]],
-              ]}
-              pathOptions={{ color: "#6b7280", weight: 3, opacity: 0.5, dashArray: "6 10" }}
-            />
-          )}
+          {/* Loading placeholder – straight dashed line while OSRM loads */}
+          {route.length === 0 && targetForMarker && (() => {
+            const srcCoords = ride?.source?.location?.coordinates;
+            const fromLat = driverLocation?.lat ?? (srcCoords ? srcCoords[1] : null);
+            const fromLng = driverLocation?.lng ?? (srcCoords ? srcCoords[0] : null);
+            if (fromLat == null || fromLng == null) return null;
+            return (
+              <Polyline
+                positions={[
+                  [fromLat, fromLng],
+                  [targetForMarker[1], targetForMarker[0]],
+                ]}
+                pathOptions={{ color: "#6b7280", weight: 3, opacity: 0.5, dashArray: "6 10" }}
+              />
+            );
+          })()}
         </MapContainer>
       </div>
 

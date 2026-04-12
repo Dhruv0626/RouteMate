@@ -1,102 +1,445 @@
-# 🛡️ RouteMate: Database Schema & Workflow Architecture
+# 🛡️ RouteMate — Database Schema & Application Workflow
 
-This document clarifies the 11 MongoDB collections in RouteMate and provides a deep dive into the synchronization between **PublishedRide** and **Trip** models.
+This document describes every MongoDB collection used in RouteMate, how they
+relate to each other, and the full end-to-end lifecycle of a ride — from a
+driver publishing a route to the passenger's money landing in the driver's
+wallet.
 
----
-
-## 1. 📂 Core Models (Active Booking Flow)
-
-### 👤 User (`models/User.js`)
-- **Use Case**: Identity and Access Management.
-- **Working**: Stores credentials, roles (`passenger`, `driver`, `admin`), and personal info. Every other document references this ID.
-
-### 🚗 DriverProfile (`models/DriverProfile.js`)
-- **Use Case**: Driver verification and live status.
-- **Working**: Stores KYC, vehicle details, and real-time availability/location.
-
-### 🗺️ PublishedRide (`models/PublishedRide.js`)
-- **Use Case**: The "Vehicle" or "Pool" state.
-- **Working**: Represents a driver's intention to travel a route. It can hold multiple `bookings`. It tracks the overall vehicle status (open, full, arrived, active).
-
-### 📍 Trip (`models/Trip.js`)
-- **Use Case**: The "Journey" or "Transaction" state.
-- **Working**: Represents a specific passenger's ride from A to B. It is created when a driver accepts a booking. It tracks the passenger's experience (searching, matched, arrived, ongoing, completed).
+> [!IMPORTANT]
+> RouteMate does NOT support shared/pooled rides. When a passenger books a
+> ride they book the ENTIRE vehicle. Seat-counting fields (totalSeats,
+> availableSeats, seats, bookingType) do NOT exist in the schema.
 
 ---
 
-## 2. 🔄 Deep Sync: PublishedRide ↔ Trip
+## 1. 📂 Collections At a Glance
 
-While **PublishedRide** tracks the driver's vehicle, the **Trip** tracks the passenger's journey. They are connected via the `publishedRide` field in the Trip model.
-
-### Lifecycle Status Mapping
-The system ensures that when a driver updates their status, all associated passenger trips are synchronized.
-
-| Event | PublishedRide Status | Trip Phase | Description |
-| :--- | :--- | :--- | :--- |
-| **Driver Posts** | `open` | *N/A* | Driver offers a ride on a specific route. |
-| **Request Recv** | `full` | *N/A* | Passenger requests a seat. Booking is `pending`. |
-| **Driver Accepts**| `active` | `matched` | Trip created. OTP generated and sent to passenger. |
-| **Driver Arrives**| `arrived` | `arrived` | Driver reached pickup. Passenger notified to share OTP. |
-| **Trip Starts** | `active` | `ongoing` | Driver enters 4-digit OTP. Trip officially starts. |
-| **Trip Ends** | `completed` | `completed` | Driver completes ride. Stats updated. |
+| # | Collection          | File                    | Role |
+|---|---------------------|-------------------------|------|
+| 1 | **User**            | models/User.js          | Identity & auth for every actor |
+| 2 | **DriverProfile**   | models/DriverProfile.js | KYC, vehicle, live location & stats |
+| 3 | **PublishedRide**   | models/PublishedRide.js | Driver's route offering (1 booking slot) |
+| 4 | **Trip**            | models/Trip.js          | Passenger's journey lifecycle |
+| 5 | **Payment**         | models/Payment.js       | Financial transaction per trip |
+| 6 | **WalletTransaction**| models/WalletTransaction.js | Ledger entry per wallet event |
+| 7 | **Notification**    | models/Notification.js  | In-app & push alerts |
+| 8 | **Review**          | models/Review.js        | Ratings after trip completion |
+| 9 | **SOS**             | models/SOS.js           | Safety-trigger records |
+| 10| **SavedPlace**      | models/SavedPlace.js    | User's favourite/frequent addresses |
+| 11| **SystemConfig**    | models/SystemConfig.js  | Admin-controlled fare & platform config |
 
 ---
 
-## 📈 Graph-wise Working Flow
+## 2. 🔍 Schema Deep-Dives
 
-```mermaid
-graph TD
-    A[Driver: Publish Ride] -->|status: open| B(PublishedRide Created)
-    B --> C[Passenger: Search & Book]
-    C -->|status: full| D{Driver: Respond}
-    
-    D -->|Reject| E[Status: open]
-    D -->|Accept| F[Booking Confirmed]
-    
-    F -->|ride: active| G[Trip Created: matched]
-    G --> H[Driver Arrival]
-    
-    H -->|ride: arrived| I[Trip: arrived]
-    I --> J{Enter OTP}
-    
-    J -->|Verified| K[Trip: ongoing]
-    K --> L[Driver: Finish]
-    
-    L -->|ride: completed| M[Trip: completed]
-    M --> N[Earnings & Stats Updated]
+---
+
+### 👤 User  (`models/User.js`)
+
+**Purpose**: Single source of truth for all human actors — passengers, drivers,
+and admins. Every other document points back to a User _id.
+
+**Key fields**
+
+| Field | Description |
+|---|---|
+| `name`, `email`, `password` | Core credentials (password is bcrypt hashed) |
+| `Mobile_no` | Optional phone number |
+| `role` | `"passenger"` \| `"driver"` \| `"admin"` |
+| `isVerified` | Email / phone verified flag |
+| `isBlocked` | Admin can block any account |
+| `fcmToken` | Firebase push-notification device token |
+| `passengerStats` | totalTrips, totalDistanceTraveled, averageRating, trustScore |
+| `refreshToken` | Hashed refresh token for JWT rotation |
+| `provider` | `"local"` \| `"google"` \| `"facebook"` (OAuth provider) |
+| `otp` | Embedded OTP for email verification or password reset (code + expiry + purpose) |
+
+**Wallet**: The User model does **not** store a wallet balance directly. Wallet
+balance is always calculated by summing the user's WalletTransaction records,
+or a running balance can be read from the `balanceAfter` of the user's latest
+WalletTransaction.
+
+---
+
+### 🚗 DriverProfile  (`models/DriverProfile.js`)
+
+**Purpose**: Extended profile for any User with `role = "driver"`. Stores KYC
+documents, vehicle details, live status, and performance stats.
+
+**Key fields**
+
+| Field | Description |
+|---|---|
+| `user` | Ref → User (1-to-1, unique) |
+| `license` | number, expiry date, Cloudinary image URL (front+back collage) |
+| `aadhar` | number, Cloudinary image URL |
+| `vehicle` | name, type, registration number, RC image, insurance expiry & image, vehicle photo |
+| `isApproved` | Admin approval gate — must be `true` before driver can go online |
+| `isOnline` | Driver toggles this to accept ride requests |
+| `currentLocation` | GeoJSON Point `[lng, lat]` updated in real-time |
+| `stats` | totalRides, completedRides, cancelledRides |
+| `averageRating`, `trustScore` | Aggregated from Review model |
+| `shifts` | Weekly schedule (day, startTime, endTime) — optional availability windows |
+
+---
+
+### 🗺️ PublishedRide  (`models/PublishedRide.js`)
+
+**Purpose**: Represents the driver's intent to travel a specific route at a
+specific time. Think of it as the driver's "available vehicle slot". It holds
+exactly **one booking** (the passenger who books the full vehicle).
+
+**Key fields — PublishedRide**
+
+| Field | Description |
+|---|---|
+| `driver` | Ref → User |
+| `source` | Origin — address string + GeoJSON Point |
+| `destination` | Destination — address string + GeoJSON Point |
+| `departureTime` | Planned departure Date |
+| `vehicleType` | MOTO, AUTO, GO, PRIME, XL, etc. |
+| `routeCoords` | Array of `[lng, lat]` waypoints from OSRM — drawn on map |
+| `status` | `open` → `active` → `arrived` → `completed` \| `cancelled` |
+| `bookings` | Array of embedded BookingSchema (in practice 0 or 1 entry) |
+
+**Embedded BookingSchema** (inside `bookings[]`)
+
+| Field | Description |
+|---|---|
+| `passenger` | Ref → User |
+| `passengerSource` | Passenger's actual pickup point (may differ from driver's origin) |
+| `passengerDestination` | Passenger's actual drop-off point |
+| `distanceKm` | Road distance calculated for this passenger segment |
+| `amountPaid` | Final fare computed by the Fare Engine |
+| `fareBreakdown` | baseFare, perKmRate, distanceKm, surgeMultiplier |
+| `paymentMethod` | `"cash"` \| `"wallet"` \| `"upi"` |
+| `status` | `"pending"` → `"confirmed"` \| `"cancelled"` |
+| `bookedAt` | Timestamp of booking creation |
+
+> **Why no `seats` or `bookingType`?**  
+> RouteMate only supports full-vehicle bookings — one passenger takes the
+> whole vehicle. There is no seat-sharing or pooling logic.
+
+**PublishedRide Status Lifecycle**
+
+```
+open  ──► (passenger books)  ──► open  ──► (driver accepts) ──► active
+active ──► (driver arrives)  ──► arrived
+arrived ──► (OTP verified)   ──► active   (trip ongoing)
+active  ──► (driver completes) ──► completed
 ```
 
 ---
 
-## 3. 🧩 Supporting Models
+### 📍 Trip  (`models/Trip.js`)
 
-| Model | Status | Use Case / Working |
-| :--- | :--- | :--- |
-| **Notification** | Active | App Alerts, OTP Delivery & Deep Links |
-| **SystemConfig** | Active | Global Fare Settings & Commission Rates |
-| **FareConfig** | Active | Vehicle-specific Pricing Logic |
-| **Review** | Active | Passenger/Driver Ratings & Feedback |
-| **SOS** | Active | Real-time Safety Triggers & Location Logging |
-| **WalletTransaction**| Active | Financial Audits, Payouts & Credits |
-| **SavedPlace** | Active | Fast Address Selection for UX |
+**Purpose**: The passenger's individual journey record. Created the instant a
+driver accepts a booking. Tracks every phase of the ride from search to
+completion.
+
+**Key fields**
+
+| Field | Description |
+|---|---|
+| `passenger` | Ref → User |
+| `driver` | Ref → User (set when driver accepts) |
+| `publishedRide` | Ref → PublishedRide (the driver's route this trip belongs to) |
+| `phase` | `searching` → `matched` → `arrived` → `ongoing` → `completed` \| `cancelled` |
+| `source` | Passenger's pickup — address + GeoJSON |
+| `destination` | Passenger's drop-off — address + GeoJSON |
+| `vehicleTypeRequested` | MOTO, AUTO, GO, PRIME, XL, etc. |
+| `driversNotified` | List of driver IDs who received the booking request |
+| `driversRejected` | List of driver IDs who declined |
+| `expiresAt` | Auto-cancel deadline if no driver accepts |
+| `otp` | 4-digit code stored here, shown to passenger via Notification |
+| `otpVerified` | Becomes `true` when driver enters correct OTP |
+| `distanceEstimate`, `durationEstimate` | Pre-ride OSRM estimates |
+| `distanceActual`, `durationActual` | Filled when ride completes |
+| `fare` | baseFare, distanceFare, timeFare, surgeFare, discount, total |
+| `surgeMultiplier` | Real-time demand multiplier |
+| `paymentMethod` | `"cash"` \| `"wallet"` \| `"upi"` |
+| `payment` | Ref → Payment (linked after ride completes) |
+| `cancelledBy`, `cancellationReason` | For cancelled trips |
+| `matchedAt`, `driverArrivedAt`, `startedAt`, `completedAt`, `cancelledAt` | Phase timestamps |
+
+**Trip Phase Lifecycle**
+
+```
+searching ──► (driver accepts)  ──► matched
+matched   ──► (driver arrives)  ──► arrived
+arrived   ──► (OTP verified)    ──► ongoing
+ongoing   ──► (driver completes)──► completed
+(any phase) ──► (cancel action) ──► cancelled
+```
 
 ---
 
-## 🚀 The Working Flow (Step-by-Step)
+### 💳 Payment  (`models/Payment.js`)
 
-1. **Discovery**: Driver publishes a route (`PublishedRide`). Passenger searches using source/destination cities and road-aware proximity.
-2. **Booking**: Passenger selects a ride. The **Fare Engine** calculates the "Final Fare" based on road distance. Booking is saved as `pending` inside the `PublishedRide`.
-3. **Acceptance**: Driver is notified. Upon "Accept", the system:
-    - Sets `PublishedRide` to `active`.
-    - Creates a new **Trip** record linked to that ride.
-    - Generates a **4-digit OTP** stored in the Trip.
-    - Notifies the passenger with the "Booking Confirmed" message + OTP.
-4. **Pickup**: Driver navigates to the passenger. When they click "I Have Arrived":
-    - Both `PublishedRide` and `Trip` switch to `arrived`.
-    - Passenger gets a notification: "Share OTP to start".
-5. **On-Trip**: Driver enters the OTP.
-    - `Trip.phase` becomes `ongoing`.
-    - `Trip.startedAt` is recorded.
-6. **Completion**: Driver arrives at the drop-off and clicks "Complete Ride":
-    - Both sync to `completed`.
-    - Final stats (Trips count, Earnings) are incremented in User and DriverProfile models.
+**Purpose**: Created **once** per trip at the moment the ride is marked
+`completed`. Records who paid, how much, which method, platform commission,
+and driver earnings. When the method is `wallet`, it also creates linked
+WalletTransaction entries for both the passenger debit and driver credit.
+
+**Key fields**
+
+| Field | Description |
+|---|---|
+| `trip` | Ref → Trip (unique — one payment per trip) |
+| `passenger` | Ref → User |
+| `driver` | Ref → User |
+| `amount` | Total fare the passenger pays |
+| `platformFee` | Commission % deducted by RouteMate |
+| `driverEarnings` | `amount − platformFee` — credited to driver |
+| `method` | `"cash"` \| `"wallet"` \| `"upi"` |
+| `status` | `"pending"` → `"completed"` \| `"failed"` \| `"refunded"` |
+| `passengerWalletTx` | Ref → WalletTransaction (debit, only for `wallet` method) |
+| `driverWalletTx` | Ref → WalletTransaction (credit, only for `wallet` method) |
+| `upiTransactionId` | External UPI ref string (only for `upi` method) |
+| `refundedAt`, `refundWalletTx` | Populated if the trip was refunded |
+| `paidAt` | Timestamp when payment status flipped to `completed` |
+
+**Payment flow by method**
+
+```
+CASH:
+  Passenger pays driver in cash.
+  Payment record is created with method="cash", status="completed".
+  Driver earnings are noted in Payment but wallet is NOT touched.
+
+WALLET:
+  At completion, passenger's wallet is debited (WalletTransaction type=debit).
+  Driver's wallet is credited (WalletTransaction type=credit, amount=driverEarnings).
+  Both WalletTransaction _ids are stored in Payment.passengerWalletTx / driverWalletTx.
+  Payment.status → "completed".
+
+UPI:
+  Payment is processed via external gateway.
+  upiTransactionId is stored in Payment for reconciliation.
+  Payment.status → "completed" after gateway confirms.
+```
+
+---
+
+### 💰 WalletTransaction  (`models/WalletTransaction.js`)
+
+**Purpose**: Immutable ledger entry for every wallet event. Never mutated after
+creation — new records are appended for every credit or debit.
+
+**Key fields**
+
+| Field | Description |
+|---|---|
+| `user` | Ref → User (whose wallet is affected) |
+| `type` | `"credit"` \| `"debit"` |
+| `amount` | Amount of this transaction |
+| `balanceAfter` | Running wallet balance AFTER this transaction (snapshot) |
+| `description` | Human-readable label ("Ride fare", "Top-up", etc.) |
+| `reference` | `"trip"` \| `"topup"` \| `"refund"` \| `"promo"` \| `"withdrawal"` |
+| `referenceId` | ObjectId of the source document (e.g. Trip _id or Payment _id) |
+
+**Relationship to Payment**
+
+```
+Payment ──► passengerWalletTx ──► WalletTransaction (user=passenger, type=debit)
+        ──► driverWalletTx    ──► WalletTransaction (user=driver,    type=credit)
+```
+
+---
+
+### 🔔 Notification  (`models/Notification.js`)
+
+**Purpose**: Every system alert — booking request, OTP, ride status updates,
+promotions — is a Notification record. A Mongoose `post("save")` hook
+automatically dispatches it via Socket.io (in-app) and Firebase (push).
+
+**Key fields**
+
+| Field | Description |
+|---|---|
+| `recipient` | Ref → User (who receives it) |
+| `sender` | Ref → User or null (admin/system) |
+| `title`, `message` | Notification copy |
+| `type` | e.g. `"booking_request"`, `"otp"`, `"trip_update"`, `"system"` |
+| `link` | Deep-link URL for navigation on tap |
+| `metadata` | Free-form object — e.g. `{ tripId, otp, amount }` |
+| `isRead` | Marked true when user opens notification |
+
+---
+
+### ⭐ Review  (`models/Review.js`)
+
+**Purpose**: Post-trip rating. Both passenger → driver and driver → passenger
+reviews are stored here. Enforces one review per reviewer per trip.
+
+**Key fields**: `trip`, `reviewer`, `target`, `direction` (`to_driver` |
+`to_passenger`), `rating` (1–5), `comment`, `tags`.
+
+---
+
+### 🆘 SOS  (`models/SOS.js`)
+
+**Purpose**: Safety-emergency records. Triggered by the passenger during a
+live trip. Stores location at trigger time, and can be resolved by an admin.
+
+**Key fields**: `trip`, `passenger`, `location`, `status` (`active` |
+`resolved`), `triggeredAt`, `resolvedAt`, `resolvedBy`, `notes`.
+
+---
+
+### 📍 SavedPlace  (`models/SavedPlace.js`)
+
+**Purpose**: Allows users to save frequently-used addresses (Home, Work,
+Favourite, Other) for fast pickup/drop-off selection.
+
+**Key fields**: `user`, `title`, `address`, `location` (GeoJSON), `type`.
+
+---
+
+### ⚙️ SystemConfig  (`models/SystemConfig.js`)
+
+**Purpose**: Single admin-controlled document for global platform settings.
+
+**Key fields**: `commission` (%), `maxRadius` (km), `pricing` (per-vehicle-type
+baseFare / costPerKm / perMinRate / minFare / nightCharge / surgeCap),
+`supportEmail`, `googleMapsKey`, `socialLinks`.
+
+---
+
+## 3. 🔗 Schema Relationship Map
+
+```
+User ◄────────── DriverProfile (1-to-1)
+ │
+ ├──► PublishedRide (driver creates)
+ │         └── BookingSchema[] (embedded, passenger books)
+ │
+ ├──► Trip (passenger journey)
+ │         ├── ref: PublishedRide
+ │         └── ref: Payment ◄─────────────────────┐
+ │                    ├── ref: WalletTransaction    │
+ │                    │    (passenger debit)        │
+ │                    └── ref: WalletTransaction    │
+ │                         (driver credit)          │
+ │                                                  │
+ ├──► WalletTransaction (ledger) ──────────────────┘
+ ├──► Notification
+ ├──► Review (via Trip)
+ ├──► SOS    (via Trip)
+ └──► SavedPlace
+```
+
+---
+
+## 4. 🚀 Complete Ride Lifecycle (Step-by-Step)
+
+### Step 1 — Driver Publishes a Ride
+- Driver sets source, destination, departure time, and vehicle type.
+- A **PublishedRide** document is created with `status: "open"`.
+- OSRM calculates the full route and `routeCoords` is stored.
+
+### Step 2 — Passenger Searches & Books
+- Passenger enters pickup and drop-off points.
+- Backend queries **PublishedRides** near that route (`2dsphere` proximity).
+- The **Fare Engine** calculates fare for the passenger's specific road
+  distance segment using **SystemConfig** pricing rules.
+- A **BookingSchema** entry is pushed into `PublishedRide.bookings[]` with
+  `status: "pending"`.
+
+### Step 3 — Driver Accepts (or Rejects)
+- Driver receives a **Notification** with the booking details.
+- **Reject**: `PublishedRide.status` stays `"open"`. Passenger is notified.
+- **Accept**:
+  - `PublishedRide.status` → `"active"`.
+  - Booking inside `bookings[]` → `status: "confirmed"`.
+  - A new **Trip** is created `{ phase: "matched" }` linked to this
+    `PublishedRide` and the passenger.
+  - A 4-digit **OTP** is generated and stored in `Trip.otp`.
+  - Passenger receives a **Notification** containing the OTP and booking
+    confirmation.
+
+### Step 4 — Driver Navigates to Pickup
+- Driver uses in-app map (OSRM route drawn from `routeCoords`).
+- Real-time driver location is broadcast via Socket.io.
+- Passenger sees driver's ETA on their tracking screen.
+
+### Step 5 — Driver Arrives at Pickup
+- Driver clicks **"I Have Arrived"**.
+- `PublishedRide.status` → `"arrived"`.
+- `Trip.phase` → `"arrived"`, `Trip.driverArrivedAt` is set.
+- Passenger receives a **Notification**: "Your driver has arrived. Share your OTP."
+
+### Step 6 — OTP Verification & Ride Start
+- Driver enters the 4-digit OTP shown by the passenger.
+- Backend validates `Trip.otp === entered OTP`.
+- On match:
+  - `Trip.otpVerified` → `true`.
+  - `Trip.phase` → `"ongoing"`, `Trip.startedAt` recorded.
+  - Map switches from "Heading to Pickup" view to "Mission Ongoing" view.
+
+### Step 7 — Driver Drops Off & Completes Ride
+- Driver clicks **"Complete Ride"** at destination.
+- `Trip.phase` → `"completed"`, `Trip.completedAt` recorded.
+- `PublishedRide.status` → `"completed"`.
+- Actual distance and duration are saved to `Trip.distanceActual` /
+  `Trip.durationActual`.
+
+### Step 8 — Payment Processing
+- A **Payment** document is created (`status: "pending"`).
+- **Cash**: Payment is recorded, `status → "completed"`. No wallet touched.
+- **Wallet**:
+  1. Passenger's wallet is debited → **WalletTransaction** created
+     `{ type: "debit", reference: "trip" }`.
+  2. Driver's wallet is credited with `driverEarnings` →
+     **WalletTransaction** created `{ type: "credit", reference: "trip" }`.
+  3. Both WalletTransaction `_id`s are stored in Payment.
+  4. `Payment.status → "completed"`, `Payment.paidAt` recorded.
+- `Trip.payment` is set to the Payment `_id`.
+- Driver stats (`completedRides`, `totalRides`) incremented in **DriverProfile**.
+- Passenger stats (`totalTrips`) incremented in **User.passengerStats**.
+
+### Step 9 — Post-Trip Review (optional)
+- Both parties can submit a **Review** (one per person per trip).
+- Ratings are aggregated into `DriverProfile.averageRating` and
+  `User.passengerStats.averageRating`.
+
+---
+
+## 5. 📊 Lifecycle Status Mapping Table
+
+| Event | PublishedRide Status | Trip Phase | Payment Status |
+|---|---|---|---|
+| Driver posts ride | `open` | — | — |
+| Passenger books | `open` | — | — |
+| Driver accepts | `active` | `matched` | — |
+| Driver arrives | `arrived` | `arrived` | — |
+| OTP verified | `active` | `ongoing` | — |
+| Ride completed | `completed` | `completed` | `pending` → `completed` |
+| Booking rejected | `open` | — | — |
+| Ride cancelled | `cancelled` | `cancelled` | `refunded` (if wallet was charged) |
+
+---
+
+## 6. 🔄 Payment Model & Wallet Integration Flow
+
+```
+Trip completed
+     │
+     ▼
+Payment created  (status: "pending")
+     │
+     ├─── method = "cash" ──────────────────────────────────────►  status: "completed"
+     │                                                              (no wallet touch)
+     │
+     ├─── method = "wallet" ────────────────────────────────────►  WalletTx: passenger DEBIT
+     │                                                          ►  WalletTx: driver   CREDIT
+     │                                                          ►  Payment refs saved
+     │                                                          ►  status: "completed"
+     │
+     └─── method = "upi" ──────────────────────────────────────►  upiTransactionId stored
+                                                               ►  status: "completed" (on gateway callback)
+```
+
+---
+
+*Generated: April 2026 — RouteMate v2 — Full-vehicle booking model, no shared rides.*

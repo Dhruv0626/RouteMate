@@ -12,14 +12,14 @@ import { useGeoNavigation } from "../hooks/useGeoNavigation";
 import api from "../services/api";
 
 const VEHICLE_METADATA = {
-  MOTO: { name: "Bike", capacity: 1, desc: "Affordable bike rides", icon: "🏍️", tag: "" },
-  EVMOTO: { name: "Electric Bike", capacity: 1, desc: "Eco-friendly bike rides", icon: "🌱🏍️", tag: "Eco" },
-  AUTO: { name: "Auto", capacity: 3, desc: "Quick city transport", icon: "🛺", tag: "" },
-  EVAUTO: { name: "Electric Auto", capacity: 3, desc: "Green city transport", icon: "🌱🛺", tag: "Eco" },
+  MOTO: { name: "Bike", capacity: 1, desc: "Affordable bike rides", image: "/images/Moto.png", tag: "" },
+  EVMOTO: { name: "Electric Bike", capacity: 1, desc: "Eco-friendly",image: "/images/EVmoto.png" , tag: "Eco" },
+  AUTO: { name: "Auto", capacity: 3, desc: "Quick city transport", image: "/images/Auto.png", tag: "" },
+  EVAUTO: { name: "Electric Auto", capacity: 3, desc: "Green city transport", image: "/images/EVauto.png", tag: "Eco" },
   GO: { name: "GO", capacity: 4, desc: "Affordable Hatchback", image: "/images/Go.png", tag: "" },
-  EVGO: { name: "Electric GO", capacity: 4, desc: "Sustainable Hatchback", icon: "🌱🚕", tag: "Eco" },
-  PRIME: { name: "Prime Sedan", capacity: 4, desc: "Top-rated comfort sedans", icon: "🚗", tag: "Premium" },
-  XL: { name: "SUV XL", capacity: 6, desc: "Spacious SUVs for clans", icon: "🚙", tag: "Spacious" }
+  EVGO: { name: "Electric GO", capacity: 4, desc: "Sustainable Hatchback",image: "/images/EVgo.png", tag: "Eco" },
+  PRIME: { name: "Prime Sedan", capacity: 4, desc: "Top-rated comfort sedans", image: "/images/Prime.png", tag: "Premium" },
+  XL: { name: "SUV XL", capacity: 6, desc: "Spacious SUVs for clans", image: "/images/XL.png", tag: "Spacious" }
 };
 
 const RideMap = lazy(() => import("../components/map/RideMap"));

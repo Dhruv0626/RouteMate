@@ -35,7 +35,8 @@ export const GetPassengerHistory = async (req, res) => {
     const trips = await TripModel.find(filter)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate("driver", "name email profileImage Mobile_no");
+      .populate("driver", "name email profileImage Mobile_no")
+      .populate("publishedRide");
 
     const totalTrips = await TripModel.countDocuments({ passenger: userId, phase: "completed" });
     
@@ -73,7 +74,8 @@ export const GetDriverHistory = async (req, res) => {
     const trips = await TripModel.find(filter)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate("passenger", "name email profileImage Mobile_no");
+      .populate("passenger", "name email profileImage Mobile_no")
+      .populate("publishedRide");
 
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());

@@ -3,9 +3,8 @@ const { Schema } = mongoose;
 
 const BookingSchema = new Schema({
     passenger: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    seats: { type: Number, required: true },
-    bookingType: { type: String, enum: ["private", "shared"], required: true },
-    // Passenger's own pickup/dropoff if different from driver's full route
+
+    // Passenger's pickup/dropoff points
     passengerSource: {
         address: { type: String },
         location: {
@@ -20,6 +19,7 @@ const BookingSchema = new Schema({
             coordinates: { type: [Number], default: [0, 0] },
         },
     },
+
     // Fare computed at booking time from passenger's actual travel distance
     distanceKm:  { type: Number, default: 0 },
     amountPaid:  { type: Number, required: true },
@@ -29,7 +29,8 @@ const BookingSchema = new Schema({
         distanceKm:      { type: Number },
         surgeMultiplier: { type: Number },
     },
-    paymentMethod: { type: String, enum: ["cash", "online"], default: "cash" },
+
+    paymentMethod: { type: String, enum: ["cash", "wallet", "upi"], default: "cash" },
     status: { type: String, enum: ["pending", "confirmed", "cancelled"], default: "pending" },
     bookedAt: { type: Date, default: Date.now }
 });
@@ -55,8 +56,6 @@ const PublishedRideSchema = new Schema(
         },
 
         departureTime: { type: Date, required: true },
-        totalSeats:    { type: Number, default: 1 },
-        availableSeats: { type: Number, default: 1 },
         vehicleType:   { type: String },
 
         status: {

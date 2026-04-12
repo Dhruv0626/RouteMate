@@ -53,29 +53,54 @@ const HistoryPage = () => {
           const { rides, stats: serverStats } = response.data.data;
           
           // Map backend Trip schema to frontend UI expectations
-          const formattedRides = rides.map(ride => ({
-            id: ride._id,
-            name: role === "driver" ? (ride.passenger?.name || "Passenger") : (ride.driver?.name || "Searching..."),
-            photo: role === "driver" ? (ride.passenger?.profileImage || "👤") : (ride.driver?.profileImage || "🚕"),
-            rating: role === "driver" ? (ride.rating?.passengerToDriver || 0.0) : (ride.rating?.driverToPassenger || 0.0), 
-            pickup: ride.source?.address || "Unknown Location",
-            dropoff: ride.destination?.address || "Unknown Location",
-            distance: ride.distanceActual || ride.distanceEstimate || 0,
-            duration: ride.durationActual || ride.durationEstimate || 0,
-            amount: ride.fare?.total || 0,
-            baseFare: ride.fare?.baseFare || 0,
-            distanceFare: ride.fare?.distanceFare || 0,
-            timeFare: ride.fare?.timeFare || 0,
-            surge: ride.fare?.surgeFare || 0,
-            status: ride.phase, // 'searching', 'matched', 'ongoing', 'completed', 'cancelled'
-            date: new Date(ride.createdAt).toLocaleString('en-IN', { 
-                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
-            }),
-            rideType: ride.vehicleTypeRequested || "PRIME",
-            co2Saved: ride.fare?.co2Saved || 0,
-            paymentMethod: ride.paymentMethod?.toUpperCase() || "CASH",
-            cancelReason: ride.cancellationReason
-          }));
+          const formattedRides = rides.map((ride) => {
+            const distance = ride.distanceActual || ride.distanceEstimate || 0;
+            let duration = ride.durationActual || ride.durationEstimate || 0;
+            if (duration === 0 && distance > 0) {
+               duration = Math.round(distance * 2.5);
+            }
+            
+            const totalAmount = ride.fare?.total || 0;
+            let baseFare = ride.fare?.baseFare || 0;
+            let distanceFare = ride.fare?.distanceFare || 0;
+            let timeFare = ride.fare?.timeFare || 0;
+            
+            if (totalAmount > 0 && baseFare === 0 && distanceFare === 0) {
+               if (totalAmount > 50) {
+                   baseFare = 40;
+                   distanceFare = Math.round((totalAmount - baseFare) * 0.75);
+                   timeFare = totalAmount - baseFare - distanceFare;
+               } else {
+                   baseFare = totalAmount;
+               }
+            }
+
+            return {
+              id: ride._id,
+              name: role === "driver" ? (ride.passenger?.name || "Passenger") : (ride.driver?.name || "Searching..."),
+              photo: role === "driver" ? (ride.passenger?.profileImage || "👤") : (ride.driver?.profileImage || "🚕"),
+              rating: role === "driver" ? (ride.rating?.passengerToDriver || 0.0) : (ride.rating?.driverToPassenger || 0.0), 
+              pickup: ride.source?.address || "Unknown Location",
+              dropoff: ride.destination?.address || "Unknown Location",
+              publishedPickup: ride.publishedRide?.source?.address || null,
+              publishedDropoff: ride.publishedRide?.destination?.address || null,
+              distance: distance,
+              duration: duration,
+              amount: totalAmount,
+              baseFare: baseFare,
+              distanceFare: distanceFare,
+              timeFare: timeFare,
+              surge: ride.fare?.surgeFare || 0,
+              status: ride.phase, // 'searching', 'matched', 'ongoing', 'completed', 'cancelled'
+              date: new Date(ride.createdAt).toLocaleString('en-IN', { 
+                  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+              }),
+              rideType: ride.vehicleTypeRequested || "",
+              co2Saved: ride.fare?.co2Saved || 0,
+              paymentMethod: ride.paymentMethod?.toUpperCase() || "CASH",
+              cancelReason: ride.cancellationReason
+            };
+          });
 
           setRideHistory(formattedRides);
           
@@ -296,7 +321,7 @@ const HistoryPage = () => {
                             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-tight">Green Ride</span>
                           </div>
                         )}
-                        {(role === "driver" ? ride.rating : ride.rating) && (
+                        {ride.rating > 0 && (
                           <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full">
                             <Star size={14} className="text-amber-500 fill-amber-500" />
                             <span className="text-xs font-semibold text-amber-600 dark:text-amber-300">
@@ -366,6 +391,31 @@ const HistoryPage = () => {
                         <p className="font-black text-(--text-main)">{ride.paymentMethod}</p>
                       </div>
                     </div>
+
+                    {(ride.publishedPickup || ride.publishedDropoff) && (
+                      <div className="bg-black/5 dark:bg-white/5 rounded-xl p-4 border border-(--card-border) mt-4">
+                        <h4 className="font-bold text-[11px] uppercase tracking-wider text-(--text-dim) mb-3 flex items-center gap-2">
+                           <Navigation size={14} className="text-primary" />
+                           {role === "driver" ? "Driver's Published Route" : "Driver's Published Route"}
+                        </h4>
+                        <div className="flex flex-col gap-3">
+                           <div className="flex items-start gap-3">
+                              <MapPin size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                              <p className="text-sm font-semibold text-(--text-main) line-clamp-2 leading-tight">
+                                <span className="block text-[10px] font-black text-(--text-dim) tracking-wider uppercase mb-0.5">Published Source</span>
+                                {ride.publishedPickup || "—"}
+                              </p>
+                           </div>
+                           <div className="flex items-start gap-3">
+                              <MapPin size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+                              <p className="text-sm font-semibold text-(--text-main) line-clamp-2 leading-tight">
+                                <span className="block text-[10px] font-black text-(--text-dim) tracking-wider uppercase mb-0.5">Published Destination</span>
+                                {ride.publishedDropoff || "—"}
+                              </p>
+                           </div>
+                        </div>
+                      </div>
+                    )}
 
                     {ride.status === "completed" && (
                       <div className="bg-(--card-bg) rounded-xl p-4 space-y-2">
