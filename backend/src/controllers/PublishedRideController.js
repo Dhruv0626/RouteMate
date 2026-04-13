@@ -230,7 +230,7 @@ export const GetAvailableRides = async (req, res) => {
             .sort({ departureTime: 1 });
 
         // ── Advanced Route-Aware Proximity Filter ──
-        const MAX_PICK_KM = 3.0; // Stricter 3km limit
+        const MAX_PICK_KM = 15.0; // Expanded 15km limit to show more matching rides
         const pSrc = (srcLat && srcLng) ? [parseFloat(srcLng), parseFloat(srcLat)] : null;
         const pDst = (dstLat && dstLng) ? [parseFloat(dstLng), parseFloat(dstLat)] : null;
 
