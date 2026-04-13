@@ -9,9 +9,9 @@
 export async function searchLocation(query) {
   if (!query || query.trim().length < 2) return [];
   
-  // Prioritize Ahmedabad viewbox, but allow India-wide search
-  const ahmedabadBias = "&viewbox=72.42,22.92,72.72,23.12";
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&countrycodes=in${ahmedabadBias}`;
+  // Strict Ahmedabad restriction: Append city/state and use bounded viewbox
+  const ahmedabadViewbox = "&viewbox=72.42,22.92,72.72,23.12&bounded=1";
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ", Ahmedabad, Gujarat")}&format=json&limit=8&countrycodes=in${ahmedabadViewbox}`;
   
   try {
     const res = await fetch(url, {

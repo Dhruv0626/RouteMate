@@ -133,8 +133,13 @@ const LocationSearch = ({
       setIsLoading(true);
       try {
         const data = await searchLocation(debouncedQuery);
-        setResults(data);
-        setIsOpen(true); // always open when there are typed results
+        // Strict filter: Only show Ahmedabad locations
+        const filtered = data.filter(loc => 
+          loc.name.toLowerCase().includes("ahmedabad") || 
+          loc.name.toLowerCase().includes("gujarat")
+        );
+        setResults(filtered);
+        setIsOpen(true);
       } catch {
         setResults([]);
       } finally {

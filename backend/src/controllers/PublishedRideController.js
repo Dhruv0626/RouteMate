@@ -214,10 +214,17 @@ export const GetAvailableRides = async (req, res) => {
 
         const filter = {
             status: "open",
-            departureTime: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+            departureTime: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+            // Mandatory Ahmedabad restriction
+            $or: [
+                { "source.address": { $regex: "Ahmedabad", $options: "i" } },
+                { "destination.address": { $regex: "Ahmedabad", $options: "i" } }
+            ]
         };
 
-        if (sourceCity) filter["source.address"] = { $regex: sourceCity, $options: "i" };
+        if (sourceCity) {
+            filter["source.address"] = { $regex: sourceCity, $options: "i" };
+        }
         if (destinationCity) filter["destination.address"] = { $regex: destinationCity, $options: "i" };
         if (date) {
             const startDate = new Date(date); startDate.setHours(0, 0, 0, 0);
@@ -239,30 +246,33 @@ export const GetAvailableRides = async (req, res) => {
             let pickupIdx = -1;
             let dropoffIdx = -1;
 
-            // 1. Pickup Check
+            const driverSrc = ride.source.location.coordinates;
+            const driverDst = ride.destination.location.coordinates;
+
+            // 1. Pickup Check: Start Point or Path
             if (pSrc) {
-                const driverSrc = ride.source.location.coordinates;
                 if (haversineKm(pSrc, driverSrc) <= MAX_PICK_KM) {
                     pickupIdx = 0;
                 } else if (coords.length > 0) {
-                    for (let i = 0; i < coords.length; i += 2) { // finer resolution for matching
+                    for (let i = 0; i < coords.length; i += 2) {
                         if (haversineKm(pSrc, coords[i]) <= MAX_PICK_KM) {
                             pickupIdx = i;
                             break;
                         }
                     }
                 }
+                // If still not found, check final destination as a last resort (unlikely for pickup but safe)
+                if (pickupIdx === -1 && haversineKm(pSrc, driverDst) <= MAX_PICK_KM) pickupIdx = 999998;
+                
                 if (pickupIdx === -1) return false;
             }
 
-            // 2. Drop-off Check
+            // 2. Drop-off Check: End Point or Path
             if (pDst) {
-                const driverDst = ride.destination.location.coordinates;
                 if (haversineKm(pDst, driverDst) <= MAX_PICK_KM) {
-                    dropoffIdx = 999999; // Represents the end of the journey
+                    dropoffIdx = 999999;
                 } else if (coords.length > 0) {
-                    // Start checking from pickupIdx to ensure it's along the way forward
-                    const startSearch = pickupIdx !== -1 ? pickupIdx : 0;
+                    const startSearch = (pickupIdx !== -1 && pickupIdx !== 999998) ? pickupIdx : 0;
                     for (let i = startSearch; i < coords.length; i += 2) {
                         if (haversineKm(pDst, coords[i]) <= MAX_PICK_KM) {
                             dropoffIdx = i;
@@ -273,8 +283,8 @@ export const GetAvailableRides = async (req, res) => {
                 if (dropoffIdx === -1) return false;
             }
 
-            // 3. Optional Directional Check: If we matched both on the path, dropoff must be after pickup
-            if (pickupIdx !== -1 && dropoffIdx !== -1 && dropoffIdx !== 999999) {
+            // 3. Directional Check: Only if both matched indices are valid waypoints
+            if (pickupIdx !== -1 && dropoffIdx !== -1 && pickupIdx !== 999998 && dropoffIdx !== 999999) {
                 if (dropoffIdx <= pickupIdx) return false;
             }
 
@@ -593,12 +603,23 @@ export const RespondToBooking = async (req, res) => {
 // ─── Driver: My Published Rides ───────────────────────────────────────────────
 export const GetMyPublishedRides = async (req, res) => {
     try {
+        console.log(`[GetMyPublishedRides] Fetching rides for driver: ${req.user.id}`);
         const rides = await PublishedRideModel.find({ driver: req.user.id })
-            .populate("bookings.passenger", "name email Mobile_no profileImage")
-            .sort({ departureTime: -1 });
+            .populate({
+                path: "bookings.passenger",
+                select: "name email Mobile_no profileImage"
+            })
+            .sort({ departureTime: -1 })
+            .lean(); // Use lean for performance and to avoid Mongoose doc issues on live
+
         res.status(200).json({ success: true, data: rides });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Error fetching published rides" });
+        console.error("🔴 Error fetching published rides:", error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Error fetching published rides",
+            error: process.env.NODE_ENV === "production" ? undefined : error.message 
+        });
     }
 };
 
