@@ -240,7 +240,7 @@ const GoOnlinePage = () => {
       const appSettings = JSON.parse(localStorage.getItem("appSettings") || "{}");
       if (!appSettings.locationTracking) { setShowLocationPopup(true); return; }
       if (profile && !profile.isApproved) {
-        setError("Your account is pending admin approval. You cannot go online yet.");
+        // No red error here - user wants it removed. The amber message already shows the status.
         return;
       }
     }

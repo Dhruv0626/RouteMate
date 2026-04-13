@@ -70,7 +70,8 @@ const fetchOSRM = async (fromLat, fromLng, toLat, toLng, signal) => {
   const data = await res.json();
   if (data.code === "Ok" && data.routes?.[0]?.geometry?.coordinates) {
     const path   = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-    const etaMins = Math.round(data.routes[0].duration / 60);
+    // Multiply OSRM duration by 1.4 for more realistic city traffic estimates
+    const etaMins = Math.round((data.routes[0].duration * 1.4) / 60);
     return { path, etaMins };
   }
   return null;
@@ -113,33 +114,40 @@ const PickupMap = () => {
     socket.connect();
     socket.emit("join_ride", rideId);
     socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
-    return () => { socket.off("location_update"); socket.disconnect(); };
+    
+    // Listen for ride status updates (arrived, in_progress, completed)
+    socket.on("ride_status_update", (data) => {
+      setRide(prev => {
+        if (!prev) return null;
+        return { ...prev, status: data.status };
+      });
+      
+      if (data.status === "completed") {
+        showAlert("Your ride has been completed successfully! Thank you for choosing RouteMate.", "Ride Completed", "success");
+        setTimeout(() => navigate("/passenger/dashboard"), 3500);
+      }
+      if (data.status === "in_progress") {
+         showAlert("Your trip has started! Relax and enjoy the ride.", "Trip Started", "success");
+      }
+    });
+
+    return () => { 
+      socket.off("location_update"); 
+      socket.off("ride_status_update");
+      socket.disconnect(); 
+    };
   }, [rideId]);
 
   // ─── Fetch ride ───────────────────────────────────────────────────────────
   useEffect(() => {
     const go = async () => {
       try {
-        let found = null;
-        if (user.role === "driver") {
-          const r1 = await api.get("/published-rides/my-published");
-          found = r1.data.data.find(r => r._id === rideId);
-          if (!found) {
-            const r2 = await api.get("/rides/active-trips");
-            const trip = r2.data.data.find(t => t._id === rideId || t.publishedRide === rideId || t.publishedRide?._id === rideId);
-            if (trip?.publishedRide) {
-              found = typeof trip.publishedRide === "object"
-                ? trip.publishedRide
-                : (await api.get("/published-rides/my-published")).data.data.find(r => r._id === trip.publishedRide);
-            }
-          }
-          if (found) setIsDriver(true);
-        } else {
-          const r3 = await api.get("/published-rides/my-booked");
-          found = r3.data.data.find(r => r._id === rideId);
-          setIsDriver(false);
+        const res = await api.get(`/published-rides/${rideId}`);
+        if (res.data.success) {
+          const found = res.data.data;
+          setRide(found);
+          setIsDriver(user.role === "driver" || found.driver?._id === user.id);
         }
-        setRide(found);
       } catch (err) {
         console.error("Failed to load ride", err);
       } finally {
@@ -241,7 +249,7 @@ const PickupMap = () => {
           const res = await fetch(url);
           const data = await res.json();
           if (data.code === "Ok" && data.routes?.[0]) {
-            const mins = Math.round(data.routes[0].duration / 60);
+            const mins = Math.round((data.routes[0].duration * 1.4) / 60);
             if (isActive) setDestEtaMins(mins);
             else setLiveEtaMins(mins);
           }
@@ -421,25 +429,41 @@ const PickupMap = () => {
           )}
 
           {/* Route polyline – drawn as soon as OSRM returns the path */}
-          {route.length > 1 && (
-            <>
-              {/* Glow / shadow layer */}
-              <Polyline
-                positions={route}
-                pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }}
-              />
-              {/* Main line */}
-              <Polyline
-                positions={route}
-                pathOptions={{ color: isActive ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }}
-              />
-              {/* Animated dashes */}
-              <Polyline
-                positions={route}
-                pathOptions={{ color: "white", weight: 2, opacity: 0.5, lineCap: "round", lineJoin: "round", dashArray: "8 16" }}
-              />
-            </>
-          )}
+          {route.length > 1 && (() => {
+            // Path Cutting: Only show the part of the route ahead of the driver
+            let displayRoute = route;
+            if (driverLocation) {
+              let minStep = Infinity;
+              let closestIdx = 0;
+              // Find the closest point in the route to the driver's current GPS
+              for (let i = 0; i < route.length; i++) {
+                const d = distanceMetres(driverLocation.lat, driverLocation.lng, route[i][0], route[i][1]);
+                if (d < minStep) { minStep = d; closestIdx = i; }
+              }
+              // Only slice if we are reasonably close to the path
+              if (minStep < 200) displayRoute = route.slice(closestIdx);
+            }
+
+            return (
+              <>
+                {/* Glow / shadow layer */}
+                <Polyline
+                  positions={displayRoute}
+                  pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }}
+                />
+                {/* Main line */}
+                <Polyline
+                  positions={displayRoute}
+                  pathOptions={{ color: isActive ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }}
+                />
+                {/* Animated dashes */}
+                <Polyline
+                  positions={displayRoute}
+                  pathOptions={{ color: "white", weight: 2, opacity: 0.5, lineCap: "round", lineJoin: "round", dashArray: "8 16" }}
+                />
+              </>
+            );
+          })()}
 
           {/* Loading placeholder – straight dashed line while OSRM loads */}
           {route.length === 0 && targetForMarker && (() => {
@@ -489,15 +513,6 @@ const PickupMap = () => {
                       : routeLoading ? "Calculating…" : gpsReady ? "Route loading…" : "Acquiring GPS…"}
                   </p>
                 </div>
-                {/* Reroute button */}
-                <button
-                  onClick={handleManualReroute}
-                  disabled={!driverLocation || routeLoading}
-                  className="bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-black disabled:opacity-40 transition hover:bg-blue-500/30"
-                >
-                  <RefreshCw size={13} className={routeLoading ? "animate-spin" : ""} />
-                  Reroute
-                </button>
               </div>
 
               {/* Destination info */}
@@ -509,10 +524,10 @@ const PickupMap = () => {
               {/* Actions */}
               <div className="flex gap-3">
                 <button
-                  onClick={() => navigate("/driver/dashboard/active-rides")}
-                  className="flex-1 bg-amber-500 text-black font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all text-sm"
+                  onClick={() => navigate(`/start-ride/${rideId}`)}
+                  className="flex-1 bg-violet-600 text-white font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-violet-500/20 active:scale-95 transition-all text-sm"
                 >
-                  <MapPin size={18} />
+                  <Navigation size={18} />
                   Pickup Done
                 </button>
                 {firstPassenger?.passenger?.Mobile_no && (

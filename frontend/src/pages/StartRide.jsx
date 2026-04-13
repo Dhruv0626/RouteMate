@@ -68,7 +68,8 @@ const fetchOSRM = async (fromLat, fromLng, toLat, toLng, signal) => {
   const data = await res.json();
   if (data.code === "Ok" && data.routes?.[0]?.geometry?.coordinates) {
     const path    = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-    const etaMins = Math.round(data.routes[0].duration / 60);
+    // Multiply OSRM duration by 1.4 for more realistic city traffic estimates
+    const etaMins = Math.round((data.routes[0].duration * 1.4) / 60);
     return { path, etaMins };
   }
   return null;
@@ -120,33 +121,37 @@ const StartRide = () => {
     socket.connect();
     socket.emit("join_ride", rideId);
     socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
-    return () => { socket.off("location_update"); socket.disconnect(); };
+    
+    // Listen for ride status updates
+    socket.on("ride_status_update", (data) => {
+      setRide(prev => {
+        if (!prev) return null;
+        return { ...prev, status: data.status };
+      });
+      
+      if (data.status === "completed" && user.role !== "driver") {
+        showAlert("Your ride has been completed successfully! Thank you for choosing RouteMate.", "Ride Completed", "success");
+        setTimeout(() => navigate("/passenger/dashboard"), 3500);
+      }
+    });
+
+    return () => { 
+      socket.off("location_update"); 
+      socket.off("ride_status_update");
+      socket.disconnect(); 
+    };
   }, [rideId]);
 
   // ─── Fetch ride ───────────────────────────────────────────────────────────
   useEffect(() => {
     const go = async () => {
       try {
-        let found = null;
-        if (user.role === "driver") {
-          const r1 = await api.get("/published-rides/my-published");
-          found = r1.data.data.find(r => r._id === rideId);
-          if (!found) {
-            const r2 = await api.get("/rides/active-trips");
-            const trip = r2.data.data.find(t => t._id === rideId || t.publishedRide === rideId || t.publishedRide?._id === rideId);
-            if (trip?.publishedRide) {
-              found = typeof trip.publishedRide === "object"
-                ? trip.publishedRide
-                : (await api.get("/published-rides/my-published")).data.data.find(r => r._id === trip.publishedRide);
-            }
-          }
-          if (found) setIsDriver(true);
-        } else {
-          const r3 = await api.get("/published-rides/my-booked");
-          found = r3.data.data.find(r => r._id === rideId);
-          setIsDriver(false);
+        const res = await api.get(`/published-rides/${rideId}`);
+        if (res.data.success) {
+          const found = res.data.data;
+          setRide(found);
+          setIsDriver(user.role === "driver" || found.driver?._id === user.id);
         }
-        setRide(found);
       } catch (err) {
         console.error("Failed to load ride", err);
       } finally {
@@ -257,7 +262,7 @@ const StartRide = () => {
           const url = `${OSRM_BASE}/${lng},${lat};${targetCoords[0]},${targetCoords[1]}?overview=false`;
           const res  = await fetch(url);
           const data = await res.json();
-          if (data.code === "Ok" && data.routes?.[0]) setEtaMins(Math.round(data.routes[0].duration / 60));
+          if (data.code === "Ok" && data.routes?.[0]) setEtaMins(Math.round((data.routes[0].duration * 1.4) / 60));
         } catch (_) {}
       })();
       prevLocRef.current = { lat, lng };
@@ -416,13 +421,27 @@ const StartRide = () => {
           )}
 
           {/* Road polyline */}
-          {route.length > 1 && driverLocation && (
-            <>
-              <Polyline positions={route} pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
-              <Polyline positions={route} pathOptions={{ color: ride.status === "in_progress" ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
-              <Polyline positions={route} pathOptions={{ color: "white", weight: 2, opacity: 0.4, dashArray: "8 16", lineCap: "round", lineJoin: "round" }} />
-            </>
-          )}
+          {route.length > 1 && (() => {
+            // Path Cutting: Only show the part of the route ahead of the driver
+            let displayRoute = route;
+            if (driverLocation) {
+              let minStep = Infinity;
+              let closestIdx = 0;
+              for (let i = 0; i < route.length; i++) {
+                const d = distanceMetres(driverLocation.lat, driverLocation.lng, route[i][0], route[i][1]);
+                if (d < minStep) { minStep = d; closestIdx = i; }
+              }
+              if (minStep < 200) displayRoute = route.slice(closestIdx);
+            }
+
+            return (
+              <>
+                <Polyline positions={displayRoute} pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
+                <Polyline positions={displayRoute} pathOptions={{ color: ride.status === "in_progress" ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
+                <Polyline positions={displayRoute} pathOptions={{ color: "white", weight: 2, opacity: 0.4, dashArray: "8 16", lineCap: "round", lineJoin: "round" }} />
+              </>
+            );
+          })()}
 
           {/* Dashed placeholder while loading route */}
           {route.length === 0 && fallbackFrom && fallbackTo && (
@@ -453,14 +472,6 @@ const StartRide = () => {
                        : "Acquiring GPS…"}
                     </p>
                   </div>
-                  <button
-                    onClick={handleManualReroute}
-                    disabled={!driverLocation || routeLoading}
-                    className="bg-blue-500/20 border border-blue-500/30 text-blue-400 px-3 py-2 rounded-xl flex items-center gap-1.5 text-xs font-black disabled:opacity-40 transition hover:bg-blue-500/30"
-                  >
-                    <RefreshCw size={13} className={routeLoading ? "animate-spin" : ""} />
-                    Reroute
-                  </button>
                 </div>
               )}
 

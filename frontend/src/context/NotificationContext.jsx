@@ -35,6 +35,7 @@ export const useNotifications = () => {
 const NOTIFICATION_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"; 
 const notificationAudio = new Audio(NOTIFICATION_SOUND_URL);
 notificationAudio.preload = "auto";
+notificationAudio.loop = false; // CRITICAL: Ensure no continuous looping
 notificationAudio.load();
 
 export const NotificationProvider = ({ children }) => {
@@ -123,9 +124,11 @@ export const NotificationProvider = ({ children }) => {
         setNotifications(prev => {
            const wasUnread = prev.find(n => n._id === id && !n.isRead);
            if (wasUnread) {
-             const newCount = Math.max(0, unreadCount - 1);
-             setUnreadCount(newCount);
-             prevUnreadCountRef.current = newCount;
+             setUnreadCount(prev => {
+               const newCount = Math.max(0, prev - 1);
+               prevUnreadCountRef.current = newCount;
+               return newCount;
+             });
            }
            return prev.filter(n => n._id !== id);
         });
@@ -133,7 +136,7 @@ export const NotificationProvider = ({ children }) => {
     } catch (error) {
       console.error("Failed to delete notification:", error.message);
     }
-  }, [unreadCount]);
+  }, []); // unreadCount removed from deps
 
   // ─── Mobile Audio Unlock ───
   // Unlocks the audio context on first user interaction 
@@ -212,19 +215,23 @@ export const NotificationProvider = ({ children }) => {
       socket.emit("join_user", user.id);
 
       const handleFastNotification = (notification) => {
-        // Prevent duplicates (polling might also catch it)
+        // Trigger tone and alert immediately (Socket path)
+        showNativeNotification(notification);
+
+        // Update state
         setNotifications(prev => {
           const exists = prev.find(n => n._id === notification._id || (n.createdAt === notification.createdAt && n.title === notification.title));
           if (exists) return prev;
-          
-          // New notification arrives - Trigger tone and alert!
-          showNativeNotification(notification);
           return [notification, ...prev];
         });
         
-        setUnreadCount(prev => prev + 1);
+        setUnreadCount(prev => {
+          const newCount = prev + 1;
+          prevUnreadCountRef.current = newCount;
+          return newCount;
+        });
 
-        // UI Enhancement: Show toast with specific icon
+        // UI Enhancement: Show toast
         const ToastIcon = ICONS[notification.type] || Bell;
         showToast(notification.message, "info", 8000, {
           icon: <ToastIcon size={18} />

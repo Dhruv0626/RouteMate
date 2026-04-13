@@ -94,18 +94,6 @@ const RateCardPage = () => {
                     </div>
                 </div>
 
-                {/* Tax Info */}
-                <div className="flex justify-center">
-                    <div className="glass-card w-full p-5 rounded-3xl border-(--card-border) flex flex-col items-center justify-center text-center space-y-2 max-w-sm">
-                        <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Taxes (incl.)</p>
-                        <div className="flex items-center gap-2">
-                            <ShieldCheck size={16} className="text-emerald-500" />
-                            <span className="text-2xl font-display font-black text-white">{config?.taxPercentage || '5'}%</span>
-                        </div>
-                        <p className="text-[9px] text-(--text-dim) font-medium italic">Standard Service Tax applied after surge</p>
-                    </div>
-                </div>
-
                 {/* Rates List */}
                 <div className="space-y-6">
                     <div className="flex items-center justify-between px-2">
