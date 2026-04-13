@@ -319,7 +319,7 @@ const DashboardPage = () => {
             setStats([
               { label: "Users", value: adminStats.counts.total.toLocaleString() },
               { label: "Active", value: adminStats.counts.activeUsers.toLocaleString() },
-              { label: "Revenue", value: `₹${(adminStats.business.revenue / 1000).toFixed(1)}K` },
+              { label: "Revenue", value: `₹${Math.round(adminStats.business.revenue / 1000)}K` },
             ]);
           }
 
@@ -610,7 +610,7 @@ const DashboardPage = () => {
               {stats.map((s, i) => (
                 <div key={i} className="min-w-17.5 text-center">
                   <p className="mb-0.5 text-xl font-black text-(--text-main) md:text-2xl transition-all">
-                    {s.value}
+                    {typeof s.value === 'string' && s.value.startsWith('₹') ? `₹${Math.round(parseFloat(s.value.replace(/[^0-9.]/g, ''))).toLocaleString()}` : s.value}
                   </p>
                   <p className="text-[8px] leading-none font-black tracking-widest text-(--text-dim) uppercase">
                     {s.label}

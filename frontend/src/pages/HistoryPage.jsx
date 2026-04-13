@@ -354,7 +354,7 @@ const HistoryPage = () => {
                           <Clock size={12} />{ride.date}
                         </span>
                         <span className={`flex items-center gap-1 font-semibold ${role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"}`}>
-                          <IndianRupee size={12} />₹{ride.amount}
+                          <IndianRupee size={12} />₹{Math.round(ride.amount)}
                         </span>
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full font-semibold ${getStatusColor(ride.status)}`}>
                           {getStatusIcon(ride.status)}

@@ -14,7 +14,7 @@ const SystemConfigSchema = new Schema(
         surgeMultiplier: { type: String, default: "1.2x" }, // Hard multiplier for high demand
         realTimeTracking: { type: Boolean, default: true },
         autoApproveDrivers: { type: Boolean, default: false },
-        
+
         // ── Ride Pricing Configuration ──────────────────────────────────────────
         // Categories: MOTO, EVMOTO, AUTO, EVAUTO, GO, EVGO, PRIME, XL
         pricing: {
@@ -96,7 +96,7 @@ const SystemConfigSchema = new Schema(
             instagram: { type: String, default: "" },
             linkedin: { type: String, default: "" }
         },
-        
+
         // ── Audit ──────────────────────────────────────────────────────────────
         version: { type: Number, default: 1 },
         updatedAt: { type: Date },

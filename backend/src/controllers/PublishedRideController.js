@@ -75,9 +75,11 @@ const calcFare = async ({
         const night_val = isNight ? night_charge : 0;
         subtotal += night_val;
 
-        // Step 3: Calculate Surge Multiplier based on demand_ratio
+        // Step 3: Calculate Surge Multiplier based on demand_ratio (Stepped Logic)
         let surge_multiplier = 1.0;
-        let surge_label = "No Surge";
+        let surge_label = "Standard Fare";
+
+        const base_surge = parse(sys.surgeMultiplier || "1.2");
 
         if (demandRatio > 2.5) {
             surge_multiplier = surge_cap;
@@ -89,7 +91,7 @@ const calcFare = async ({
             surge_multiplier = 1.4;
             surge_label = "Medium Surge";
         } else if (demandRatio > 1.2) {
-            surge_multiplier = 1.2;
+            surge_multiplier = base_surge;
             surge_label = "Low Surge";
         }
 
@@ -102,13 +104,9 @@ const calcFare = async ({
         let surgedTotalRaw = subtotal * surge_multiplier;
         const min_fare_applied = surgedTotalRaw < min_fare;
         let surgedTotal = Math.max(surgedTotalRaw, min_fare);
-
-        // Step 5: Apply Flat Tax from System Config
-        const taxPercentage = sys.taxPercentage != null ? sys.taxPercentage : 5;
-        const taxAmount = surgedTotal * (taxPercentage / 100);
         
-        // Step 6: Final Total
-        let totalWithTax = surgedTotal + taxAmount;
+        // Final Total is now just the Surged Total (Tax logic removed)
+        let finalTotal = Math.round(surgedTotal);
 
         // EV SPECIAL RULES: Calculate CO2 Saved
         const is_ev = ["EVMOTO", "EVAUTO", "EVGO"].includes(catKey);
@@ -123,17 +121,17 @@ const calcFare = async ({
             is_ev,
             distance_km: Math.round(distanceKm * 10) / 10,
             time_min: Math.round(timeMin),
-            baseFare: Number(base_fare.toFixed(2)),
-            distanceFare: Number(distance_charge.toFixed(2)),
-            timeFare: Number(time_charge.toFixed(2)),
-            night_charge: Number(night_val.toFixed(2)),
-            subtotal: Number(subtotal.toFixed(2)),
+            baseFare: Math.round(base_fare),
+            distanceFare: Math.round(distance_charge),
+            timeFare: Math.round(time_charge),
+            night_charge: Math.round(night_val),
+            subtotal: Math.round(subtotal),
             surgeMultiplier: Number(surge_multiplier.toFixed(2)),
-            surgeFare: Number(surge_fare_real.toFixed(2)),
+            surgeFare: Math.round(surge_fare_real),
             surge_label,
-            surgedTotal: Number(surgedTotal.toFixed(2)),
-            taxAmount: Number(taxAmount.toFixed(2)),
-            totalWithTax: Number(totalWithTax.toFixed(2)),
+            surgedTotal: Math.round(surgedTotal),
+            totalWithTax: finalTotal, // Keeping for compatibility but tax is 0%
+            final_price: finalTotal,
             min_fare_applied,
             co2_saved_kg: Number(co2_saved_kg.toFixed(3)),
             currency: "INR"
@@ -405,7 +403,6 @@ export const BookRide = async (req, res) => {
              surgeFare: fareData.surgeFare || 0,
              surgeMultiplier: fareData.surgeMultiplier || 1.0,
              surgedTotal: fareData.surgedTotal || 0,
-             taxAmount: fareData.taxAmount || 0,
              totalWithTax: fareData.totalWithTax || 0,
              co2Saved: fareData.co2_saved_kg || 0
         };
@@ -515,7 +512,6 @@ export const RespondToBooking = async (req, res) => {
                     timeFare: booking.fareBreakdown?.timeFare || 0,
                     surgeFare: booking.fareBreakdown?.surgeFare || 0,
                     surgedTotal: booking.fareBreakdown?.surgedTotal || 0,
-                    taxAmount: booking.fareBreakdown?.taxAmount || 0,
                     totalWithTax: booking.fareBreakdown?.totalWithTax || booking.amountPaid,
                     co2Saved: booking.fareBreakdown?.co2Saved || 0
                 },

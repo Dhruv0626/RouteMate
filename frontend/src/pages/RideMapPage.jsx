@@ -270,7 +270,7 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
       {/* Right: Price */}
       <div style={{ textAlign: "right", marginLeft: '12px' }}>
         <div style={{ fontSize: "18px", fontWeight: 900, color: "var(--text-main)" }}>
-          ₹{ride.price}
+          ₹{Math.round(ride.price)}
         </div>
       </div>
     </button>
@@ -674,7 +674,7 @@ const RideMapPage = () => {
                     {fareEstimate && (
                         <div>
                             <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#a5b4fc", lineHeight: 1 }}>
-                                ₹{fareEstimate.totalFare}
+                                ₹{Math.round(fareEstimate.totalFare)}
                             </p>
                             <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>final fare</p>
                         </div>

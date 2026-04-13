@@ -276,11 +276,6 @@ const SystemSettingsPage = () => {
              value={config.commission} icon={Smartphone} suffix="%"
              onChange={(v) => setConfig({...config, commission: v})}
            />
-           <ConfigInput
-             label="Total Calculation %" desc="Global flat tax rate"
-             value={config.taxPercentage ?? ""} icon={IndianRupee} suffix="%"
-             onChange={(v) => setConfig({...config, taxPercentage: v})}
-           />
         </SettingGroup>
 
         <SettingGroup title="Operational Logic" desc="Fine-tune how the platform behaves.">
