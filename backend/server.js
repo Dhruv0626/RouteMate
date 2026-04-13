@@ -118,6 +118,9 @@ const io = new Server(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+// Initialize the global SocketManager with this instance
+initSocket(io);
+
 // Socket.io namespaces or rooms logic
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);

@@ -4,6 +4,7 @@ import SystemConfig from "../models/SystemConfig.js";
 import NotificationModel from "../models/Notification.js";
 import TripModel from "../models/Trip.js";
 import UserModel from "../models/User.js";
+import { getIO } from "../utils/SocketManager.js";
 
 // ─── Haversine distance (km) ──────────────────────────────────────────────────
 const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
@@ -21,12 +22,25 @@ const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
 // ─── Help: Demand Ratio (Requests / Drivers) ──────────────────────────────────
 const getDemandRatio = async () => {
     try {
-        const driversCount = await DriverProfileModel.countDocuments({ isOnline: true, isApproved: true });
-        const requestCount = await PublishedRideModel.countDocuments({ status: "open" });
+        // Supply = Active Published Rides that are open for booking
+        const supplyCount = await PublishedRideModel.countDocuments({ status: "open" });
+        
+        // Demand = Count all "pending" booking requests across all published rides
+        const demandStats = await PublishedRideModel.aggregate([
+            { $unwind: "$bookings" },
+            { $match: { "bookings.status": "pending" } },
+            { $count: "count" }
+        ]);
+        const demandCount = demandStats[0]?.count || 0;
 
-        if (driversCount === 0) return requestCount > 0 ? 3.0 : 1.0; // Max surge if no drivers but requests exist
-        return requestCount / driversCount;
+        if (supplyCount === 0) return 1.0; 
+        
+        // Ratio = Demand / Supply
+        // e.g. 10 people wanting 5 rides -> ratio 2.0 (High Surge)
+        // e.g. 2 people wanting 10 rides -> ratio 0.2 (Standard Fare)
+        return demandCount / supplyCount;
     } catch (error) {
+        console.error("🔴 Demand Ratio Calc Error:", error.message);
         return 1.0;
     }
 };
@@ -254,6 +268,9 @@ export const GetAvailableRides = async (req, res) => {
             return true;
         });
 
+        // ── Step 1: Calculate global demand ratio ONCE for this request ──
+        const demandRatio = await getDemandRatio();
+
         const enrichedRides = await Promise.all(filtered.map(async (ride) => {
             const profile = await DriverProfileModel.findOne({ user: ride.driver._id });
             const rideObj = ride.toObject();
@@ -277,7 +294,6 @@ export const GetAvailableRides = async (req, res) => {
             const straightLineDist = (pSrc && pDst) ? haversineKm(pSrc, pDst) : haversineKm(ride.source.location.coordinates, ride.destination.location.coordinates);
             const estimatedRoadDist = straightLineDist * 1.3;
 
-            const demandRatio = await getDemandRatio();
             const fareData = await calcFare({
                 category: ride.vehicleType || "PRIME",
                 distanceKm: estimatedRoadDist,
@@ -598,6 +614,13 @@ export const UpdateRideStatus = async (req, res) => {
         ride.status = status;
         await ride.save();
 
+        // ── EMIT SOCKET STATUS UPDATE ──
+        const io = getIO();
+        if (io) {
+            io.to(rideId).emit("ride_status_update", { rideId, status });
+            console.log(`🚀 PublishedRideController: Emitted status [${status}] to Ride ${rideId}`);
+        }
+
         // ── UPDATE ASSOCIATED TRIPS ──
         // Map each status to the correct target phase AND the phases that are eligible
         // to be updated — this prevents dropped/unstarted trips from being swept up.
@@ -682,6 +705,22 @@ export const UpdateRideStatus = async (req, res) => {
 };
 
 // ─── Passenger: My Booked Rides ───────────────────────────────────────────────
+// ─── Shared: Get Single Ride ──────────────────────────────────────────────────
+export const GetSingleRide = async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const ride = await PublishedRideModel.findById(rideId)
+            .populate("driver", "name email Mobile_no profileImage")
+            .populate("bookings.passenger", "name email Mobile_no profileImage");
+        
+        if (!ride) return res.status(404).json({ success: false, message: "Ride not found" });
+        
+        res.status(200).json({ success: true, data: ride });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error fetching ride details" });
+    }
+};
+
 export const GetMyBookedRides = async (req, res) => {
     try {
         const rides = await PublishedRideModel.find({ "bookings.passenger": req.user.id })

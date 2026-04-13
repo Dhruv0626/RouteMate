@@ -7,12 +7,15 @@ import {
     RespondToBooking,
     UpdateRideStatus,
     GetMyPublishedRides,
+    GetSingleRide,
     GetMyBookedRides
 } from "../controllers/PublishedRideController.js";
 import authMiddleware from "../middlewares/AuthMid.js";
 import authorizeRoles from "../middlewares/RoleMid.js";
 
 const router = express.Router();
+
+router.get("/:rideId", authMiddleware, GetSingleRide);
 
 // ── Driver routes ─────────────────────────────────────────────────────────────
 router.post("/publish",           authMiddleware, authorizeRoles("driver", "admin"), PublishRide);
