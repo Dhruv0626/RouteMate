@@ -235,34 +235,47 @@ export const GetAvailableRides = async (req, res) => {
         const pDst = (dstLat && dstLng) ? [parseFloat(dstLng), parseFloat(dstLat)] : null;
 
         const filtered = rides.filter(ride => {
-            // Coordinate check for Source (Pickup)
+            const coords = ride.routeCoords || [];
+            let pickupIdx = -1;
+            let dropoffIdx = -1;
+
+            // 1. Pickup Check
             if (pSrc) {
-                // Check if passenger's pickup is near NO part of the route
                 const driverSrc = ride.source.location.coordinates;
-                const distToStart = haversineKm(pSrc, driverSrc);
-
-                // If not near the start, check the entire path
-                if (distToStart > MAX_PICK_KM) {
-                    const coords = ride.routeCoords || [];
-                    if (!coords.length) return false; // Hide if we have no path data and start is far
-
-                    // Check path waypoints (sampled every 5th point for speed)
-                    let isNearPath = false;
-                    for (let i = 0; i < coords.length; i += 5) {
+                if (haversineKm(pSrc, driverSrc) <= MAX_PICK_KM) {
+                    pickupIdx = 0;
+                } else if (coords.length > 0) {
+                    for (let i = 0; i < coords.length; i += 2) { // finer resolution for matching
                         if (haversineKm(pSrc, coords[i]) <= MAX_PICK_KM) {
-                            isNearPath = true;
+                            pickupIdx = i;
                             break;
                         }
                     }
-                    if (!isNearPath) return false;
                 }
+                if (pickupIdx === -1) return false;
             }
 
-            // Coordinate check for Destination (Drop-off)
+            // 2. Drop-off Check
             if (pDst) {
                 const driverDst = ride.destination.location.coordinates;
-                const distToDst = haversineKm(pDst, driverDst);
-                if (distToDst > MAX_PICK_KM) return false;
+                if (haversineKm(pDst, driverDst) <= MAX_PICK_KM) {
+                    dropoffIdx = 999999; // Represents the end of the journey
+                } else if (coords.length > 0) {
+                    // Start checking from pickupIdx to ensure it's along the way forward
+                    const startSearch = pickupIdx !== -1 ? pickupIdx : 0;
+                    for (let i = startSearch; i < coords.length; i += 2) {
+                        if (haversineKm(pDst, coords[i]) <= MAX_PICK_KM) {
+                            dropoffIdx = i;
+                            break;
+                        }
+                    }
+                }
+                if (dropoffIdx === -1) return false;
+            }
+
+            // 3. Optional Directional Check: If we matched both on the path, dropoff must be after pickup
+            if (pickupIdx !== -1 && dropoffIdx !== -1 && dropoffIdx !== 999999) {
+                if (dropoffIdx <= pickupIdx) return false;
             }
 
             return true;
