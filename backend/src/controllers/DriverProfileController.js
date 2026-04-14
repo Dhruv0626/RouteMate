@@ -1,6 +1,7 @@
 import DriverProfileModel from "../models/DriverProfile.js";
 import UserModel from "../models/User.js";
 import NotificationModel from "../models/Notification.js";
+import PublishedRideModel from "../models/PublishedRide.js";
 import { notifyDriverProfileSubmitted, notifyDriverApproved, notifyDriverRejected } from "../utils/NotifyUtil.js";
 
 // ─── Create Driver Profile ────────────────────────────────────────────────────
@@ -320,12 +321,34 @@ export const GetAllDriverProfiles = async (req, res) => {
             .skip(parseInt(skip))
             .sort({ createdAt: -1 });
 
+        // ─── Attach Active Ride Info for Telematics ───
+        const enriched = await Promise.all(driverProfiles.map(async (profile) => {
+            const profileObj = profile.toObject();
+            
+            // Find NO.1: Any live ride (confirmed and in motion/pickup)
+            const activeRide = await PublishedRideModel.findOne({ 
+                driver: profile.user._id,
+                status: { $in: ["active", "arrived", "in_progress"] }
+            }).populate("bookings.passenger", "name");
+
+            // Find NO.2: Any online ride (published but not yet active/accepted)
+            const onlineRide = await PublishedRideModel.findOne({
+                driver: profile.user._id,
+                status: { $in: ["open", "full", "booked"] }
+            });
+
+            profileObj.activeRide = activeRide || null;
+            profileObj.onlineRide = onlineRide || null;
+            
+            return profileObj;
+        }));
+
         const total = await DriverProfileModel.countDocuments(filter);
 
         res.status(200).json({
             success: true,
             message: "Driver profiles retrieved successfully.",
-            data: driverProfiles,
+            data: enriched,
             pagination: {
                 total,
                 limit: parseInt(limit),

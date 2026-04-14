@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Navigation, Play, Square, Loader2,
-  User as UserIcon, Lock, MapPin, IndianRupee, Phone, RefreshCw,
+  User as UserIcon, Lock, IndianRupee, Phone, RefreshCw,
+  ArrowUp, CornerUpLeft, CornerUpRight, Volume2, X,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import L from "leaflet";
@@ -10,24 +11,7 @@ import socket from "../services/socket";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
-
-// ─── Map Icons ────────────────────────────────────────────────────────────────
-const carIcon = L.divIcon({
-  html: `<div style="font-size:28px;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.5));transform:translateY(-4px);">🚗</div>`,
-  className: "",
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
-
-const makePin = (color, label) => L.divIcon({
-  html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.4))">
-    <div style="background:${color};color:white;font-size:10px;font-weight:900;padding:2px 6px;border-radius:6px;white-space:nowrap;margin-bottom:2px">${label}</div>
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="white"/></svg>
-  </div>`,
-  className: "",
-  iconSize: [80, 50],
-  iconAnchor: [40, 50],
-});
+import { makeVehicleIcon, makePin } from "../utils/mapIcons";
 
 const greenPin = makePin("#10b981", "PICKUP");
 const redPin   = makePin("#ef4444", "DROP");
@@ -60,17 +44,39 @@ const distanceToPolyline = (lat, lng, polyline) => {
   return min;
 };
 
+/** Format metres into "250 m" or "1.4 km" */
+const fmtDist = (m) => {
+  if (!m && m !== 0) return "";
+  if (m < 1000) return `${Math.round(m / 10) * 10} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+};
+
+/** Map OSRM maneuver to Lucide icon + label */
+const TurnArrow = ({ step }) => {
+  const mod  = step?.maneuver?.modifier || "";
+  const type = step?.maneuver?.type     || "";
+
+  if (type === "arrive")
+    return <div className="text-2xl">🏁</div>;
+  if (mod.includes("left"))
+    return <CornerUpLeft size={28} className="text-white" strokeWidth={3} />;
+  if (mod.includes("right"))
+    return <CornerUpRight size={28} className="text-white" strokeWidth={3} />;
+  return <ArrowUp size={28} className="text-white" strokeWidth={3} />;
+};
+
 const OSRM_BASE = "https://router.project-osrm.org/route/v1/driving";
 
 const fetchOSRM = async (fromLat, fromLng, toLat, toLng, signal) => {
-  const url = `${OSRM_BASE}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
+  const url = `${OSRM_BASE}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`;
   const res  = await fetch(url, signal ? { signal } : undefined);
   const data = await res.json();
   if (data.code === "Ok" && data.routes?.[0]?.geometry?.coordinates) {
     const path    = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-    // Multiply OSRM duration by 1.4 for more realistic city traffic estimates
     const etaMins = Math.round((data.routes[0].duration * 1.4) / 60);
-    return { path, etaMins };
+    const distKm  = Math.round(data.routes[0].distance / 100) / 10;
+    const steps   = data.routes[0].legs?.[0]?.steps || [];
+    return { path, etaMins, distKm, steps };
   }
   return null;
 };
@@ -82,21 +88,26 @@ const StartRide = () => {
   const { user }      = useAuth();
   const { showAlert } = useDialog();
 
-  const [ride, setRide]                   = useState(null);
+  const [ride, setRide]                     = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
-  const [isDriver, setIsDriver]           = useState(false);
-  const [loading, setLoading]             = useState(true);
-  const [showOtpBox, setShowOtpBox]       = useState(true);
-  const [otpSlots, setOtpSlots]           = useState(["", "", "", ""]);
+  const [isDriver, setIsDriver]             = useState(false);
+  const [loading, setLoading]               = useState(true);
+  const [showOtpBox, setShowOtpBox]         = useState(true);
+  const [otpSlots, setOtpSlots]             = useState(["", "", "", ""]);
   const [isStartingRequest, setIsStartingRequest] = useState(false);
-  const [route, setRoute]                 = useState([]);   // [[lat,lng],...] road path
-  const [etaMins, setEtaMins]             = useState(null);
-  const [routeLoading, setRouteLoading]   = useState(false);
-  const [gpsReady, setGpsReady]           = useState(false);
-  const [map, setMap]                     = useState(null);
+  const [route, setRoute]                   = useState([]);
+  const [etaMins, setEtaMins]               = useState(null);
+  const [routeDistKm, setRouteDistKm]       = useState(null);
+  const [routeSteps, setRouteSteps]         = useState([]);
+  const [nextStep, setNextStep]             = useState(null);
+  const [routeLoading, setRouteLoading]     = useState(false);
+  const [heading, setHeading]               = useState(0);
+  const [gpsReady, setGpsReady]             = useState(false);
+  const [map, setMap]                       = useState(null);
 
-  const abortRef   = useRef(null);
-  const prevLocRef = useRef(null);
+  const abortRef    = useRef(null);
+  const prevLocRef  = useRef(null);
+  const stepIdxRef  = useRef(0);
   const REROUTE_THRESHOLD_M = 80;
 
   // ─── Derived ──────────────────────────────────────────────────────────────
@@ -110,7 +121,6 @@ const StartRide = () => {
   const pickupCoords = firstPassenger?.passengerSource?.location?.coordinates;
   const destCoords   = firstPassenger?.passengerDestination?.location?.coordinates || ride?.destination?.location?.coordinates;
 
-  // Whether driver arrived within 2 km of destination
   let isNearDestination = false;
   if (driverLocation && destCoords && ride?.status === "in_progress") {
     isNearDestination = distanceMetres(driverLocation.lat, driverLocation.lng, destCoords[1], destCoords[0]) <= 2000;
@@ -121,24 +131,17 @@ const StartRide = () => {
     socket.connect();
     socket.emit("join_ride", rideId);
     socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
-    
-    // Listen for ride status updates
     socket.on("ride_status_update", (data) => {
-      setRide(prev => {
-        if (!prev) return null;
-        return { ...prev, status: data.status };
-      });
-      
+      setRide(prev => { if (!prev) return null; return { ...prev, status: data.status }; });
       if (data.status === "completed" && user.role !== "driver") {
         showAlert("Your ride has been completed successfully! Thank you for choosing RouteMate.", "Ride Completed", "success");
         setTimeout(() => navigate("/passenger/dashboard"), 3500);
       }
     });
-
-    return () => { 
-      socket.off("location_update"); 
+    return () => {
+      socket.off("location_update");
       socket.off("ride_status_update");
-      socket.disconnect(); 
+      socket.disconnect();
     };
   }, [rideId]);
 
@@ -151,6 +154,11 @@ const StartRide = () => {
           const found = res.data.data;
           setRide(found);
           setIsDriver(user.role === "driver" || found.driver?._id === user.id);
+          
+          // CRITICAL FIX: Hide OTP box if ride already started
+          if (found.status === "in_progress") {
+            setShowOtpBox(false);
+          }
         }
       } catch (err) {
         console.error("Failed to load ride", err);
@@ -161,10 +169,15 @@ const StartRide = () => {
     go();
   }, [rideId, user.role]);
 
-  // ─── Block back button ────────────────────────────────────────────────────
+  // ─── Block browser back during active mission ───
   useEffect(() => {
-    if (!ride || !isDriver || ride.status === "completed") return;
-    const block = (e) => { e.preventDefault(); window.history.pushState(null, "", window.location.href); };
+    // Only block if ride is active (Arrived or In Progress)
+    if (!ride || !isDriver || !["arrived", "in_progress"].includes(ride.status)) return;
+    
+    const block = (e) => { 
+      e.preventDefault(); 
+      window.history.pushState(null, "", window.location.href); 
+    };
     window.history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", block);
     return () => window.removeEventListener("popstate", block);
@@ -180,7 +193,7 @@ const StartRide = () => {
       .catch(err => console.error("Auto-arrived error:", err));
   }, [showOtpBox, ride?.status, isDriver, rideId]);
 
-  // ─── Driver GPS: immediate fix + continuous watch ─────────────────────────
+  // ─── Driver GPS ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isDriver) return;
     const settings = JSON.parse(localStorage.getItem("appSettings") || "{}");
@@ -189,8 +202,6 @@ const StartRide = () => {
       return;
     }
     if (!navigator.geolocation) return;
-
-    // Immediate first fix
     navigator.geolocation.getCurrentPosition(
       (p) => {
         const coords = { lat: p.coords.latitude, lng: p.coords.longitude };
@@ -201,8 +212,6 @@ const StartRide = () => {
       (e) => console.warn("GPS initial fix failed:", e.message),
       { enableHighAccuracy: true, timeout: 10000 }
     );
-
-    // Continuous watch
     const wid = navigator.geolocation.watchPosition(
       (p) => {
         const coords = { lat: p.coords.latitude, lng: p.coords.longitude };
@@ -213,11 +222,10 @@ const StartRide = () => {
       (e) => console.warn("GPS watch error:", e.message),
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
     );
-
     return () => navigator.geolocation.clearWatch(wid);
   }, [isDriver, rideId]);
 
-  // ─── Route fetching with smart rerouting ──────────────────────────────────
+  // ─── Route fetching ────────────────────────────────────────────────────────
   const fetchRoute = useCallback(async (dLat, dLng, toLat, toLng) => {
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
@@ -227,7 +235,19 @@ const StartRide = () => {
       if (result) {
         setRoute(result.path);
         setEtaMins(result.etaMins);
+        setRouteDistKm(result.distKm);
+        setRouteSteps(result.steps);
+        stepIdxRef.current = 0;
+        // Skip "depart" step for the instruction banner
+        const firstMeaningful = result.steps.find(s => s.maneuver?.type !== "depart") || result.steps[1] || result.steps[0];
+        setNextStep(firstMeaningful || null);
         prevLocRef.current = { lat: dLat, lng: dLng };
+        if (result.path.length > 2) {
+          const p1 = result.path[0];
+          const p2 = result.path[1];
+          const angle = (Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180) / Math.PI;
+          setHeading(angle + 90);
+        }
       }
     } catch (e) {
       if (e.name !== "AbortError") console.error("OSRM error:", e);
@@ -236,14 +256,13 @@ const StartRide = () => {
     }
   }, []);
 
+  // ─── Smart rerouting + step advancement ───────────────────────────────────
   useEffect(() => {
     if (!driverLocation || !isDriver) return;
     const { lat, lng } = driverLocation;
-
     const targetCoords = isHeadingToPickup ? pickupCoords : destCoords;
     if (!targetCoords || targetCoords[0] === 0) return;
 
-    // First fetch
     if (route.length === 0) {
       fetchRoute(lat, lng, targetCoords[1], targetCoords[0]);
       return;
@@ -251,18 +270,50 @@ const StartRide = () => {
 
     const deviance = distanceToPolyline(lat, lng, route);
     if (deviance > REROUTE_THRESHOLD_M) {
-      console.log(`Rerouting: ${Math.round(deviance)}m off route`);
       fetchRoute(lat, lng, targetCoords[1], targetCoords[0]);
     } else {
-      // On-route ETA refresh (cheap, no polyline update)
       const prev = prevLocRef.current;
       if (prev && distanceMetres(prev.lat, prev.lng, lat, lng) < 20) return;
+
+      // Update heading
+      let closestIdx = 0, minD = Infinity;
+      for (let i = 0; i < route.length - 1; i++) {
+        const d = distanceMetres(lat, lng, route[i][0], route[i][1]);
+        if (d < minD) { minD = d; closestIdx = i; }
+      }
+      if (route[closestIdx + 1]) {
+        const p1 = route[closestIdx];
+        const p2 = route[closestIdx + 1];
+        setHeading((Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180) / Math.PI + 90);
+      }
+
+      // Advance turn step: check if driver passed the current step's waypoint
+      if (routeSteps.length > 0) {
+        const curStepIdx = stepIdxRef.current;
+        const curStep = routeSteps[curStepIdx];
+        if (curStep?.maneuver?.location) {
+          const [sLng, sLat] = curStep.maneuver.location;
+          const distToStep = distanceMetres(lat, lng, sLat, sLng);
+          if (distToStep < 60 && curStepIdx + 1 < routeSteps.length) {
+            const newIdx = curStepIdx + 1;
+            stepIdxRef.current = newIdx;
+            // Find next non-trivial step
+            const nextMeaningful = routeSteps.slice(newIdx).find(s => s.maneuver?.type !== "depart") || routeSteps[newIdx];
+            setNextStep(nextMeaningful || null);
+          }
+        }
+      }
+
+      // Cheap ETA refresh
       (async () => {
         try {
           const url = `${OSRM_BASE}/${lng},${lat};${targetCoords[0]},${targetCoords[1]}?overview=false`;
           const res  = await fetch(url);
           const data = await res.json();
-          if (data.code === "Ok" && data.routes?.[0]) setEtaMins(Math.round((data.routes[0].duration * 1.4) / 60));
+          if (data.code === "Ok" && data.routes?.[0]) {
+            setEtaMins(Math.round((data.routes[0].duration * 1.4) / 60));
+            setRouteDistKm(Math.round(data.routes[0].distance / 100) / 10);
+          }
         } catch (_) {}
       })();
       prevLocRef.current = { lat, lng };
@@ -270,17 +321,17 @@ const StartRide = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driverLocation?.lat, driverLocation?.lng, isHeadingToPickup]);
 
-  // Reset route on phase transition (pickup → active)
+  // Reset route on phase transition
   const prevIsHeadingRef = useRef(null);
   useEffect(() => {
     if (prevIsHeadingRef.current !== null && prevIsHeadingRef.current !== isHeadingToPickup) {
-      setRoute([]);
-      setEtaMins(null);
+      setRoute([]); setEtaMins(null); setRouteDistKm(null);
+      setRouteSteps([]); setNextStep(null); stepIdxRef.current = 0;
     }
     prevIsHeadingRef.current = isHeadingToPickup;
   }, [isHeadingToPickup]);
 
-  // ─── Auto-fit bounds ──────────────────────────────────────────────────────
+  // Auto-fit bounds
   useEffect(() => {
     if (!map || !driverLocation) return;
     const targetCoords = isHeadingToPickup ? pickupCoords : destCoords;
@@ -292,13 +343,21 @@ const StartRide = () => {
   }, [map, driverLocation?.lat, driverLocation?.lng, isHeadingToPickup]);
 
   // ─── OTP handlers ─────────────────────────────────────────────────────────
+  const [isPerspectiveMode, setIsPerspectiveMode] = useState(false);
+
+  // Auto-track vehicle in Perspective Mode
+  useEffect(() => {
+    if (isPerspectiveMode && map && driverLocation) {
+      map.panTo([driverLocation.lat, driverLocation.lng], { animate: true, duration: 1.0 });
+    }
+  }, [isPerspectiveMode, driverLocation, map]);
+
   const handleOtpChange = (index, value) => {
     const val = value.replace(/[^0-9]/g, "");
     if (!val && value !== "") return;
     const slots = [...otpSlots]; slots[index] = val; setOtpSlots(slots);
     if (val && index < 3) document.getElementById(`otp-${index + 1}`)?.focus();
   };
-
   const handleOtpKeyDown = (index, e) => {
     if (e.key === "Backspace" && !otpSlots[index] && index > 0)
       document.getElementById(`otp-${index - 1}`)?.focus();
@@ -329,14 +388,20 @@ const StartRide = () => {
     }
   };
 
-  // ─── Manual reroute ───────────────────────────────────────────────────────
   const handleManualReroute = () => {
     if (!driverLocation) return;
     const targetCoords = isHeadingToPickup ? pickupCoords : destCoords;
     if (!targetCoords) return;
-    setRoute([]);
+    setRoute([]); setNextStep(null); stepIdxRef.current = 0;
     fetchRoute(driverLocation.lat, driverLocation.lng, targetCoords[1], targetCoords[0]);
   };
+
+  // ─── Computed ─────────────────────────────────────────────────────────────
+  const arrivalTime = etaMins !== null
+    ? new Date(Date.now() + etaMins * 60000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  const isNavMode = isDriver && (isHeadingToPickup || ride?.status === "in_progress") && !showOtpBox;
 
   // ─── Render ───────────────────────────────────────────────────────────────
   if (loading) return (
@@ -345,7 +410,6 @@ const StartRide = () => {
       <p className="text-white/40 text-sm">Loading ride…</p>
     </div>
   );
-
   if (!ride) return (
     <div className="min-h-screen flex items-center justify-center bg-[#05080f] text-white">Ride not found</div>
   );
@@ -357,83 +421,123 @@ const StartRide = () => {
 
   const pickupMarkerCoords = pickupCoords ? [pickupCoords[1], pickupCoords[0]] : null;
   const destMarkerCoords   = destCoords   ? [destCoords[1],   destCoords[0]  ] : null;
-
-  // Fallback straight line endpoints for loading state
   const fallbackFrom = driverLocation ? [driverLocation.lat, driverLocation.lng] : null;
   const fallbackTo   = isHeadingToPickup ? pickupMarkerCoords : destMarkerCoords;
 
   return (
-    <div className="relative flex flex-col h-screen text-white bg-black">
+    <div className="relative flex flex-col h-screen text-white bg-black overflow-hidden">
+      <style>{`
+        .nav-tilt-wrapper {
+          perspective: 1000px;
+          height: 100%;
+          width: 100%;
+          overflow: hidden;
+        }
+        .nav-tilt-wrapper .leaflet-container {
+          transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .leaflet-touch .leaflet-control-attribution { display: none; }
+      `}</style>
 
-      {/* ── Header ── */}
-      <div className="absolute top-0 w-full z-50 p-4 flex items-center justify-between pointer-events-none">
-        <button onClick={() => navigate(-1)} className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition">
-          <ArrowLeft size={20} />
-        </button>
+      {/* ══ Header ══ */}
+      <div className="absolute top-0 w-full z-50 p-4 flex items-center justify-between pointer-events-none"
+           style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
+        {/* Hide back button during active mission to prevent accidental navigation */}
+        {ride?.status !== "in_progress" && (
+          <button onClick={() => navigate(-1)} className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition">
+            <ArrowLeft size={20} />
+          </button>
+        )}
         <div className="flex items-center gap-2">
-          <div className="bg-black/60 backdrop-blur border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-2">
+          <div className="bg-black/60 backdrop-blur border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-2 shadow-2xl">
             <span className={`w-2 h-2 rounded-full ${ride.status === "in_progress" ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`} />
             <span className="text-xs font-black uppercase tracking-wider">
-              {ride.status === "in_progress" ? "Mission Ongoing"
+              {ride.status === "in_progress" ? "Trip Ongoing"
                : ride.status === "arrived" ? "Wait for OTP"
                : "Heading to Pickup"}
             </span>
           </div>
-          {routeLoading && (
-            <div className="bg-blue-500/20 backdrop-blur border border-blue-500/30 p-2 rounded-full pointer-events-auto">
-              <RefreshCw size={14} className="text-blue-400 animate-spin" />
-            </div>
-          )}
         </div>
       </div>
 
-      {/* ── GPS not ready banner ── */}
+      {/* ══ Floating Map Controls ══ */}
+      <div className="absolute z-40 flex flex-col gap-3 right-4" 
+           style={{ top: "calc(env(safe-area-inset-top, 0px) + 80px)" }}>
+        <button
+          onClick={() => {
+            setIsPerspectiveMode(!isPerspectiveMode);
+            if (!isPerspectiveMode && map && driverLocation) {
+              map.setView([driverLocation.lat, driverLocation.lng], 17, { animate: true });
+            } else if (isPerspectiveMode && map && driverLocation) {
+              const target = isHeadingToPickup ? pickupCoords : destCoords;
+              if (target) map.fitBounds(
+                L.latLngBounds([[driverLocation.lat, driverLocation.lng], [target[1], target[0]]]),
+                { padding: [80, 80], animate: true }
+              );
+            }
+          }}
+          className={`pointer-events-auto w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 ${
+            isPerspectiveMode 
+            ? "bg-primary text-black border-none" 
+            : "bg-black/60 backdrop-blur border border-white/15 text-white"
+          }`}
+        >
+          <Navigation size={20} className={isPerspectiveMode ? "fill-black" : ""} />
+        </button>
+        <button
+          onClick={handleManualReroute}
+          disabled={routeLoading || !driverLocation}
+          className="pointer-events-auto w-12 h-12 bg-black/60 backdrop-blur border border-white/15 rounded-full flex items-center justify-center shadow-2xl hover:bg-white/10 active:scale-90 transition-all disabled:opacity-40"
+        >
+          <RefreshCw size={20} className={routeLoading ? "animate-spin" : ""} />
+        </button>
+      </div>
+
+      {/* ══ GPS not ready banner ══ */}
       {isDriver && !gpsReady && (
-        <div className="absolute top-20 left-4 right-4 z-50 bg-amber-500/90 backdrop-blur text-black text-xs font-black px-4 py-2.5 rounded-xl flex items-center gap-2 animate-pulse">
+        <div className="absolute left-4 right-4 z-50 bg-amber-500/90 backdrop-blur text-black text-xs font-black px-4 py-2.5 rounded-xl flex items-center gap-2 animate-pulse"
+          style={{ top: "100px" }}>
           📡 Acquiring GPS signal… Please stay on this screen.
         </div>
       )}
 
-      {/* ── Map ── */}
-      <div className="flex-1 w-full relative z-0">
-        <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
+      {/* ══ Map ══ */}
+      <div className="flex-1 w-full relative z-0 nav-tilt-wrapper">
+        <div 
+          className={`w-full h-full transform-gpu transition-all duration-700`}
+          style={isPerspectiveMode ? { 
+            transform: `rotateX(35deg) translateY(-5%) scale(1.2)` 
+          } : {}}
+        >
+          <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" maxZoom={19} />
 
-          {/* Pickup marker – show before active */}
           {ride.status !== "in_progress" && pickupMarkerCoords && (
             <Marker position={pickupMarkerCoords} icon={greenPin}>
               <Popup><b style={{ color: "#10b981" }}>Passenger Pickup</b><br />{firstPassenger?.passengerSource?.address}</Popup>
             </Marker>
           )}
-
-          {/* Destination marker – show when active */}
           {ride.status === "in_progress" && destMarkerCoords && (
             <Marker position={destMarkerCoords} icon={redPin}>
               <Popup><b style={{ color: "#ef4444" }}>Passenger Destination</b><br />{firstPassenger?.passengerDestination?.address || ride.destination?.address}</Popup>
             </Marker>
           )}
-
-          {/* Driver marker */}
           {driverLocation && (
-            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={carIcon}>
+            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={makeVehicleIcon(ride.vehicleType, heading)}>
               <Popup><b>Your Location</b></Popup>
             </Marker>
           )}
 
-          {/* Road polyline */}
           {route.length > 1 && (() => {
-            // Path Cutting: Only show the part of the route ahead of the driver
             let displayRoute = route;
             if (driverLocation) {
-              let minStep = Infinity;
-              let closestIdx = 0;
+              let minStep = Infinity, closestIdx = 0;
               for (let i = 0; i < route.length; i++) {
                 const d = distanceMetres(driverLocation.lat, driverLocation.lng, route[i][0], route[i][1]);
                 if (d < minStep) { minStep = d; closestIdx = i; }
               }
               if (minStep < 200) displayRoute = route.slice(closestIdx);
             }
-
             return (
               <>
                 <Polyline positions={displayRoute} pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
@@ -443,137 +547,194 @@ const StartRide = () => {
             );
           })()}
 
-          {/* Dashed placeholder while loading route */}
           {route.length === 0 && fallbackFrom && fallbackTo && (
-            <Polyline
-              positions={[fallbackFrom, fallbackTo]}
-              pathOptions={{ color: "#6b7280", weight: 3, opacity: 0.5, dashArray: "6 10" }}
-            />
+            <Polyline positions={[fallbackFrom, fallbackTo]} pathOptions={{ color: "#6b7280", weight: 3, opacity: 0.5, dashArray: "6 10" }} />
           )}
         </MapContainer>
+        </div>
       </div>
 
-      {/* ── Bottom HUD ── */}
-      <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none">
-        <div className="bg-black/85 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl">
-          {isDriver ? (
-            <div className="flex flex-col gap-3">
-              {/* ETA + Reroute row – only show when navigating */}
-              {(isHeadingToPickup || ride.status === "in_progress") && (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-white/40 tracking-widest">
-                      {isHeadingToPickup ? "ETA to Pickup" : "ETA to Destination"}
-                    </p>
-                    <p className="text-lg font-black text-white">
-                      {etaMins !== null ? `~${etaMins} min`
-                       : routeLoading ? "Calculating…"
-                       : gpsReady ? "Route loading…"
-                       : "Acquiring GPS…"}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Pickup phase actions */}
-              {ride.status !== "in_progress" && (
-                <>
-                  <div className="flex gap-3">
-                    <a
-                      href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
-                      className="flex-1 bg-emerald-500 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm"
-                    >
-                      <Phone size={18} /> Call
-                    </a>
-                    <button
-                      onClick={handleManualReroute}
-                      disabled={!driverLocation || routeLoading}
-                      className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 text-sm disabled:opacity-50 transition active:scale-95"
-                    >
-                      <Navigation size={18} className={routeLoading ? "animate-spin" : ""} />
-                      {routeLoading ? "Routing…" : "Update Route"}
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => setShowOtpBox(true)}
-                    disabled={isStartingRequest}
-                    className="flex-1 bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
-                  >
-                    <Play size={20} className={isStartingRequest ? "animate-spin" : ""} /> Start Ride
-                  </button>
-                </>
-              )}
-
-              {/* Active trip status */}
-              {ride.status === "in_progress" && (
-                <>
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Trip Ongoing</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
-                      <span className="text-[9px] font-black text-emerald-500/60 uppercase">Final Fare</span>
-                      <span className="text-sm font-black text-emerald-500 flex items-center gap-0.5">
-                        <IndianRupee size={12} /> {firstPassenger?.amountPaid || 0}
-                      </span>
-                    </div>
-                  </div>
-                  {isNearDestination ? (
-                    <button
-                      onClick={() => handleUpdateStatus("completed")}
-                      className="flex-1 bg-red-500 hover:bg-red-600 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-red-500/20 transition-all animate-pulse active:scale-95"
-                    >
-                      <Square size={20} /> Complete Ride
-                    </button>
-                  ) : (
-                    <div className="flex-1 bg-white/5 border border-white/10 text-white/50 font-black py-4 rounded-xl flex justify-center items-center gap-2">
-                      <Navigation size={18} /> Heading To Destination…
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          ) : (
-            /* ─── PASSENGER HUD ─── */
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
-                <UserIcon size={24} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-sm truncate">{ride.driver?.name || "Your Driver"}</p>
-                  <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
-                    <span className="text-[8px] font-black text-emerald-500/60 uppercase leading-none">Final Fare</span>
-                    <span className="text-xs font-black text-emerald-500 flex items-center gap-0.5 leading-none">
-                      <IndianRupee size={10} /> {firstPassenger?.amountPaid || 0}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  {ride.status !== "in_progress" ? (
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
-                        {ride.status === "arrived" ? "Driver has arrived!" : "Driver is heading to your pickup"}
-                      </span>
-                      <p className="text-[10px] text-white/50">
-                        {ride.status === "arrived"
-                          ? "Please share your OTP with the driver to start the trip."
-                          : "Your OTP is waiting in your notifications."}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="px-2 border rounded-full text-[10px] uppercase font-bold border-emerald-500/30 text-emerald-500">Live</span>
-                      <span className="text-xs text-white/50 truncate">{(ride.vehicleType || "PRIME").toUpperCase()} • En route</span>
-                    </>
-                  )}
-                </div>
+      {/* ══ NAVIGATION MODE: Google Maps Bottom Strip ══ */}
+      {isNavMode && (
+        <div className="absolute bottom-0 left-0 right-0 z-50" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          {/* Current street name pill */}
+          {nextStep?.name && nextStep.maneuver?.type !== "arrive" && (
+            <div className="flex justify-center mb-2">
+              <div className="bg-[#1565C0] text-white text-xs font-black px-5 py-1.5 rounded-full shadow-lg">
+                {nextStep.name}
               </div>
             </div>
           )}
+
+          {/* Main dark strip */}
+          <div className="bg-[#0f1219]/95 backdrop-blur-md border-t border-white/10 px-5 py-4">
+            <div className="flex items-center justify-between gap-4">
+
+              {/* Left: X to dismiss / call */}
+              <div className="flex flex-col gap-2 items-center">
+                {ride.status !== "in_progress" ? (
+                  <a href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
+                    className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 transition">
+                    <Phone size={20} className="text-white" />
+                  </a>
+                ) : (
+                  <button onClick={() => navigate(-1)}
+                    className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center active:scale-95 transition">
+                    <X size={20} className="text-white" />
+                  </button>
+                )}
+              </div>
+
+              {/* Center: Big ETA */}
+              <div className="flex-1 text-center">
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-5xl font-black text-white leading-none">
+                    {etaMins !== null ? etaMins : "--"}
+                  </span>
+                  <span className="text-xl font-bold text-white/60">min</span>
+                </div>
+                <p className="text-white/50 text-xs mt-1 font-semibold">
+                  {routeDistKm ? `${routeDistKm} km` : ""}
+                  {routeDistKm && arrivalTime ? " · " : ""}
+                  {arrivalTime || ""}
+                </p>
+                {/* Phase label */}
+                <div className="flex items-center justify-center gap-1.5 mt-2">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isHeadingToPickup ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-pulse"}`} />
+                  <span className={`text-[10px] font-black uppercase tracking-widest ${isHeadingToPickup ? "text-amber-400" : "text-emerald-400"}`}>
+                    {isHeadingToPickup ? "Heading to Pickup" : "En Route to Destination"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: Action button */}
+              <div className="flex flex-col gap-2 items-center">
+                {ride.status !== "in_progress" ? (
+                  <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
+                    className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/30 active:scale-95 transition disabled:opacity-60">
+                    <Play size={20} className="text-black" />
+                  </button>
+                ) : isNearDestination ? (
+                  <button onClick={() => handleUpdateStatus("completed")}
+                    className="px-4 py-2.5 bg-red-500 rounded-2xl font-black text-sm active:scale-95 transition animate-pulse shadow-lg shadow-red-500/30">
+                    End Ride
+                  </button>
+                ) : (
+                  <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center">
+                    <IndianRupee size={16} className="text-emerald-400" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ══ STANDARD Bottom HUD (non-nav) ══ */}
+      {!isNavMode && !showOtpBox && (
+        <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none">
+          <div className="bg-black/85 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl">
+            {isDriver ? (
+              <div className="flex flex-col gap-3">
+                {(isHeadingToPickup || ride.status === "in_progress") && (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-white/40 tracking-widest">
+                        {isHeadingToPickup ? "ETA to Pickup" : "ETA to Destination"}
+                      </p>
+                      <p className="text-lg font-black text-white">
+                        {etaMins !== null ? `~${etaMins} min` : routeLoading ? "Calculating…" : gpsReady ? "Route loading…" : "Acquiring GPS…"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {ride.status !== "in_progress" && (
+                  <>
+                    <div className="flex gap-3">
+                      <a href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
+                        className="flex-1 bg-emerald-500 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm">
+                        <Phone size={18} /> Call
+                      </a>
+                      <button onClick={handleManualReroute} disabled={!driverLocation || routeLoading}
+                        className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 text-sm disabled:opacity-50 transition active:scale-95">
+                        <Navigation size={18} className={routeLoading ? "animate-spin" : ""} />
+                        {routeLoading ? "Routing…" : "Update Route"}
+                      </button>
+                    </div>
+                    <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
+                      className="flex-1 bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all">
+                      <Play size={20} className={isStartingRequest ? "animate-spin" : ""} /> Start Ride
+                    </button>
+                  </>
+                )}
+                {ride.status === "in_progress" && (
+                  <>
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Trip Ongoing</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                        <span className="text-[9px] font-black text-emerald-500/60 uppercase">Final Fare</span>
+                        <span className="text-sm font-black text-emerald-500 flex items-center gap-0.5">
+                          <IndianRupee size={12} /> {firstPassenger?.amountPaid || 0}
+                        </span>
+                      </div>
+                    </div>
+                    {isNearDestination ? (
+                      <button onClick={() => handleUpdateStatus("completed")}
+                        className="flex-1 bg-red-500 hover:bg-red-600 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-red-500/20 transition-all animate-pulse active:scale-95">
+                        <Square size={20} /> Complete Ride
+                      </button>
+                    ) : (
+                      <div className="flex-1 bg-white/5 border border-white/10 text-white/50 font-black py-4 rounded-xl flex justify-center items-center gap-2">
+                        <Navigation size={18} /> Heading To Destination…
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              // Passenger HUD
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
+                  <UserIcon size={24} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-sm truncate">{ride.driver?.name || "Your Driver"}</p>
+                    <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
+                      <span className="text-[8px] font-black text-emerald-500/60 uppercase leading-none">Final Fare</span>
+                      <span className="text-xs font-black text-emerald-500 flex items-center gap-0.5 leading-none">
+                        <IndianRupee size={10} /> {firstPassenger?.amountPaid || 0}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {ride.status !== "in_progress" ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
+                          {ride.status === "arrived" ? "Driver has arrived!" : "Driver is heading to your pickup"}
+                        </span>
+                        <p className="text-[10px] text-white/50">
+                          {ride.status === "arrived"
+                            ? "Please share your OTP with the driver to start the trip."
+                            : "Your OTP is waiting in your notifications."}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="px-2 border rounded-full text-[10px] uppercase font-bold border-emerald-500/30 text-emerald-500">Live</span>
+                        <span className="text-xs text-white/50 truncate">{(ride.vehicleType || "PRIME").toUpperCase()} • En route</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── OTP Overlay ── */}
       {showOtpBox && (
@@ -594,13 +755,7 @@ const StartRide = () => {
                 </p>
                 <div className="flex justify-center gap-3">
                   {otpSlots.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      id={`otp-${idx}`}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
+                    <input key={idx} id={`otp-${idx}`} type="text" inputMode="numeric" maxLength={1} value={digit}
                       onChange={(e) => handleOtpChange(idx, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                       className="w-14 h-16 bg-black/50 border border-white/20 rounded-xl text-center text-2xl font-black text-white focus:border-primary focus:bg-primary/5 transition-all outline-none"
@@ -608,11 +763,9 @@ const StartRide = () => {
                   ))}
                 </div>
               </div>
-              <button
-                onClick={() => handleUpdateStatus("in_progress")}
+              <button onClick={() => handleUpdateStatus("in_progress")}
                 disabled={otpSlots.join("").length !== 4 || isStartingRequest}
-                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-black py-4 rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2"
-              >
+                className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-black py-4 rounded-xl font-black text-lg transition-all flex items-center justify-center gap-2">
                 {isStartingRequest ? <Loader2 size={24} className="animate-spin" /> : <Play size={24} />}
                 Verify & Start Ride
               </button>

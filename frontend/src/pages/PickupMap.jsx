@@ -8,25 +8,7 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
 
-// ─── Map Icons ────────────────────────────────────────────────────────────────
-const carIcon = L.divIcon({
-  html: `<div style="font-size:28px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); transform: translateY(-4px);">🚗</div>`,
-  className: "",
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
-
-const makePin = (color, label) => L.divIcon({
-  html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.4))">
-    <div style="background:${color};color:white;font-size:10px;font-weight:900;padding:2px 6px;border-radius:6px;white-space:nowrap;margin-bottom:2px">${label}</div>
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="white"/></svg>
-  </div>`,
-  className: "",
-  iconSize: [80, 50],
-  iconAnchor: [40, 50],
-});
-
-const makeDestPin = (isActive) => makePin("#ef4444", isActive ? "DEST" : "PICKUP");
+import { makeVehicleIcon, makeDestPin } from "../utils/mapIcons";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +76,7 @@ const PickupMap = () => {
   const [routeLoading, setRouteLoading] = useState(false);
   const [gpsReady, setGpsReady]         = useState(false);     // first GPS fix received
   const [map, setMap]                   = useState(null);
+  const [heading, setHeading]           = useState(0);         // car rotation
 
   const abortRef   = useRef(null);
   const prevLocRef = useRef(null);   // last location that triggered a route fetch
@@ -196,8 +179,8 @@ const PickupMap = () => {
   }, [isDriver, rideId]);
 
   // ─── Route fetching with smart rerouting ──────────────────────────────────
-  const fetchRoute = useCallback(async (dLat, dLng, targetCoords, isActive) => {
-    if (!targetCoords || targetCoords[0] === 0) return;
+  const fetchRoute = useCallback(async (dLat, dLng, targetLng, targetLat, isActive) => {
+    if (!targetLng || !targetLat) return;
 
     // Cancel any in-flight request
     if (abortRef.current) abortRef.current.abort();
@@ -205,13 +188,20 @@ const PickupMap = () => {
 
     setRouteLoading(true);
     try {
-      // OSRM: [lng,lat] format — targetCoords is [lng, lat]
-      const result = await fetchOSRM(dLat, dLng, targetCoords[1], targetCoords[0], abortRef.current.signal);
+      // OSRM: [lng,lat] format
+      const result = await fetchOSRM(dLat, dLng, targetLat, targetLng, abortRef.current.signal);
       if (result) {
         setRoute(result.path);
         if (isActive) setDestEtaMins(result.etaMins);
         else setLiveEtaMins(result.etaMins);
         prevLocRef.current = { lat: dLat, lng: dLng };
+
+        // Update heading towards first point of route
+        if (result.path.length > 1) {
+          const p1 = result.path[0];
+          const angle = Math.atan2(p1[1] - dLng, p1[0] - dLat) * (180 / Math.PI);
+          setHeading(angle);
+        }
       }
     } catch (e) {
       if (e.name !== "AbortError") console.error("OSRM error:", e);
@@ -225,12 +215,12 @@ const PickupMap = () => {
     const { lat, lng } = driverLocation;
 
     const isActive     = ride?.status === "in_progress";
-    const targetCoords = isActive ? destCoords : pickupCoords;
-    if (!targetCoords) return;
+    const targetCoords = isActive ? destCoords : pickupCoords; // [lng, lat]
+    if (!targetCoords || targetCoords[0] === 0) return;
 
-    // First fetch: no route yet — fetch for BOTH driver and passenger views
+    // First fetch: no route yet
     if (route.length === 0) {
-      fetchRoute(lat, lng, targetCoords, isActive);
+      fetchRoute(lat, lng, targetCoords[0], targetCoords[1], isActive);
       return;
     }
 
@@ -238,7 +228,7 @@ const PickupMap = () => {
     const deviance = distanceToPolyline(lat, lng, route);
     if (deviance > REROUTE_THRESHOLD_M) {
       console.log(`Rerouting: deviance ${Math.round(deviance)}m > ${REROUTE_THRESHOLD_M}m`);
-      fetchRoute(lat, lng, targetCoords, isActive);
+      fetchRoute(lat, lng, targetCoords[0], targetCoords[1], isActive);
     } else {
       // Still on route — just refresh ETA cheaply (no polyline re-draw)
       const prev = prevLocRef.current;
@@ -258,7 +248,7 @@ const PickupMap = () => {
       prevLocRef.current = { lat, lng };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driverLocation?.lat, driverLocation?.lng, ride?.status]);
+  }, [driverLocation?.lat, driverLocation?.lng, ride?.status, pickupCoords?.[0], destCoords?.[0]]);
 
   // Reset route when ride transitions from pickup → active
   const prevStatus = useRef(null);
@@ -286,9 +276,9 @@ const PickupMap = () => {
     if (!srcCoords) return;
 
     fallbackFetchedRef.current = true;
-    fetchRoute(srcCoords[1], srcCoords[0], targetCoords, isActive);
+    fetchRoute(srcCoords[1], srcCoords[0], targetCoords[0], targetCoords[1], isActive);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ride, isDriver, driverLocation]);
+  }, [ride, isDriver, driverLocation, pickupCoords?.[0], destCoords?.[0]]);
 
   // ─── Auto-fit map bounds ───────────────────────────────────────────────────
   const hasFittedBounds = useRef(null);
@@ -325,14 +315,19 @@ const PickupMap = () => {
     map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
   };
 
-  // ─── Block browser back ────────────────────────────────────────────────────
+  // ─── Block browser back during active mission ───
   useEffect(() => {
-    if (!isDriver) return;
-    const block = (e) => { e.preventDefault(); window.history.pushState(null, "", window.location.href); };
+    // Only block if ride is active (Arrived or In Progress)
+    if (!ride || !["arrived", "in_progress"].includes(ride.status)) return;
+    
+    const block = (e) => { 
+      e.preventDefault(); 
+      window.history.pushState(null, "", window.location.href); 
+    };
     window.history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", block);
     return () => window.removeEventListener("popstate", block);
-  }, [isDriver]);
+  }, [ride?.status]);
 
   // ─── Manual reroute button ────────────────────────────────────────────────
   const handleManualReroute = () => {
@@ -373,12 +368,14 @@ const PickupMap = () => {
 
       {/* ── Header ── */}
       <div className="absolute top-0 w-full z-50 p-4 shrink-0 flex items-center justify-between pointer-events-none">
-        <button
-          onClick={() => navigate(-1)}
-          className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition"
-        >
-          <ArrowLeft size={20} />
-        </button>
+        {ride?.status !== "in_progress" && (
+          <button
+            onClick={() => navigate(-1)}
+            className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition"
+          >
+            <ArrowLeft size={20} />
+          </button>
+        )}
 
         <div className="flex items-center gap-2">
           {/* Status pill */}
@@ -421,10 +418,10 @@ const PickupMap = () => {
             </Marker>
           )}
 
-          {/* Driver marker */}
+          {/* Driver marker (using 3D vehicle icon) */}
           {driverLocation && (
-            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={carIcon}>
-              <Popup><b>Your Location</b></Popup>
+            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={makeVehicleIcon(ride.vehicleType, heading)}>
+              <Popup><b>{isDriver ? "You" : "Driver"}</b></Popup>
             </Marker>
           )}
 
@@ -489,10 +486,19 @@ const PickupMap = () => {
         {/* Recenter Button */}
         <div className="flex justify-end">
              <button
+                onClick={handleManualReroute}
+                disabled={routeLoading}
+                className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full shadow-lg hover:bg-white/10 transition text-white disabled:opacity-50"
+                title="Refresh Route"
+             >
+                <RefreshCw size={20} className={routeLoading ? "animate-spin" : ""} />
+             </button>
+             <button
                 onClick={handleRecenter}
                 className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full shadow-lg hover:bg-white/10 transition text-white"
+                title="Recenter Map"
              >
-                <RefreshCw size={20} />
+                <Navigation size={20} />
              </button>
         </div>
         

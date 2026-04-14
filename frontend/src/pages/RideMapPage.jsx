@@ -270,7 +270,9 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
       {/* Right: Price */}
       <div style={{ textAlign: "right", marginLeft: '12px' }}>
         <div style={{ fontSize: "18px", fontWeight: 900, color: "var(--text-main)" }}>
-          ₹{Math.round(ride.price)}
+          {ride.price > 0 ? `₹${Math.round(ride.price)}` : (
+            <div className="w-12 h-6 bg-white/5 rounded-md animate-pulse ml-auto" />
+          )}
         </div>
       </div>
     </button>
@@ -311,6 +313,7 @@ const RideMapPage = () => {
   const [fareEstimate, setFareEstimate] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(null);
+  const [isCalculatingFare, setIsCalculatingFare] = useState(false);
 
   // Fetch system config on mount
   useEffect(() => {
@@ -367,21 +370,24 @@ const RideMapPage = () => {
       try {
         setTraffic(getTrafficCondition());
         
-        // Fetch active rides that ARE NEAR the passenger's specific pickup/dropoff
-        const [fetchedRides, fetchedRoutes] = await Promise.all([
-          api.get("/published-rides/available", {
+        // 1. Fetch routes first to get accurate road distance
+        const fetchedRoutes = await getMultipleRoutes(from, to, systemConfig);
+        setRoutes(fetchedRoutes);
+
+        // 2. Fetch rides with the precise road distance from the best route
+        const bestRouteDist = fetchedRoutes[0]?.distanceKm;
+        
+        const fetchedRides = await api.get("/published-rides/available", {
             params: {
               srcLat: from.lat, srcLng: from.lng,
-              dstLat: to.lat,   dstLng: to.lng
+              dstLat: to.lat,   dstLng: to.lng,
+              distanceKm: bestRouteDist
             }
-          }).catch(() => ({ data: { success: true, data: [] } })),
-          getMultipleRoutes(from, to, systemConfig)
-        ]);
+        }).catch(() => ({ data: { success: true, data: [] } }));
         
         if (fetchedRides.data?.success) {
             setAvailableRides(fetchedRides.data.data || []);
         }
-        setRoutes(fetchedRoutes);
       } catch (e) {
       console.error("[RideMapPage] fetch data error:", e.message);
     } finally {
@@ -420,6 +426,7 @@ const RideMapPage = () => {
         return;
       }
       
+      setIsCalculatingFare(true);
       try {
         const res = await api.get("/published-rides/fare-estimate", {
           params: {
@@ -432,8 +439,8 @@ const RideMapPage = () => {
         }
       } catch (err) {
         console.error("Fare estimate failed:", err);
-        // Fallback to ride list price if API fails
-        setFareEstimate({ totalFare: selectedPublishedRide.price });
+      } finally {
+        setTimeout(() => setIsCalculatingFare(false), 300); // Tiny delay for smooth transition
       }
     };
 
@@ -634,19 +641,22 @@ const RideMapPage = () => {
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
-                  {availableRides.map((ride, idx) => (
-                    <PublishedRideCard
-                      key={ride._id}
-                      ride={{
-                        ...ride,
-                        price: (idx === selectedRideIdx && fareEstimate) ? fareEstimate.totalFare : ride.price
-                      }}
-                      isSelected={idx === selectedRideIdx}
-                      durationMin={selectedRoute.durationMin}
-                      passengerPickup={pickup}
-                      onClick={() => setSelectedRideIdx(idx)}
-                    />
-                  ))}
+                  {availableRides.map((ride, idx) => {
+                    const isSelected = idx === selectedRideIdx;
+                    // Ensure the card shows the SAME price as the summary strip
+                    const displayPrice = (isSelected && fareEstimate) ? fareEstimate.totalFare : ride.price;
+                    
+                    return (
+                      <PublishedRideCard
+                        key={ride._id}
+                        ride={{ ...ride, price: displayPrice }}
+                        isSelected={isSelected}
+                        durationMin={selectedRoute.durationMin}
+                        passengerPickup={pickup}
+                        onClick={() => setSelectedRideIdx(idx)}
+                      />
+                    );
+                  })}
                 </div>
               )}
 
@@ -670,15 +680,19 @@ const RideMapPage = () => {
                         </p>
                     )}
                   </div>
-                  <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    {fareEstimate && (
-                        <div>
+                    <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <div className="flex flex-col items-end">
+                        {isCalculatingFare ? (
+                          <div className="w-16 h-8 bg-white/10 rounded-lg animate-pulse" />
+                        ) : (
+                          <>
                             <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#a5b4fc", lineHeight: 1 }}>
-                                ₹{Math.round(fareEstimate.totalFare)}
+                                ₹{Math.round(fareEstimate?.totalFare || selectedPublishedRide.price)}
                             </p>
                             <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>final fare</p>
-                        </div>
-                    )}
+                          </>
+                        )}
+                      </div>
                     <button
                         onClick={handleProceed}
                         disabled={bookingLoading || !!bookingSuccess}
@@ -697,57 +711,6 @@ const RideMapPage = () => {
               )}
             </div>
           )}
-
-          {/* ── Navigation Controls ── */}
-          <div className="rounded-2xl p-4 flex flex-col gap-3"
-            style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
-
-            <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em", margin: 0 }}>
-              Navigation
-            </p>
-
-            {/* Sim toggle */}
-            <button onClick={() => setSimulateMode((v) => !v)} disabled={nav.isNavigating} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "9px 12px", borderRadius: "10px", border: "1px solid var(--card-border)",
-              background: simulateMode ? "rgba(99,102,241,0.10)" : "transparent",
-              cursor: nav.isNavigating ? "not-allowed" : "pointer",
-              opacity: nav.isNavigating ? 0.5 : 1, transition: "all 0.2s",
-            }}>
-              <div className="flex items-center gap-2">
-                <Shuffle size={13} style={{ color: simulateMode ? "#6366f1" : "var(--text-dim)" }} />
-                <span style={{ fontSize: "12px", fontWeight: 600, color: simulateMode ? "#6366f1" : "var(--text-dim)" }}>Demo / Simulation mode</span>
-              </div>
-              <div style={{ width: 34, height: 18, borderRadius: 9, background: simulateMode ? "#6366f1" : "var(--card-border)", position: "relative", transition: "background 0.25s" }}>
-                <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: simulateMode ? 18 : 3, transition: "left 0.25s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
-              </div>
-            </button>
-
-            {simulateMode && (
-              <p style={{ fontSize: "11px", color: "var(--text-dim)", margin: 0 }}>
-                🛵 Auto-moves marker along the selected route — great for testing.
-              </p>
-            )}
-
-            <button onClick={handleToggleNavigation} disabled={!canNavigate && !nav.isNavigating} style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              gap: "8px", padding: "12px", borderRadius: "12px", border: "none",
-              fontSize: "13px", fontWeight: 700,
-              cursor: (!canNavigate && !nav.isNavigating) ? "not-allowed" : "pointer",
-              opacity: (!canNavigate && !nav.isNavigating) ? 0.45 : 1,
-              background: nav.isNavigating
-                ? "linear-gradient(135deg,#ef4444,#dc2626)"
-                : "linear-gradient(135deg,#6366f1,#4f46e5)",
-              color: "#fff",
-              boxShadow: nav.isNavigating ? "0 4px 16px rgba(239,68,68,0.35)" : "0 4px 16px rgba(99,102,241,0.35)",
-              transition: "all 0.25s ease", fontFamily: "'Inter',sans-serif",
-            }}>
-              {nav.isNavigating
-                ? <><Square size={15} fill="#fff" /> Stop Navigation</>
-                : <><Play  size={15} fill="#fff" /> Start Navigation</>
-              }
-            </button>
-          </div>
 
           {/* ── Live HUD ── */}
           {nav.isNavigating && (
@@ -816,6 +779,7 @@ const RideMapPage = () => {
               arrived={nav.arrived}
               routeCoords={routeCoords}
               routeInfo={routeInfo}
+              vehicleType={selectedPublishedRide?.vehicleType}
             />
           </Suspense>
           </div>

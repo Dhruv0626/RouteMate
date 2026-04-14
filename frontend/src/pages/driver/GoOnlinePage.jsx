@@ -33,24 +33,13 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+import { makeVehicleIcon, makePin } from "../../utils/mapIcons";
 import { getMyDriverProfile, updateDriverStatus } from "../../services/driverProfileService";
 import api from "../../services/api";
 
 // ── Leaflet icons ────────────────────────────────────────────────────────────
-const greenIcon = new L.Icon({
-  iconUrl:
-    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
-});
-const redIcon = new L.Icon({
-  iconUrl:
-    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
-});
+const greenIcon = makePin("#22c55e", "PICKUP");
+const redIcon   = makePin("#ef4444", "DEST");
 
 // ── Haversine distance ────────────────────────────────────────────────────────
 const haversineKm = (lat1, lng1, lat2, lng2) => {
@@ -106,6 +95,8 @@ const GoOnlinePage = () => {
   const [sourcePin, setSourcePin] = useState(null);     // { lat, lng, address }
   const [destPin, setDestPin]     = useState(null);
   const [distanceKm, setDistanceKm] = useState(null);
+  const [routeCoords, setRouteCoords] = useState([]);
+  const [fetchingRoute, setFetchingRoute] = useState(false);
 
   // Device stats
   const [batteryLevel, setBatteryLevel] = useState(null);
@@ -125,13 +116,36 @@ const GoOnlinePage = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await getMyDriverProfile();
-        if (response.data.success) {
-          setProfile(response.data.data);
-          setIsOnline(response.data.data.isOnline);
+        const [profileRes, historyRes, liveRes] = await Promise.all([
+          getMyDriverProfile(),
+          api.get("/rides/driver-history"),
+          api.get("/published-rides/my-published").catch(() => ({ data: { data: [] } }))
+        ]);
+
+        if (profileRes.data.success) {
+          setProfile(profileRes.data.data);
+          setIsOnline(profileRes.data.data.isOnline);
+          
+          // Override stats with actual live history data for consistency (same as dashboard)
+          if (historyRes.data.success) {
+            const historyStats = historyRes.data.data.stats;
+            const liveRides = liveRes.data?.data || [];
+            
+            // Exact same formula as DashboardPage.jsx
+            const realTotal = (historyStats.totalRides || 0) + liveRides.filter(r => r.status === 'completed').length;
+            
+            setProfile(prev => ({
+              ...prev,
+              stats: {
+                ...prev.stats,
+                totalRides: realTotal,
+                completedRides: realTotal
+              }
+            }));
+          }
         }
       } catch (err) {
-        console.error("Fetch profile error:", err.message);
+        console.error("Fetch profile/stats error:", err.message);
       } finally {
         setLoading(false);
       }
@@ -201,13 +215,37 @@ const GoOnlinePage = () => {
     return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
   }, []);
 
-  // Recompute distance when both pins set
+  // Recompute road distance and route when both pins set
   useEffect(() => {
     if (sourcePin && destPin) {
-      const d = haversineKm(sourcePin.lat, sourcePin.lng, destPin.lat, destPin.lng);
-      setDistanceKm(Math.round(d * 10) / 10);
+      const fetchRoute = async () => {
+        setFetchingRoute(true);
+        try {
+          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${sourcePin.lng},${sourcePin.lat};${destPin.lng},${destPin.lat}?overview=full&geometries=geojson`;
+          const osrmRes = await fetch(osrmUrl);
+          const osrmData = await osrmRes.json();
+          
+          if (osrmData.code === "Ok" && osrmData.routes?.length > 0) {
+            const route = osrmData.routes[0];
+            // [lng, lat] from OSRM -> [lat, lng] for Leaflet
+            setRouteCoords(route.geometry.coordinates.map(c => [c[1], c[0]]));
+            setDistanceKm(Math.round((route.distance / 1000) * 10) / 10);
+          } else {
+            // Fallback to haversine if OSRM fails
+            const d = haversineKm(sourcePin.lat, sourcePin.lng, destPin.lat, destPin.lng);
+            setDistanceKm(Math.round(d * 10) / 10);
+            setRouteCoords([[sourcePin.lat, sourcePin.lng], [destPin.lat, destPin.lng]]);
+          }
+        } catch (err) {
+          console.error("Route fetch error:", err);
+        } finally {
+          setFetchingRoute(false);
+        }
+      };
+      fetchRoute();
     } else {
       setDistanceKm(null);
+      setRouteCoords([]);
     }
   }, [sourcePin, destPin]);
 
@@ -262,16 +300,8 @@ const GoOnlinePage = () => {
 
     setPublishing(true);
     try {
-      // 1. Fetch full route geometry from OSRM to store path waypoints
-      const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${sourcePin.lng},${sourcePin.lat};${destPin.lng},${destPin.lat}?overview=full&geometries=geojson`;
-      const osrmRes = await fetch(osrmUrl);
-      const osrmData = await osrmRes.json();
-      
-      let routeCoords = [];
-      if (osrmData.code === "Ok" && osrmData.routes?.length > 0) {
-        // [lng, lat] format
-        routeCoords = osrmData.routes[0].geometry.coordinates;
-      }
+      // routeCoords is already in state from the useEffect live preview
+      const finalCoords = routeCoords.map(c => [c[1], c[0]]); // convert back to [lng, lat] for backend
 
       // 2. Publish to backend
       const res = await api.post("/published-rides/publish", {
@@ -285,7 +315,7 @@ const GoOnlinePage = () => {
         },
         departureTime: new Date(rideForm.departureTime).toISOString(),
         totalSeats: Number(rideForm.totalSeats),
-        routeCoords, // Save full path for proximity matching
+        routeCoords: finalCoords, // Save full path for proximity matching
       });
 
       if (res.data.success) {
@@ -498,6 +528,13 @@ const GoOnlinePage = () => {
                     />
                     <MapClickPicker pickingMode={pickingMode} onPick={handleMapPick} />
 
+                    {/* Driver's current location */}
+                    {userLocation && (
+                      <Marker position={[userLocation.lat, userLocation.lng]} icon={makeVehicleIcon(profile?.vehicleType || "hatchback", 0, 40)}>
+                        <Popup><p className="font-bold text-xs">You are here</p></Popup>
+                      </Marker>
+                    )}
+
                     {/* Source marker */}
                     {sourcePin && (
                       <Marker position={[sourcePin.lat, sourcePin.lng]} icon={greenIcon}>
@@ -518,10 +555,10 @@ const GoOnlinePage = () => {
                       </Marker>
                     )}
 
-                    {/* Straight-line route between pins */}
-                    {sourcePin && destPin && (
+                    {/* Road-based route between pins */}
+                    {routeCoords.length > 0 && (
                       <Polyline
-                        positions={[[sourcePin.lat, sourcePin.lng], [destPin.lat, destPin.lng]]}
+                        positions={routeCoords}
                         pathOptions={{ color: "#ffcc00", weight: 5, opacity: 0.9, dashArray: "10 6", lineCap: "round" }}
                       />
                     )}
@@ -568,10 +605,12 @@ const GoOnlinePage = () => {
                 <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
                   <Navigation size={20} className="text-primary" />
                   <div className="text-center">
-                    <p className="text-2xl font-black text-primary">{distanceKm} km</p>
-                    <p className="text-xs text-(--text-dim)">Approximate straight-line distance</p>
+                    <p className="text-2xl font-black text-primary">
+                      {fetchingRoute ? "..." : `${distanceKm} km`}
+                    </p>
+                    <p className="text-xs text-(--text-dim)">Confirmed road distance</p>
                   </div>
-                  <Info size={16} className="text-(--text-dim)" title="Actual road distance may be higher" />
+                  <Info size={16} className="text-(--text-dim)" title="Route calculated via real road paths" />
                 </div>
               )}
 

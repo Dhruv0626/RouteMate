@@ -1,8 +1,11 @@
 import TripModel from "../models/Trip.js";
 import SystemConfig from "../models/SystemConfig.js";
+import DriverProfileModel from "../models/DriverProfile.js";
+import PublishedRideModel from "../models/PublishedRide.js";
+import { calculateFareDetails } from "../utils/PriceEngine.js";
 
 /**
- * Helper to calculate fare based on distance and vehicle type using FareConfig
+ * Helper to calculate fare based on distance and vehicle type using RouteMAte Price Engine
  */
 const calculateFare = async (distanceKm, vehicleType) => {
   const sys = await SystemConfig.findOne();
@@ -15,12 +18,34 @@ const calculateFare = async (distanceKm, vehicleType) => {
 
   const parse = (val) => parseFloat(String(val || "0").replace(/[^\d.]/g, ""));
 
-  const base = parse(pricing.baseFare);
-  const rate = parse(pricing.costPerKm);
-  const minFare = parse(pricing.minFare);
+  // Supply = Total Drivers Online
+  const available_drivers = await DriverProfileModel.countDocuments({ isOnline: true, isApproved: true });
   
-  const total = Math.round(base + (rate * distanceKm));
-  return Math.max(total, minFare);
+  // Demand = Total "pending" or "booked" rides in the last 15 minutes
+  const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const total_requests = await PublishedRideModel.countDocuments({
+      createdAt: { $gte: fifteenMinsAgo }
+  });
+
+  const is_ev = ["EVMOTO", "EVAUTO", "EVGO"].includes(catKey);
+
+  const fareData = calculateFareDetails({
+      category: vehicleType.toLowerCase(),
+      is_ev,
+      base_fare: parse(pricing.baseFare),
+      per_km_rate: parse(pricing.costPerKm),
+      per_min_rate: parse(pricing.perMinRate || 0.5),
+      night_charge: parse(pricing.nightCharge),
+      min_fare: parse(pricing.minFare),
+      surge_cap: parse(pricing.surgeCap || (is_ev ? 1.5 : 1.8)),
+      distance_km: distanceKm,
+      time_min: distanceKm * 2, // Estimate 2 mins per km
+      is_night: new Date().getHours() >= 22 || new Date().getHours() < 6,
+      total_requests: Math.max(total_requests, 5),
+      available_drivers: Math.max(available_drivers, 5)
+  });
+
+  return fareData.final_price || 150;
 };
 
 // ─── Get Passenger History ────────────────────────────────────────────────────

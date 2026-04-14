@@ -3,23 +3,9 @@ import {
   MapContainer, TileLayer, Marker, Popup, useMap, Circle,
 } from "react-leaflet";
 import L from "leaflet";
+import { makeFleetVehicleIcon } from "../../utils/mapIcons";
 
 // ─── Color Marker Factory ─────────────────────────────────────────────────────
-function makeVehicleIcon(status) {
-  const colors = {
-    active: "emerald",
-    idle: "blue",
-    maint: "red",
-    offline: "grey"
-  };
-  const color = colors[status] || "blue";
-  
-  return new L.Icon({
-    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
-  });
-}
 
 // ─── FitAllMarkers ────────────────────────────────────────────────────────────
 function FitAllMarkers({ vehicles }) {
@@ -47,6 +33,19 @@ const FleetMap = ({ vehicles = [] }) => {
 
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden border border-(--card-border) shadow-2xl">
+      <style>{`
+        .fleet-custom-popup .leaflet-popup-content-wrapper { 
+          background: #0f172a !important; 
+          border: 1px solid rgba(255,255,255,0.2) !important;
+          border-radius: 8px !important;
+          padding: 0 !important;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.5) !important;
+        }
+        .fleet-custom-popup .leaflet-popup-content { margin: 0 !important; width: auto !important; }
+        .fleet-custom-popup .leaflet-popup-tip { background: #0f172a !important; }
+        .telematics-card { padding: 6px 8px; color: white; width: 125px; line-height: 1; }
+        .telematics-card p { margin: 0 !important; padding: 0 !important; }
+      `}</style>
       <MapContainer 
         center={DEFAULT_CENTER} 
         zoom={12}
@@ -67,37 +66,47 @@ const FleetMap = ({ vehicles = [] }) => {
           
           return (
             <React.Fragment key={v.id}>
-              {v.status === "active" && (
-                 <Circle
-                   center={[v.lat, v.lng]} 
-                   radius={100}
-                   pathOptions={{ color: "#10b981", fillColor: "#10b981", fillOpacity: 0.1, weight: 1 }}
-                 />
-              )}
               <Marker 
                 position={[v.lat, v.lng]} 
-                icon={makeVehicleIcon(v.status)}
+                icon={makeFleetVehicleIcon(v.type || "hatchback", v.status, v.status === 'active' ? 52 : 44)}
+                eventHandlers={v.status === "active" ? {
+                  mouseover: (e) => e.target.openPopup(),
+                  mouseout: (e) => e.target.closePopup()
+                } : {}}
               >
-                <Popup className="custom-popup">
-                  <div className="p-1">
-                    <p className="font-black text-xs text-(--text-main) mb-1">{v.driver}</p>
-                    <div className="flex items-center gap-2 mb-2">
-                       <span className={`h-1.5 w-1.5 rounded-full ${
-                        v.status === 'active' ? 'bg-emerald-500' : 'bg-primary'
-                       }`}></span>
-                       <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-                         {v.id} · {v.status}
-                       </p>
+                <Popup className="fleet-custom-popup" closeButton={false} autoPan={true}>
+                  <div className="telematics-card">
+                    <div className="border-b border-white/10 pb-1 mb-1">
+                      <p className="font-black text-[9px] text-white truncate">{v.driver}</p>
+                      <p className="text-[7px] font-bold text-white/40 uppercase truncate">
+                        {v.type} · {v.plate}
+                      </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 border-t border-(--card-border) pt-2">
-                       <div>
-                         <p className="text-[8px] uppercase text-(--text-dim)">Fuel</p>
-                         <p className="text-xs font-black">{v.fuel || "N/A"}</p>
-                       </div>
-                       <div>
-                         <p className="text-[8px] uppercase text-(--text-dim)">Type</p>
-                         <p className="text-xs font-black">{v.type}</p>
-                       </div>
+
+                    {v.activeRide && (
+                      <div className="space-y-0.5 mb-1">
+                        <div className="flex items-center gap-1">
+                          <div className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
+                          <p className="text-[9px] text-white/90 font-bold truncate">
+                            {v.activeRide.source?.address?.split(',')[0]}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-1 h-1 rounded-full bg-rose-500 shrink-0" />
+                          <p className="text-[9px] text-white/90 font-bold truncate">
+                            {v.activeRide.destination?.address?.split(',')[0]}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1 border-t border-white/10">
+                        <p className={`text-[8px] font-black uppercase tracking-tight ${v.status === 'active' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {v.area}
+                        </p>
+                        <p className="text-[8px] font-black text-white/90">
+                           {v.activeRide?.bookings?.[0]?.passenger?.name?.split(' ')[0] || "—"}
+                        </p>
                     </div>
                   </div>
                 </Popup>

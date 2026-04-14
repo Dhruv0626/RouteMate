@@ -1,52 +1,16 @@
 import React, { useEffect, useRef } from "react";
 import {
   MapContainer, TileLayer, Marker, Popup,
-  Polyline, useMap, Circle,
+  Polyline, useMap, Circle, ZoomControl,
 } from "react-leaflet";
 import L from "leaflet";
+import { makeVehicleIcon, makeLiveIcon, makeRouteLabelIcon, makePin } from "../../utils/mapIcons";
 
-// ─── Color Marker Factory ─────────────────────────────────────────────────────
-function makeColorIcon(color) {
-  return new L.Icon({
-    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-    shadowUrl: null,
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
-  });
-}
-
-// ─── Pulsing "You Are Here" icon ──────────────────────────────────────────────
-function makeLiveIcon() {
-  return L.divIcon({
-    html: `<div style="width:18px;height:18px;background:#6366f1;border:3px solid #fff;
-      border-radius:50%;animation:pulse-rm 1.5s ease-out infinite;">
-      <style>@keyframes pulse-rm{0%{box-shadow:0 0 0 0 rgba(99,102,241,.7);}
-      70%{box-shadow:0 0 0 12px rgba(99,102,241,0);}
-      100%{box-shadow:0 0 0 0 rgba(99,102,241,0);}}</style></div>`,
-    className: "", iconSize: [18, 18], iconAnchor: [9, 9],
-  });
-}
-
-// ─── Route label icon (pill badge at midpoint) ────────────────────────────────
-function makeRouteLabelIcon(route, isSelected) {
-  return L.divIcon({
-    html: `<div style="
-      background:${route.color};color:#fff;
-      font-size:10px;font-weight:700;font-family:'Inter',sans-serif;
-      padding:4px 9px;border-radius:20px;white-space:nowrap;
-      box-shadow:0 2px 10px rgba(0,0,0,0.4);
-      border:${isSelected ? "2px solid #fff" : "1.5px solid rgba(255,255,255,0.55)"};
-      opacity:${isSelected ? 1 : 0.82};
-      pointer-events:none;
-    ">${route.label} · ${route.durationMin} min</div>`,
-    className: "",
-    iconAnchor: [0, 0],
-  });
-}
-
-const greenIcon = makeColorIcon("green");
-const redIcon   = makeColorIcon("red");
-const blueIcon  = makeColorIcon("blue");
+const greenIcon = makePin("#22c55e", "START");
+const redIcon   = makePin("#ef4444", "DEST");
+const blueIcon  = makePin("#3b82f6", "PICKUP");
 const liveIcon  = makeLiveIcon();
+
 
 // ─── FitAllRoutes: fit map to cover all route geometries ──────────────────────
 function FitAllRoutes({ routes, active }) {
@@ -108,14 +72,14 @@ function RouteInfoBadge({ route, isNavigating, remainingDist, remainingMin, arri
 
   return (
     <div style={{
-      position: "absolute", top: 12, right: 12, zIndex: 1000,
-      background: arrived ? "rgba(16,85,16,0.93)" : "rgba(10,16,30,0.90)",
-      backdropFilter: "blur(14px)",
-      border: `1px solid ${arrived ? "rgba(34,197,94,0.5)" : (route?.color ? route.color + "70" : "rgba(99,102,241,0.45)")}`,
+      position: "absolute", bottom: 12, left: 12, zIndex: 900,
+      background: arrived ? "rgba(16,85,16,0.85)" : "rgba(10,16,30,0.65)",
+      backdropFilter: "blur(20px)",
+      border: `1px solid ${arrived ? "rgba(32, 34, 33, 0.3)" : (route?.color ? route.color + "40" : "rgba(150,150,255,0.2)")}`,
       borderRadius: 14, padding: "10px 16px",
-      boxShadow: `0 4px 24px ${arrived ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.15)"}`,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
       color: "#f1f5f9", fontFamily: "'Inter',sans-serif",
-      minWidth: 148, pointerEvents: "none", transition: "all 0.35s ease",
+      minWidth: 148, pointerEvents: "all", transition: "all 0.35s ease",
     }}>
       {arrived ? (
         <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#4ade80" }}>🎉 Arrived!</p>
@@ -148,6 +112,7 @@ const RideMap = ({
   availableRides  = [],          // array of rides featuring coordinate drops
   selectedRouteIdx = 0,          // which is highlighted
   onRouteSelect   = null,        // (idx) => void — called when polyline clicked
+  isDark          = false,       // dark/light tile switching
 
   // Navigation
   isNavigating    = false,
@@ -158,6 +123,8 @@ const RideMap = ({
   remainingDist   = null,
   remainingMin    = null,
   arrived         = false,
+  vehicleType     = "GO",
+  driverVehicleType = null,
 }) => {
   const DEFAULT_CENTER = [23.0225, 72.5714];
   const allPoints      = [pickup, dropoff, driverLocation].filter(Boolean);
@@ -179,11 +146,15 @@ const RideMap = ({
       />
 
       <MapContainer center={DEFAULT_CENTER} zoom={12}
-        style={{ width: "100%", height: "100%" }} zoomControl scrollWheelZoom>
-
-        {/* OSM tiles */}
+        style={{ width: "100%", height: "100%" }} zoomControl={false} scrollWheelZoom>
+        <ZoomControl position="bottomright" />
+ 
+        {/* Dark/Light aware tiles */}
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          url={isDark 
+            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          }
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           maxZoom={19}
         />
@@ -280,19 +251,36 @@ const RideMap = ({
           />
         )}
 
-        {/* Live position (pulsing dot) */}
+        {/* Live position (pulsing dot for user OR 3D vehicle for driver) */}
         {livePos?.lat != null && livePos?.lng != null && (
           <>
             <Circle
               center={[livePos.lat, livePos.lng]} radius={30}
               pathOptions={{ color: "#6366f1", fillColor: "#6366f1", fillOpacity: 0.15, weight: 1 }}
             />
-            <Marker position={[livePos.lat, livePos.lng]} icon={liveIcon}>
+            <Marker 
+              position={[livePos.lat, livePos.lng]} 
+              icon={driverVehicleType ? makeVehicleIcon(driverVehicleType, heading) : liveIcon}
+            >
               <Popup>
-                <p style={{ fontWeight: 700, color: "#4f46e5", fontSize: 12, margin: 0 }}>📍 Your Location</p>
+                <p style={{ fontWeight: 700, color: "#4f46e5", fontSize: 12, margin: 0 }}>
+                    📍 {driverVehicleType ? "Your Vehicle" : "Your Location"}
+                </p>
               </Popup>
             </Marker>
           </>
+        )}
+
+        {/* Selected Driver (3D Vehicle) */}
+        {isNavigating && currentPos && (
+           <Marker 
+              position={[currentPos.lat, currentPos.lng]} 
+              icon={makeVehicleIcon(vehicleType, heading)}
+            >
+              <Popup>
+                <p style={{ fontWeight: 700, color: "#4f46e5", fontSize: 12, margin: 0 }}>📍 Driver Position</p>
+              </Popup>
+            </Marker>
         )}
 
         {/* Pickup marker */}
@@ -319,7 +307,7 @@ const RideMap = ({
 
         {/* External driver (if only one) */}
         {driverLocation && !isNavigating && (
-          <Marker position={[driverLocation.lat, driverLocation.lng]} icon={blueIcon}>
+          <Marker position={[driverLocation.lat, driverLocation.lng]} icon={makeVehicleIcon(driverLocation.vehicleType)}>
             <Popup>
               <p style={{ fontWeight: 700, color: "#1e40af", fontSize: 13, marginBottom: 4 }}>🚗 Driver</p>
               <p style={{ margin: 0, fontSize: 12 }}>{driverLocation.name || "Driver Location"}</p>
@@ -331,10 +319,16 @@ const RideMap = ({
         {!isNavigating && availableRides.map((ride) => {
           if (!ride.source?.location?.coordinates) return null;
           return (
-            <Marker key={ride._id} position={[ride.source.location.coordinates[1], ride.source.location.coordinates[0]]} icon={blueIcon}>
+            <Marker key={ride._id} position={[ride.source.location.coordinates[1], ride.source.location.coordinates[0]]} icon={makeVehicleIcon(ride.vehicleType)}>
               <Popup>
-                <p style={{ fontWeight: 700, color: "#1e40af", fontSize: 13, marginBottom: 4 }}>🚗 {ride.driver?.name || "Driver"}</p>
-                <p style={{ margin: 0, fontSize: 12 }}>Heading to {ride.destination.address}</p>
+                <div style={{ padding: '2px' }}>
+                  <p style={{ fontWeight: 800, color: "var(--text-main)", fontSize: 13, marginBottom: 4 }}>
+                    {ride.vehicleType}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-dim)' }}>
+                    {ride.driver?.name} is heading to {ride.destination.address.split(',')[0]}
+                  </p>
+                </div>
               </Popup>
             </Marker>
           )

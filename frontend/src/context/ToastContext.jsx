@@ -14,8 +14,8 @@ export const ToastProvider = ({ children }) => {
 
     const showToast = useCallback((message, type = "info", duration = 4000, options = {}) => {
         const id = Date.now();
-        const { onClose } = options;
-        setToasts((prev) => [...prev, { id, message, type, duration, onClose }]);
+        const { onClose, onDismiss, icon } = options;
+        setToasts((prev) => [...prev, { id, message, type, duration, onClose, onDismiss, icon }]);
 
         if (duration > 0) {
             setTimeout(() => {
@@ -49,7 +49,7 @@ export const ToastProvider = ({ children }) => {
     );
 };
 
-const ToastItem = ({ message, type, onClose, onDismiss }) => {
+const ToastItem = ({ message, type, onClose, onDismiss, icon }) => {
     const icons = {
         success: <CheckCircle className="text-emerald-500" size={18} />,
         error: <AlertCircle className="text-red-500" size={18} />,
@@ -66,7 +66,7 @@ const ToastItem = ({ message, type, onClose, onDismiss }) => {
 
     return (
         <div className={`flex items-center gap-3 p-4 pr-12 rounded-2xl border backdrop-blur-xl animate-in slide-in-from-right duration-300 ${bgColors[type] || bgColors.info} shadow-2xl relative min-w-[300px] max-w-md`}>
-            {icons[type] || icons.info}
+            {icon ? icon : (icons[type] || icons.info)}
             <p className="text-xs font-bold text-(--text-main)">{message}</p>
             <button 
                 onClick={() => {

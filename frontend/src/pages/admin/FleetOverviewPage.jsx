@@ -13,10 +13,11 @@ import api from "../../services/api";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const VEHICLE_STATUSES = {
-  active:   { label: "On Trip",  color: "text-emerald-500", bg: "bg-emerald-500/10", dot: "bg-emerald-500" },
-  idle:     { label: "Idle",     color: "text-primary",     bg: "bg-primary/10",     dot: "bg-primary" },
-  offline:  { label: "Offline",  color: "text-(--text-dim)", bg: "bg-black/5",        dot: "bg-slate-500" },
-  maint:    { label: "Warning",  color: "text-rose-500",    bg: "bg-rose-500/10",    dot: "bg-rose-500" }
+  active:      { label: "On Trip",    color: "text-emerald-500", bg: "bg-emerald-500/10", dot: "bg-emerald-500" },
+  idle:        { label: "Published",  color: "text-amber-500",   bg: "bg-amber-500/10",   dot: "bg-amber-500" },
+  online_only: { label: "Online",     color: "text-primary",     bg: "bg-primary/10",     dot: "bg-primary" },
+  offline:     { label: "Offline",    color: "text-(--text-dim)", bg: "bg-black/5",        dot: "bg-slate-500" },
+  maint:       { label: "Warning",    color: "text-rose-500",    bg: "bg-rose-500/10",    dot: "bg-rose-500" }
 };
 
 const FleetOverviewPage = () => {
@@ -34,18 +35,27 @@ const FleetOverviewPage = () => {
       const { data } = await api.get("/driver-profiles/admin/all-drivers");
       if (data.success && data.data) {
         // Map backend driverProfile to the format expected by the fleet UI
-        const mapped = data.data.map(d => ({
-          id: d._id,
-          driver: d.user?.name || "Unknown",
-          type: d.vehicle?.type || "Sedan",
-          plate: d.vehicle?.number || "—",
-          status: d.isOnline ? "active" : "offline", // Simplified mapping for now
-          fuel: d.isOnline ? "High" : "N/A",
-          area: d.isOnline ? "Live Area" : "Offline",
-          trips: d.stats?.totalRides || 0,
-          lat: d.currentLocation?.coordinates?.[1] || 23.0338,
-          lng: d.currentLocation?.coordinates?.[0] || 72.5850,
-        }));
+        const mapped = data.data
+          .filter(d => d.isOnline) // ONLY show vehicles that are online
+          .map(d => {
+            let status = "online_only"; // just online, no ride issued
+            if (d.activeRide) status = "active";
+            else if (d.onlineRide) status = "idle"; // published but not booked/active
+            
+            return {
+              id: d._id,
+              driver: d.user?.name || "Unknown",
+              type: d.vehicle?.type || "Sedan",
+              plate: d.vehicle?.number || "—",
+              status: status,
+              fuel: "High", 
+              area: d.activeRide ? "In Trip" : d.onlineRide ? "Published" : "Online Only",
+              trips: d.stats?.totalRides || 0,
+              lat: d.currentLocation?.coordinates?.[1] || 23.0338,
+              lng: d.currentLocation?.coordinates?.[0] || 72.5850,
+              activeRide: d.activeRide
+            };
+          });
         setVehicles(mapped);
       }
     } catch (e) {
@@ -57,6 +67,9 @@ const FleetOverviewPage = () => {
 
   useEffect(() => {
     fetchVehicles();
+    // ─── Real-time Telematics Polling (5s) ───
+    const interval = setInterval(fetchVehicles, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const filtered = vehicles.filter(v => {
@@ -70,7 +83,7 @@ const FleetOverviewPage = () => {
   const counts = {
     total:   vehicles.length,
     active:  vehicles.filter(v => v.status === "active").length,
-    idle:    vehicles.filter(v => v.status === "idle").length,
+    idle:    vehicles.filter(v => v.status === "idle" || v.status === "online_only").length,
     warning: vehicles.filter(v => v.status === "maint").length,
   };
 
@@ -162,7 +175,7 @@ const FleetOverviewPage = () => {
           <div className="flex items-center gap-2">
             <Filter size={16} className="text-(--text-dim)" />
             <div className="flex rounded-2xl border border-(--card-border) overflow-hidden">
-              {["all","active","idle","maint"].map(f => (
+              {["all","active","idle","online_only"].map(f => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
@@ -172,7 +185,7 @@ const FleetOverviewPage = () => {
                       : "text-(--text-dim) hover:text-(--text-main) hover:bg-(--card-bg)"
                   }`}
                 >
-                  {f === "active" ? "On Trip" : f === "maint" ? "Health" : f}
+                  {f === "active" ? "In Trip" : f === "idle" ? "Published" : f === "online_only" ? "Online" : "All"}
                 </button>
               ))}
             </div>

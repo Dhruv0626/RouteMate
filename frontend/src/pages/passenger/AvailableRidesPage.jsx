@@ -9,21 +9,14 @@ import {
   MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+import { makePin } from "../../utils/mapIcons";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import LocationSearch from "../../components/map/LocationSearch";
 import api from "../../services/api";
 
 // ── Leaflet icons ─────────────────────────────────────────────────────────────
-const greenIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-  iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34], shadowSize: [41,41],
-});
-const redIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-  iconSize: [25,41], iconAnchor: [12,41], popupAnchor: [1,-34], shadowSize: [41,41],
-});
+const greenIcon = makePin("#22c55e", "PICKUP");
+const redIcon   = makePin("#ef4444", "DEST");
 
 // ── Haversine ─────────────────────────────────────────────────────────────────
 const haversineKm = (lat1, lng1, lat2, lng2) => {
@@ -59,6 +52,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
   const [fetchingFare, setFetchingFare] = useState(false);
   const [booking, setBooking]   = useState(false);
   const [error, setError]       = useState("");
+  const [pRouteCoords, setPRouteCoords] = useState([]);
 
   const mapCenter = srcPin ? [srcPin.lat, srcPin.lng]
     : dstPin ? [dstPin.lat, dstPin.lng]
@@ -85,12 +79,26 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
     }, () => alert("Could not fetch location"));
   };
 
-  // Live fare estimate
+  // Live fare estimate + Road routing
   useEffect(() => {
-    if (!srcPin || !dstPin) { setFareData(null); return; }
+    if (!srcPin || !dstPin) { 
+        setFareData(null); 
+        setPRouteCoords([]);
+        return; 
+    }
     const fetch = async () => {
       setFetchingFare(true);
       try {
+        // 1. Fetch road path for visualization
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${srcPin.lng},${srcPin.lat};${dstPin.lng},${dstPin.lat}?overview=full&geometries=geojson`;
+        const osrmRes = await fetch(osrmUrl);
+        const osrmData = await osrmRes.json();
+        
+        if (osrmData.code === "Ok" && osrmData.routes?.length > 0) {
+           setPRouteCoords(osrmData.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
+        }
+
+        // 2. Fetch fare from backend
         const res = await api.get("/published-rides/fare-estimate", {
           params: {
             rideId: ride._id,
@@ -224,10 +232,10 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
                   />
                 )}
 
-                {/* Passenger's straight-line segment */}
-                {srcPin && dstPin && (
+                {/* Passenger's road-based route segment */}
+                {pRouteCoords.length > 0 && (
                   <Polyline 
-                    positions={[[srcPin.lat, srcPin.lng],[dstPin.lat, dstPin.lng]]} 
+                    positions={pRouteCoords} 
                     pathOptions={{ color:"#ffcc00", weight:5, dashArray:"10 6", lineCap:"round" }} 
                   />
                 )}
@@ -482,13 +490,15 @@ const AvailableRidesPage = () => {
                       </div>
                     </div>
 
-                    {/* Fare info */}
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/10 mb-4">
-                      <IndianRupee size={14} className="text-primary shrink-0" />
-                      <p className="text-xs text-(--text-dim)">
-                        Fare calculated based on <strong>your travel distance</strong> at booking. Paid in cash to the driver.
-                      </p>
-                    </div>
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-primary/5 border border-primary/10 mb-4">
+                        <div className="flex items-center gap-2">
+                          <IndianRupee size={14} className="text-primary shrink-0" />
+                          <p className="text-xs text-(--text-dim)">
+                            Estimated Fare
+                          </p>
+                        </div>
+                        <p className="text-lg font-black text-primary">₹{Math.round(ride.price || 0)}</p>
+                      </div>
 
                     <button
                       onClick={() => setSelectedRide(ride)}

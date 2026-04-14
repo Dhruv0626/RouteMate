@@ -97,19 +97,25 @@ const RideRequestDetailsPage = () => {
   return (
     <div className="relative flex flex-col h-screen overflow-hidden bg-(--bg-main) text-(--text-main)">
       
-      {/* Heavy-duty Header */}
-      <header className="absolute top-0 left-0 right-0 z-[1001] p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="glass-card p-3 rounded-2xl border-(--card-border) text-(--text-main) hover:scale-105 transition-all">
-            <ArrowLeft size={20} />
+      {/* Heavy-duty Header (Mobile Optimized) */}
+      <header className="absolute top-0 left-0 right-0 z-[1001] p-4 flex items-center justify-between pointer-events-none">
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="w-12 h-12 rounded-2xl bg-black border border-white/20 text-white flex items-center justify-center hover:scale-105 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.5)] active:scale-95"
+          >
+            <ArrowLeft size={22} />
           </button>
-          <div className="glass-card px-4 py-2 rounded-2xl border-(--card-border)">
-            <h1 className="text-sm font-black">Ride Request</h1>
+          <div className="hidden sm:flex bg-black px-4 py-2.5 rounded-2xl border border-white/20 shadow-2xl">
+            <h1 className="text-[10px] font-black text-white uppercase tracking-widest leading-none">Incoming Request</h1>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <div className={`px-4 py-2 rounded-2xl border font-black text-xs uppercase tracking-widest ${booking.status === 'pending' ? 'bg-amber-500/20 text-amber-500 border-amber-500/30' : booking.status === 'confirmed' ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' : 'bg-red-500/20 text-red-500 border-red-500/30'}`}>
+        
+        <div className="flex items-center gap-2 pointer-events-auto">
+            <div className="bg-black/80 backdrop-blur-xl p-1.5 rounded-2xl border border-white/10 shadow-2xl transition-all hover:bg-black">
+                <ThemeToggle />
+            </div>
+            <div className={`px-4 py-2 rounded-2xl border font-black text-[10px] uppercase tracking-widest shadow-2xl backdrop-blur-xl ${booking.status === 'pending' ? 'bg-amber-500 text-white border-amber-400' : 'bg-emerald-500 text-white border-emerald-400'}`}>
                 {booking.status}
             </div>
         </div>
@@ -129,7 +135,8 @@ const RideRequestDetailsPage = () => {
                 lng: booking.passengerDestination?.location?.coordinates[0], 
                 name: booking.passengerDestination?.address 
               }}
-              userLocation={null}
+              userLocation={{ lat: 23.0225, lng: 72.5714 }} // Simulated driver start point
+              driverVehicleType={ride.vehicleType} // SHOW DRIVER AS VEHICLE PHOTO
               allRoutes={ride.routeCoords?.length ? [{
                 id: ride._id,
                 coords: ride.routeCoords.map(c => [c[1], c[0]]),
@@ -164,10 +171,10 @@ const RideRequestDetailsPage = () => {
         
         {/* Passenger Info */}
         <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center overflow-hidden flex-shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-inner">
                 {booking.passenger?.profileImage 
-                    ? <img src={booking.passenger.profileImage} alt="" className="w-full h-full object-cover" />
-                    : <span className="text-xl font-black text-primary">{booking.passenger?.name?.[0] || 'P'}</span>
+                    ? <img src={booking.passenger.profileImage} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.onerror = null; e.target.src = '/default-avatar.png'; }} />
+                    : <div className="text-xl font-black text-primary drop-shadow-sm">{booking.passenger?.name?.[0]?.toUpperCase() || 'P'}</div>
                 }
             </div>
             <div className="flex-1 min-w-0">

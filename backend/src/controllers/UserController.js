@@ -17,7 +17,7 @@ const generateAccessToken = (user) =>
         { expiresIn: "1d" }
     );
 
-/** Generate long-lived Refresh Token (30 days to ensure at least 7 days of absolute persistence) */
+/** Generate long-lived Refresh Token (30 days to ensure absolute persistence) */
 const generateRefreshToken = (user) => {
     const options = user.role === "admin" ? {} : { expiresIn: "30d" };
     return jwt.sign(

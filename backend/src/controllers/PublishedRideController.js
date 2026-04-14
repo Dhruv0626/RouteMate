@@ -5,6 +5,7 @@ import NotificationModel from "../models/Notification.js";
 import TripModel from "../models/Trip.js";
 import UserModel from "../models/User.js";
 import { getIO } from "../utils/SocketManager.js";
+import { calculateFareDetails } from "../utils/PriceEngine.js";
 
 // ─── Haversine distance (km) ──────────────────────────────────────────────────
 const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
@@ -19,29 +20,25 @@ const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// ─── Help: Demand Ratio (Requests / Drivers) ──────────────────────────────────
-const getDemandRatio = async () => {
+// ─── Help: Platform Stats (Requests & Drivers) ────────────────────────────────
+const getPlatformStats = async () => {
     try {
-        // Supply = Active Published Rides that are open for booking
-        const supplyCount = await PublishedRideModel.countDocuments({ status: "open" });
+        // Supply = Total Drivers Online
+        const available_drivers = await DriverProfileModel.countDocuments({ isOnline: true, isApproved: true });
         
-        // Demand = Count all "pending" booking requests across all published rides
-        const demandStats = await PublishedRideModel.aggregate([
-            { $unwind: "$bookings" },
-            { $match: { "bookings.status": "pending" } },
-            { $count: "count" }
-        ]);
-        const demandCount = demandStats[0]?.count || 0;
+        // Demand = Total "pending" or "booked" rides in the last 15 minutes
+        const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
+        const total_requests = await PublishedRideModel.countDocuments({
+            createdAt: { $gte: fifteenMinsAgo }
+        });
 
-        if (supplyCount === 0) return 1.0; 
-        
-        // Ratio = Demand / Supply
-        // e.g. 10 people wanting 5 rides -> ratio 2.0 (High Surge)
-        // e.g. 2 people wanting 10 rides -> ratio 0.2 (Standard Fare)
-        return demandCount / supplyCount;
+        return {
+            total_requests: Math.max(total_requests, 5), // Min floor for stability
+            available_drivers: Math.max(available_drivers, 5)
+        };
     } catch (error) {
-        console.error("🔴 Demand Ratio Calc Error:", error.message);
-        return 1.0;
+        console.error("🔴 Platform Stats Error:", error.message);
+        return { total_requests: 10, available_drivers: 10 };
     }
 };
 
@@ -51,13 +48,11 @@ const isNightTime = () => {
     return hour >= 22 || hour < 6;
 };
 
-// ─── Calculate fare from SystemConfig based on distance ─────────────────────────
 // ─── Smart Ride Price Calculation Engine (RouteMAte) ─────────────────────────
 const calcFare = async ({
     category,
     distanceKm,
     timeMin = 20,
-    demandRatio = 1.0,
     isNight = false
 }) => {
     try {
@@ -70,93 +65,47 @@ const calcFare = async ({
 
         const parse = (val) => {
             if (!val) return 0;
-            // Clean string from symbols like ₹, %, x and parse
             const cleaned = val.toString().replace(/[^\d.]/g, "");
             return parseFloat(cleaned || "0");
         };
 
-        const base_fare = parse(pricing.baseFare);
-        const per_km_rate = parse(pricing.costPerKm);
-        const per_min_rate = parse(pricing.perMinRate);
-        const night_charge = parse(pricing.nightCharge);
-        const min_fare = parse(pricing.minFare);
-        const surge_cap = parse(pricing.surgeCap);
-
-        // Step 1: Subtotal = Base Fare + (Distance KM × Per KM Rate) + (Time Min × Per Min Rate)
-        let subtotal = base_fare + (distanceKm * per_km_rate) + (timeMin * per_min_rate);
-
-        // Step 2: Night Charge is FLAT - add to subtotal if it's night time
-        const night_val = isNight ? night_charge : 0;
-        subtotal += night_val;
-
-        // Step 3: Calculate Surge Multiplier based on demand_ratio (Stepped Logic)
-        let surge_multiplier = 1.0;
-        let surge_label = "Standard Fare";
-
-        const base_surge = parse(sys.surgeMultiplier || "1.2");
-
-        if (demandRatio > 2.5) {
-            surge_multiplier = surge_cap;
-            surge_label = "Extreme Surge";
-        } else if (demandRatio > 2.0) {
-            surge_multiplier = 1.6;
-            surge_label = "High Surge";
-        } else if (demandRatio > 1.5) {
-            surge_multiplier = 1.4;
-            surge_label = "Medium Surge";
-        } else if (demandRatio > 1.2) {
-            surge_multiplier = base_surge;
-            surge_label = "Low Surge";
-        }
-
-        // Never exceed the surge_cap
-        if (surge_multiplier > surge_cap) {
-            surge_multiplier = surge_cap;
-        }
-
-        // Step 4: Surged Total (MAX of Surge or Min Fare)
-        let surgedTotalRaw = subtotal * surge_multiplier;
-        const min_fare_applied = surgedTotalRaw < min_fare;
-        let surgedTotal = Math.max(surgedTotalRaw, min_fare);
-        
-        // Final Total is now just the Surged Total (Tax logic removed)
-        let finalTotal = Math.round(surgedTotal);
-
-        // EV SPECIAL RULES: Calculate CO2 Saved
+        const stats = await getPlatformStats();
         const is_ev = ["EVMOTO", "EVAUTO", "EVGO"].includes(catKey);
-        const co2_saved_kg = is_ev ? (distanceKm * 0.12) : 0;
-        
-        const distance_charge = distanceKm * per_km_rate;
-        const time_charge = timeMin * per_min_rate;
-        const surge_fare_real = surge_multiplier > 1.0 ? Math.max(0, surgedTotal - subtotal) : 0;
 
-        return {
+        const fareData = calculateFareDetails({
             category: category.toLowerCase(),
             is_ev,
-            distance_km: Math.round(distanceKm * 10) / 10,
-            time_min: Math.round(timeMin),
-            baseFare: Math.round(base_fare),
-            distanceFare: Math.round(distance_charge),
-            timeFare: Math.round(time_charge),
-            night_charge: Math.round(night_val),
-            subtotal: Math.round(subtotal),
-            surgeMultiplier: Number(surge_multiplier.toFixed(2)),
-            surgeFare: Math.round(surge_fare_real),
-            surge_label,
-            surgedTotal: Math.round(surgedTotal),
-            totalWithTax: finalTotal, // Keeping for compatibility but tax is 0%
-            final_price: finalTotal,
-            min_fare_applied,
-            co2_saved_kg: Number(co2_saved_kg.toFixed(3)),
-            currency: "INR"
+            base_fare: parse(pricing.baseFare),
+            per_km_rate: parse(pricing.costPerKm),
+            per_min_rate: parse(pricing.perMinRate || 0.5), // Fallback to 0.5 if not set
+            night_charge: parse(pricing.nightCharge),
+            min_fare: parse(pricing.minFare),
+            surge_cap: parse(pricing.surgeCap || (is_ev ? 1.5 : 1.8)),
+            distance_km: distanceKm,
+            time_min: timeMin,
+            is_night: isNight,
+            total_requests: stats.total_requests,
+            available_drivers: stats.available_drivers
+        });
+
+        if (fareData.error) throw new Error(fareData.message);
+
+        // Map internal names to controller expected names for backward compatibility
+        return {
+            ...fareData,
+            baseFare: fareData.base_fare,
+            distanceFare: fareData.distance_charge,
+            timeFare: fareData.time_charge,
+            surgeMultiplier: fareData.surge_multiplier,
+            surgedTotal: fareData.final_price,
+            totalWithTax: fareData.final_price // Tax is 0%
         };
     } catch (error) {
         console.error("🔴 RouteMate Fare Engine Error:", error.message);
-        console.error("Context:", { category, distanceKm, timeMin, demandRatio, isNight });
         return {
             error: "Calculation failed",
             message: error.message,
-            final_price: 0 // Return 0 so it's visible something is wrong
+            final_price: 150 // Fallback minimum
         };
     }
 };
@@ -210,7 +159,7 @@ export const PublishRide = async (req, res) => {
 // ─── Passenger: Get Available Rides ───────────────────────────────────────────
 export const GetAvailableRides = async (req, res) => {
     try {
-        const { sourceCity, destinationCity, date, srcLat, srcLng, dstLat, dstLng } = req.query;
+        const { sourceCity, destinationCity, date, srcLat, srcLng, dstLat, dstLng, distanceKm: passedDist } = req.query;
 
         const filter = {
             status: "open",
@@ -291,8 +240,8 @@ export const GetAvailableRides = async (req, res) => {
             return true;
         });
 
-        // ── Step 1: Calculate global demand ratio ONCE for this request ──
-        const demandRatio = await getDemandRatio();
+        // ── Step 1: Calculate global platform stats ONCE for this request ──
+        const stats = await getPlatformStats();
 
         const enrichedRides = await Promise.all(filtered.map(async (ride) => {
             const profile = await DriverProfileModel.findOne({ user: ride.driver._id });
@@ -315,13 +264,12 @@ export const GetAvailableRides = async (req, res) => {
 
             // ── DYNAMIC PRICING: Calculate price for this SPECIFIC ride's category ──
             const straightLineDist = (pSrc && pDst) ? haversineKm(pSrc, pDst) : haversineKm(ride.source.location.coordinates, ride.destination.location.coordinates);
-            const estimatedRoadDist = straightLineDist * 1.3;
+            const estimatedRoadDist = passedDist ? parseFloat(passedDist) : (straightLineDist * 1.3);
 
             const fareData = await calcFare({
                 category: ride.vehicleType || "PRIME",
                 distanceKm: estimatedRoadDist,
                 timeMin: estimatedRoadDist * 2, // 2 mins per km estimate
-                demandRatio,
                 isNight: isNightTime()
             });
 
@@ -367,12 +315,10 @@ export const GetFareEstimate = async (req, res) => {
                 : 0;
         }
 
-        const demandRatio = await getDemandRatio();
         const fareData = await calcFare({
             category: ride.vehicleType || "PRIME",
             distanceKm,
             timeMin: distanceKm * 2,
-            demandRatio,
             isNight: isNightTime()
         });
         const finalPrice = fareData.final_price;
@@ -425,12 +371,10 @@ export const BookRide = async (req, res) => {
             }
         }
 
-        const demandRatio = await getDemandRatio();
         const fareData = await calcFare({
             category: ride.vehicleType || "PRIME",
             distanceKm,
             timeMin: distanceKm * 2,
-            demandRatio,
             isNight: isNightTime()
         });
         const amountPaid = fareData.totalWithTax;

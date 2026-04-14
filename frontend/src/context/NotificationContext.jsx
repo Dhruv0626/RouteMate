@@ -53,7 +53,7 @@ export const NotificationProvider = ({ children }) => {
    */
   const showNativeNotification = useCallback((notification) => {
     // 1. Play Sound (Global - doesn't depend on native push settings)
-    playChime();
+    playChime(notification._id);
 
     // 2. Show System Notification (if permitted)
     const appSettings = JSON.parse(localStorage.getItem('appSettings') || '{"pushNotifs":true}');
@@ -141,13 +141,20 @@ export const NotificationProvider = ({ children }) => {
   // ─── Mobile Audio Unlock ───
   // Unlocks the audio context on first user interaction 
   const unlockAudio = useCallback(() => {
+    // Save original volume
+    const originalVolume = notificationAudio.volume;
+    notificationAudio.volume = 0; // Mute for unlock to prevent "ghost" blip
+    
     notificationAudio.play().then(() => {
       notificationAudio.pause();
       notificationAudio.currentTime = 0;
-      console.log("🔊 Audio unlocked for mobile");
+      notificationAudio.volume = originalVolume || 0.5; // Restore volume
+      console.log("🔊 Audio context unlocked silently");
       document.removeEventListener("click", unlockAudio);
       document.removeEventListener("touchstart", unlockAudio);
-    }).catch(() => {});
+    }).catch(() => {
+      notificationAudio.volume = originalVolume || 0.5;
+    });
   }, []);
 
   useEffect(() => {
@@ -160,7 +167,21 @@ export const NotificationProvider = ({ children }) => {
   }, [unlockAudio]);
 
   // ─── Tone Trigger ───
-  const playChime = () => {
+  // Use a map to track recently played notification IDs to prevent duplicates
+  const recentlyPlayedRef = useRef(new Set());
+
+  const playChime = useCallback((notificationId = null) => {
+    // 1. Deduplication check
+    if (notificationId) {
+      if (recentlyPlayedRef.current.has(notificationId)) return;
+      recentlyPlayedRef.current.add(notificationId);
+      // Keep set size manageable (last 50 IDs)
+      if (recentlyPlayedRef.current.size > 50) {
+        const first = recentlyPlayedRef.current.values().next().value;
+        recentlyPlayedRef.current.delete(first);
+      }
+    }
+
     try {
       // Re-initialize for better mobile reliability
       notificationAudio.currentTime = 0;
@@ -169,7 +190,7 @@ export const NotificationProvider = ({ children }) => {
         console.warn("Mobile chime blocked (interaction required):", err.message);
       });
     } catch (err) {}
-  };
+  }, []);
 
   // Fetch notifications from API
   const fetchNotifications = useCallback(async (isInitial = false) => {

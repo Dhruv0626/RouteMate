@@ -108,7 +108,7 @@ const LocationSearch = ({
   const [gpsLocation, setGpsLocation] = useState(null); // { lat, lng, name }
 
   const containerRef = useRef(null);
-  const debouncedQuery = useDebounce(query, 450);
+  const debouncedQuery = useDebounce(query, 200);
 
   // ─── Pre-resolve GPS name as soon as currentLocation prop arrives ────────
   useEffect(() => {
@@ -121,7 +121,7 @@ const LocationSearch = ({
 
   // ─── Fetch search suggestions ────────────────────────────────────────────
   useEffect(() => {
-    if (!debouncedQuery || debouncedQuery.trim().length < 2) {
+    if (!debouncedQuery || debouncedQuery.trim().length < 1) {
       setResults([]);
       // Keep dropdown open on focus if showing GPS option
       if (!(showCurrentLocation && isFocused)) setIsOpen(false);
@@ -319,11 +319,10 @@ const LocationSearch = ({
           top: "calc(100% + 6px)",
           left: 0,
           right: 0,
-          background: "var(--card-bg)",
+          background: "var(--bg-main)",
           border: "1px solid var(--card-border)",
           borderRadius: "14px",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-          backdropFilter: "blur(16px)",
+          boxShadow: "0 12px 48px rgba(0,0,0,0.5)",
           zIndex: 9999,
           overflow: "hidden",
           maxHeight: "260px",
@@ -407,7 +406,8 @@ const LocationSearch = ({
                   </span>
                   <span style={{
                     display: "block", fontSize: "10px", color: "var(--text-dim)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    opacity: 0.9, overflow: "hidden", textOverflow: "ellipsis", 
+                    whiteSpace: "nowrap",
                   }}>
                     {loc.name}
                   </span>

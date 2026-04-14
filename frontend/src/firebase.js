@@ -1,53 +1,46 @@
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
+// ─── New Firebase Project: routemate-aa712 ────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyDCYwNptmf02BXe1iHs5ZJa6kvvaldrlqA",
-  authDomain: "routemate-8c753.firebaseapp.com",
-  projectId: "routemate-8c753",
-  storageBucket: "routemate-8c753.firebasestorage.app",
-  messagingSenderId: "481672405033",
-  appId: "1:481672405033:web:73a1c22234838a2bfdfc38",
-  measurementId: "G-8ZMWLJZER0"
+  apiKey: "AIzaSyDRbAIAt7MfAqjtHgLJ3UDfMfNmeQf1fPU",
+  authDomain: "routemate-aa712.firebaseapp.com",
+  projectId: "routemate-aa712",
+  storageBucket: "routemate-aa712.firebasestorage.app",
+  messagingSenderId: "362096907157",
+  appId: "1:362096907157:web:38c31934a7f02ff9f65c9c",
+  measurementId: "G-W67CSWPBKS"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase Cloud Messaging and get a reference to the service
+// Initialize Firebase Cloud Messaging
 const messaging = getMessaging(app);
 
 /**
- * Request permission for notifications and get FCM Token
- * @returns {Promise<string|null>} FCM Token
+ * Request permission for push notifications and get FCM Token
+ * @returns {Promise<string|null>} FCM Token or null
+ * 
+ * ⚠️  IMPORTANT: You MUST update the vapidKey below!
+ *     Go to: Firebase Console → routemate-aa712 → Project Settings
+ *            → Cloud Messaging → Web configuration → Web Push certificates
+ *            → Generate key pair → copy the Key pair value
  */
 export const requestForToken = async () => {
   try {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return null;
+
     const permission = await Notification.requestPermission();
-    
-    if (permission === 'granted') {
-      // Get the token using the VAPID key
-      // REPLACE 'YOUR_VAPID_KEY_HERE' with your actual VAPID key from Firebase Console
-      // Settings -> Cloud Messaging -> Web configuration -> Web Push certificates
-      const vapidKey = 'BM1oVrTY2CFL0fNV9XtGpUYKD67FrWG4GNNBnZDCGzbHubL8ph4KNc1u72XcGWkCAcsadGVA1-9NRwEsyvqzUF8'; 
-      
-      const currentToken = await getToken(messaging, { vapidKey });
-      
-      if (currentToken) {
-        return currentToken;
-      } else {
-        return null;
-      }
-    } else {
-      console.warn('⚠️ Push notifications are blocked by the browser.');
-      return null;
-    }
-  } catch (err) {
-    if (err.message && err.message.includes('blocked')) {
-      console.warn("⚠️ Push notifications are blocked by browser settings.");
-    } else {
-      console.warn('⚠️ Push tokens could not be retrieved. Falling back to in-app alerts.');
-    }
+    if (permission !== 'granted') return null;
+
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKey) return null; // No VAPID key configured
+
+    const currentToken = await getToken(messaging, { vapidKey });
+    return currentToken || null;
+  } catch {
+    // Silently fallback — Socket.IO handles real-time notifications
     return null;
   }
 };
@@ -58,7 +51,6 @@ export const requestForToken = async () => {
 export const onMessageListener = () =>
   new Promise((resolve) => {
     onMessage(messaging, (payload) => {
-      console.log("📨 Foreground message received:", payload);
       resolve(payload);
     });
   });

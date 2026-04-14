@@ -10,10 +10,10 @@ dotenv.config();
 
 // ─── Token Helpers ─────────────────────────────────────────────────────────────
 const generateAccessToken = (user) =>
-    jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
 const generateRefreshToken = (user) => {
-    const options = user.role === "admin" ? {} : { expiresIn: "7d" };
+    const options = user.role === "admin" ? {} : { expiresIn: "30d" };
     return jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, options);
 };
 
@@ -136,13 +136,13 @@ export const issueOAuthTokens = async (user, res) => {
     await UserModel.findByIdAndUpdate(user._id, { refreshToken: hashToken(refreshToken) });
 
     const isProduction = process.env.NODE_ENV === "production";
-    const refreshMaxAge = user.role === "admin" ? 100 * 365 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    const refreshMaxAge = user.role === "admin" ? 100 * 365 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
 
     res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: isProduction,
         sameSite: isProduction ? "none" : "Lax",
-        maxAge: 60 * 60 * 1000
+        maxAge: 24 * 60 * 60 * 1000
     });
 
     res.cookie("refreshToken", refreshToken, {
