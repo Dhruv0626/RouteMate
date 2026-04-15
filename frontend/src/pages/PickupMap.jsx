@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Navigation, Loader2, User as UserIcon, MapPin, IndianRupee, Phone, RefreshCw } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
@@ -77,6 +77,7 @@ const PickupMap = () => {
   const [gpsReady, setGpsReady]         = useState(false);     // first GPS fix received
   const [map, setMap]                   = useState(null);
   const [heading, setHeading]           = useState(0);         // car rotation
+  const [isPerspectiveMode, setIsPerspectiveMode] = useState(false);
 
   const abortRef   = useRef(null);
   const prevLocRef = useRef(null);   // last location that triggered a route fetch
@@ -91,6 +92,7 @@ const PickupMap = () => {
 
   const pickupCoords    = firstPassenger?.passengerSource?.location?.coordinates;      // [lng, lat]
   const destCoords      = firstPassenger?.passengerDestination?.location?.coordinates; // [lng, lat]
+  const isActive        = ride?.status === "in_progress";
 
   // ─── Socket ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -214,7 +216,6 @@ const PickupMap = () => {
     if (!driverLocation) return;
     const { lat, lng } = driverLocation;
 
-    const isActive     = ride?.status === "in_progress";
     const targetCoords = isActive ? destCoords : pickupCoords; // [lng, lat]
     if (!targetCoords || targetCoords[0] === 0) return;
 
@@ -250,6 +251,34 @@ const PickupMap = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driverLocation?.lat, driverLocation?.lng, ride?.status, pickupCoords?.[0], destCoords?.[0]]);
 
+  const vehicleIcon = useMemo(() => {
+    if (!ride) return null;
+    return makeVehicleIcon(ride.vehicleType, heading);
+  }, [ride?.vehicleType, heading]);
+
+  const targetIcon = useMemo(() => {
+    return makeDestPin(isActive);
+  }, [isActive]);
+
+  // ─── Memoized display route (Path Cutting) ───────────────────────────────
+  const displayRoute = useMemo(() => {
+    if (route.length <= 1) return route;
+    if (!driverLocation) return route;
+
+    let minStep = Infinity;
+    let closestIdx = 0;
+    // Fast O(N) scan to find closest point on route
+    for (let i = 0; i < route.length; i++) {
+      const d = distanceMetres(driverLocation.lat, driverLocation.lng, route[i][0], route[i][1]);
+      if (d < minStep) {
+        minStep = d;
+        closestIdx = i;
+      }
+    }
+    // Only slice if we are reasonably close to the path
+    return minStep < 200 ? route.slice(closestIdx) : route;
+  }, [route, driverLocation?.lat, driverLocation?.lng]);
+
   // Reset route when ride transitions from pickup → active
   const prevStatus = useRef(null);
   useEffect(() => {
@@ -280,14 +309,18 @@ const PickupMap = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ride, isDriver, driverLocation, pickupCoords?.[0], destCoords?.[0]]);
 
+  // ─── Perspective Mode Tracking ─────────────────────────────────────────────
+  useEffect(() => {
+    if (isPerspectiveMode && map && driverLocation) {
+      map.panTo([driverLocation.lat, driverLocation.lng], { animate: true, duration: 1.0 });
+    }
+  }, [isPerspectiveMode, driverLocation, map]);
+
   // ─── Auto-fit map bounds ───────────────────────────────────────────────────
   const hasFittedBounds = useRef(null);
   useEffect(() => {
     if (!map) return;
-    const isActive = ride?.status === "in_progress";
     const phaseKey = ride?.status || "unknown";
-    
-    // Only auto-fit once per phase
     if (hasFittedBounds.current === phaseKey) return;
     
     const target   = isActive ? destCoords : pickupCoords;
@@ -308,34 +341,19 @@ const PickupMap = () => {
   
   const handleRecenter = () => {
     if (!map) return;
-    const isActive = ride?.status === "in_progress";
     const target = isActive ? destCoords : pickupCoords;
     if (!target || !driverLocation) return;
     const bounds = L.latLngBounds([[driverLocation.lat, driverLocation.lng], [target[1], target[0]]]);
     map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
   };
 
-  // ─── Block browser back during active mission ───
-  useEffect(() => {
-    // Only block if ride is active (Arrived or In Progress)
-    if (!ride || !["arrived", "in_progress"].includes(ride.status)) return;
-    
-    const block = (e) => { 
-      e.preventDefault(); 
-      window.history.pushState(null, "", window.location.href); 
-    };
-    window.history.pushState(null, "", window.location.href);
-    window.addEventListener("popstate", block);
-    return () => window.removeEventListener("popstate", block);
-  }, [ride?.status]);
 
   // ─── Manual reroute button ────────────────────────────────────────────────
   const handleManualReroute = () => {
     if (!driverLocation) return;
-    const isActive    = ride?.status === "in_progress";
     const targetCoords = isActive ? destCoords : pickupCoords;
     setRoute([]);
-    fetchRoute(driverLocation.lat, driverLocation.lng, targetCoords, isActive);
+    fetchRoute(driverLocation.lat, driverLocation.lng, targetCoords[0], targetCoords[1], isActive);
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -357,25 +375,34 @@ const PickupMap = () => {
       ? [ride.source.location.coordinates[1], ride.source.location.coordinates[0]]
       : [23.0225, 72.5714]);
 
-  const isActive = ride.status === "in_progress";
   const targetForMarker = isActive ? destCoords : pickupCoords;
   const targetAddress   = isActive
     ? (firstPassenger?.passengerDestination?.address || ride.destination?.address)
     : (firstPassenger?.passengerSource?.address || ride.source?.address);
 
   return (
-    <div className="relative flex flex-col h-screen text-white bg-black">
+    <div className="relative flex flex-col h-screen text-white bg-black overflow-hidden">
+      <style>{`
+        .nav-tilt-wrapper {
+          perspective: 1000px;
+          height: 100%;
+          width: 100%;
+          overflow: hidden;
+        }
+        .nav-tilt-wrapper .leaflet-container {
+          transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .leaflet-touch .leaflet-control-attribution { display: none; }
+      `}</style>
 
       {/* ── Header ── */}
       <div className="absolute top-0 w-full z-50 p-4 shrink-0 flex items-center justify-between pointer-events-none">
-        {ride?.status !== "in_progress" && (
-          <button
+        <button
             onClick={() => navigate(-1)}
             className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition"
           >
             <ArrowLeft size={20} />
           </button>
-        )}
 
         <div className="flex items-center gap-2">
           {/* Status pill */}
@@ -403,8 +430,14 @@ const PickupMap = () => {
       )}
 
       {/* ── Map ── */}
-      <div className="flex-1 w-full relative z-0">
-        <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
+      <div className="flex-1 w-full relative z-0 nav-tilt-wrapper">
+        <div 
+          className={`w-full h-full transform-gpu transition-all duration-700`}
+          style={isPerspectiveMode ? { 
+            transform: `rotateX(35deg) translateY(-5%) scale(1.2)` 
+          } : {}}
+        >
+          <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap"
@@ -413,54 +446,40 @@ const PickupMap = () => {
 
           {/* Target pin (pickup or destination) */}
           {targetForMarker && (
-            <Marker position={[targetForMarker[1], targetForMarker[0]]} icon={makeDestPin(isActive)}>
+            <Marker position={[targetForMarker[1], targetForMarker[0]]} icon={targetIcon}>
               <Popup><b style={{ color: "#ef4444" }}>{isActive ? "Destination" : "Passenger Pickup"}</b><br />{targetAddress}</Popup>
             </Marker>
           )}
 
           {/* Driver marker (using 3D vehicle icon) */}
-          {driverLocation && (
-            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={makeVehicleIcon(ride.vehicleType, heading)}>
+          {driverLocation && vehicleIcon && (
+            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={vehicleIcon}>
               <Popup><b>{isDriver ? "You" : "Driver"}</b></Popup>
             </Marker>
           )}
 
-          {/* Route polyline – drawn as soon as OSRM returns the path */}
-          {route.length > 1 && (() => {
-            // Path Cutting: Only show the part of the route ahead of the driver
-            let displayRoute = route;
-            if (driverLocation) {
-              let minStep = Infinity;
-              let closestIdx = 0;
-              // Find the closest point in the route to the driver's current GPS
-              for (let i = 0; i < route.length; i++) {
-                const d = distanceMetres(driverLocation.lat, driverLocation.lng, route[i][0], route[i][1]);
-                if (d < minStep) { minStep = d; closestIdx = i; }
-              }
-              // Only slice if we are reasonably close to the path
-              if (minStep < 200) displayRoute = route.slice(closestIdx);
-            }
-
-            return (
-              <>
-                {/* Glow / shadow layer */}
+          {/* Route polyline – memoized displayRoute used for performance */}
+          {displayRoute.length > 1 && (
+            <>
+              {/* Glow / shadow layer (Simplified) */}
+              <Polyline
+                positions={displayRoute}
+                pathOptions={{ color: "#1e3a8a", weight: 9, opacity: 0.15, lineCap: "round", lineJoin: "round" }}
+              />
+              {/* Main line */}
+              <Polyline
+                positions={displayRoute}
+                pathOptions={{ color: isActive ? "#6366f1" : "#3b82f6", weight: 5, opacity: 1, lineCap: "round", lineJoin: "round" }}
+              />
+              {/* Animated dashes (Only if route isn't excessively long to avoid lag) */}
+              {displayRoute.length < 500 && (
                 <Polyline
                   positions={displayRoute}
-                  pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }}
+                  pathOptions={{ color: "white", weight: 1.5, opacity: 0.4, lineCap: "round", lineJoin: "round", dashArray: "10 20" }}
                 />
-                {/* Main line */}
-                <Polyline
-                  positions={displayRoute}
-                  pathOptions={{ color: isActive ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }}
-                />
-                {/* Animated dashes */}
-                <Polyline
-                  positions={displayRoute}
-                  pathOptions={{ color: "white", weight: 2, opacity: 0.5, lineCap: "round", lineJoin: "round", dashArray: "8 16" }}
-                />
-              </>
-            );
-          })()}
+              )}
+            </>
+          )}
 
           {/* Loading placeholder – straight dashed line while OSRM loads */}
           {route.length === 0 && targetForMarker && (() => {
@@ -479,26 +498,42 @@ const PickupMap = () => {
             );
           })()}
         </MapContainer>
+        </div>
       </div>
 
       {/* ── Bottom HUD ── */}
       <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none flex flex-col gap-3">
-        {/* Recenter Button */}
-        <div className="flex justify-end">
+        {/* Recenter & Perspective Buttons */}
+        <div className="flex flex-col items-end gap-3">
+             <button
+                onClick={() => {
+                  setIsPerspectiveMode(!isPerspectiveMode);
+                  if (!isPerspectiveMode && map && driverLocation) {
+                    map.setView([driverLocation.lat, driverLocation.lng], 17, { animate: true });
+                  } else if (isPerspectiveMode && map && driverLocation) {
+                    const target = isActive ? destCoords : pickupCoords;
+                    if (target) map.fitBounds(
+                      L.latLngBounds([[driverLocation.lat, driverLocation.lng], [target[1], target[0]]]),
+                      { padding: [80, 80], animate: true }
+                    );
+                  }
+                }}
+                className={`pointer-events-auto w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 ${
+                  isPerspectiveMode 
+                  ? "bg-primary text-black border-none" 
+                  : "bg-black/60 backdrop-blur border border-white/15 text-white"
+                }`}
+                title="Toggle Navigation View"
+             >
+                <Navigation size={20} className={isPerspectiveMode ? "fill-black" : ""} />
+             </button>
              <button
                 onClick={handleManualReroute}
                 disabled={routeLoading}
-                className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full shadow-lg hover:bg-white/10 transition text-white disabled:opacity-50"
+                className="pointer-events-auto bg-black/60 backdrop-blur border border-white/15 text-white p-3 rounded-full shadow-lg hover:scale-110 active:scale-90 transition-all disabled:opacity-50"
                 title="Refresh Route"
              >
                 <RefreshCw size={20} className={routeLoading ? "animate-spin" : ""} />
-             </button>
-             <button
-                onClick={handleRecenter}
-                className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full shadow-lg hover:bg-white/10 transition text-white"
-                title="Recenter Map"
-             >
-                <Navigation size={20} />
              </button>
         </div>
         
@@ -531,7 +566,7 @@ const PickupMap = () => {
               <div className="flex gap-3">
                 <button
                   onClick={() => navigate(`/start-ride/${rideId}`)}
-                  className="flex-1 bg-violet-600 text-white font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-violet-500/20 active:scale-95 transition-all text-sm"
+                  className="flex-1 bg-primary text-black font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all text-sm"
                 >
                   <Navigation size={18} />
                   Pickup Done
@@ -539,7 +574,7 @@ const PickupMap = () => {
                 {firstPassenger?.passenger?.Mobile_no && (
                   <a
                     href={`tel:${firstPassenger.passenger.Mobile_no}`}
-                    className="flex-1 bg-emerald-500 text-white font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm"
+                    className="flex-1 bg-primary text-black font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all text-sm"
                   >
                     <Phone size={18} />
                     Call
@@ -639,7 +674,7 @@ const PickupMap = () => {
                     {ride.driver?.Mobile_no && (
                       <a
                         href={`tel:${ride.driver.Mobile_no}`}
-                        className="bg-emerald-500 text-white p-2.5 rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex-shrink-0 ml-3"
+                        className="bg-primary text-black p-2.5 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all flex-shrink-0 ml-3"
                       >
                         <Phone size={16} />
                       </a>

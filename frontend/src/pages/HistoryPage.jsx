@@ -14,6 +14,8 @@ import {
   Download,
   RefreshCw,
   Headphones,
+  TrendingUp,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import ThemeToggle from "../components/ui/ThemeToggle";
@@ -61,18 +63,28 @@ const HistoryPage = () => {
             }
             
             const totalAmount = ride.fare?.totalWithTax || ride.fare?.total || 0;
-            let baseFare = ride.fare?.baseFare || 0;
-            let distanceFare = ride.fare?.distanceFare || 0;
-            let timeFare = ride.fare?.timeFare || 0;
+            let baseFare = Math.round(ride.fare?.baseFare || 0);
+            let distanceFare = Math.round(ride.fare?.distanceFare || 0);
+            let timeFare = Math.round(ride.fare?.timeFare || 0);
+            let nightFare = Math.round(ride.fare?.nightFare || 0);
             
             if (totalAmount > 0 && baseFare === 0 && distanceFare === 0) {
-               if (totalAmount > 50) {
-                   baseFare = 40;
-                   distanceFare = Math.round((totalAmount - baseFare) * 0.75);
-                   timeFare = totalAmount - baseFare - distanceFare;
-               } else {
-                   baseFare = totalAmount;
-               }
+                // If breakdown is missing (old rides), use a better heuristic based on current rates
+                const ratePerKm = ride.vehicleTypeRequested?.includes("GO") ? 12 : 10;
+                const ratePerMin = ride.vehicleTypeRequested?.includes("GO") ? 1.2 : 0.8;
+                baseFare = ride.vehicleTypeRequested?.includes("GO") ? 32 : 25;
+                
+                distanceFare = Math.round(distance * ratePerKm * 10) / 10;
+                timeFare = Math.round(duration * ratePerMin * 10) / 10;
+                
+                // If the sum exceeds total, scale it down, otherwise the rest is surge
+                const currentSum = baseFare + distanceFare + timeFare;
+                if (currentSum > totalAmount) {
+                    const ratio = totalAmount / currentSum;
+                    baseFare = Math.floor(baseFare * ratio);
+                    distanceFare = Math.round(distanceFare * ratio * 10) / 10;
+                    timeFare = Math.round(timeFare * ratio * 10) / 10;
+                }
             }
 
             return {
@@ -90,6 +102,7 @@ const HistoryPage = () => {
               baseFare: baseFare,
               distanceFare: distanceFare,
               timeFare: timeFare,
+              nightFare: nightFare,
               surge: ride.fare?.surgeFare || 0,
               status: ride.phase, // 'searching', 'matched', 'ongoing', 'completed', 'cancelled'
               date: new Date(ride.createdAt).toLocaleString('en-IN', { 
@@ -98,7 +111,10 @@ const HistoryPage = () => {
               rideType: ride.vehicleTypeRequested || "",
               co2Saved: ride.fare?.co2Saved || 0,
               paymentMethod: ride.paymentMethod?.toUpperCase() || "CASH",
-              cancelReason: ride.cancellationReason
+              cancelReason: ride.cancellationReason,
+              timestamp: new Date(ride.createdAt).getTime(),
+              surgeMultiplier: ride.surgeMultiplier || 1.0,
+              surgeAmount: Math.max(0, totalAmount - (baseFare + distanceFare + timeFare + nightFare))
             };
           });
 
@@ -107,8 +123,8 @@ const HistoryPage = () => {
           setStats({
             totalRides: serverStats.totalRides,
             totalAmount: role === "driver" ? serverStats.totalEarnings : serverStats.totalSpent,
-            averageRating: serverStats.avgRating || "0.0",
-            cancelledRides: formattedRides.filter(r => r.status === 'cancelled').length
+            averageRating: serverStats.averageRating || serverStats.avgRating || "0.0",
+            cancelledRides: serverStats.cancelledRides || formattedRides.filter(r => r.status === 'cancelled').length
           });
         }
       } catch (err) {
@@ -140,9 +156,26 @@ const HistoryPage = () => {
       ride.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ride.pickup.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ride.dropoff.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    // Simple date filter logic for mock data
-    const matchesDate = dateRange === "all" || ride.date.toLowerCase().includes(dateRange);
+
+    const matchesDate = (() => {
+      if (dateRange === "all") return true;
+      const rideDate = new Date(ride.timestamp);
+      const now = new Date();
+      if (dateRange === "today") {
+        return rideDate.toDateString() === now.toDateString();
+      }
+      if (dateRange === "week") {
+        const lastWeek = new Date();
+        lastWeek.setDate(now.getDate() - 7);
+        return rideDate >= lastWeek;
+      }
+      if (dateRange === "month") {
+        const lastMonth = new Date();
+        lastMonth.setMonth(now.getMonth() - 1);
+        return rideDate >= lastMonth;
+      }
+      return true;
+    })();
     
     return matchesStatus && matchesSearch && matchesDate;
   });
@@ -202,7 +235,7 @@ const HistoryPage = () => {
             <ThemeToggle />
             <button
               onClick={handleExport}
-              className="rounded-xl border border-(--card-border) bg-(--card-bg) px-4 py-2 text-sm font-semibold text-(--text-main) transition-all hover:border-primary/40 hover:bg-primary/5 flex items-center gap-2"
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-black text-black transition-all hover:scale-105 shadow-md shadow-primary/10 flex items-center gap-2"
             >
               <Download size={16} />
               <span className="hidden sm:inline">Export</span>
@@ -425,28 +458,42 @@ const HistoryPage = () => {
                         </h4>
                         <div className="flex justify-between text-sm">
                           <span className="text-(--text-dim)">Base Fare</span>
-                          <span className="font-semibold text-(--text-main)">₹{ride.baseFare}</span>
+                          <span className="font-semibold text-(--text-main)">₹{ride.baseFare.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-(--text-dim)">Distance ({ride.distance} km)</span>
-                          <span className="font-semibold text-(--text-main)">₹{ride.distanceFare}</span>
+                          <span className="font-semibold text-(--text-main)">₹{ride.distanceFare.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-(--text-dim)">Time ({ride.duration} min)</span>
-                          <span className="font-semibold text-(--text-main)">₹{ride.timeFare}</span>
+                          <span className="font-semibold text-(--text-main)">₹{ride.timeFare.toFixed(2)}</span>
                         </div>
+                        
+                        {ride.nightFare > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-indigo-400 font-medium">Night Charge (10AM - 6PM)</span>
+                            <span className="font-semibold text-indigo-400">₹{ride.nightFare.toFixed(2)}</span>
+                          </div>
+                        )}
+                        
+                        {ride.surgeAmount > 0 && (
+                          <div className="flex justify-between items-center py-2 px-3 bg-amber-500/10 rounded-xl border border-amber-500/20 my-3">
+                             <div className="flex flex-col">
+                                <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
+                                    <TrendingUp size={14} className="text-amber-500" /> Surge Charge
+                                </span>
+                                <span className="text-[10px] text-amber-500/70 font-black uppercase tracking-[0.1em] pl-5">Demand Multiplier: x{ride.surgeMultiplier.toFixed(2)}</span>
+                             </div>
+                             <span className="font-black text-lg text-amber-600 dark:text-amber-400">₹{ride.surgeAmount.toFixed(2)}</span>
+                          </div>
+                        )}
+
                         {ride.co2Saved > 0 && (
-                          <div className="flex justify-between text-sm py-1 px-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                          <div className="flex justify-between text-sm py-2 px-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 my-2">
                             <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5">
                                 <Zap size={12} className="fill-emerald-500" /> Environment Benefit
                             </span>
                             <span className="font-black text-emerald-600 dark:text-emerald-400">{ride.co2Saved}kg CO2 Saved</span>
-                          </div>
-                        )}
-                        {role === "driver" && ride.surge > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-(--text-dim)">Surge</span>
-                            <span className="font-semibold text-red-500">+₹{ride.surge}</span>
                           </div>
                         )}
                         <div className="border-t border-(--card-border) pt-2 flex justify-between">
@@ -505,11 +552,11 @@ const HistoryPage = () => {
 
                     {role === "passenger" && ride.status === "completed" && (
                       <div className="flex gap-3 flex-wrap">
-                        <button className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-4 py-2 text-xs font-bold text-primary hover:bg-primary hover:text-black transition-all">
+                        <button className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-black text-black hover:scale-105 transition-all shadow-md shadow-primary/10">
                           <RefreshCw size={14} />
                           Book Again
                         </button>
-                        <button className="flex items-center gap-2 rounded-xl bg-(--card-bg) border border-(--card-border) px-4 py-2 text-xs font-bold text-(--text-dim) hover:text-(--text-main) transition-all">
+                        <button className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-4 py-2 text-xs font-black text-primary hover:bg-primary/20 transition-all">
                           <Headphones size={14} />
                           Support
                         </button>

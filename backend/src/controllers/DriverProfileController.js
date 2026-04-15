@@ -412,6 +412,20 @@ export const ApproveDriverProfile = async (req, res) => {
             });
         }
 
+        // Global System Audit Log
+        await NotificationModel.create({
+            sender: req.user.id,
+            title: `Driver ${isApproved ? "Approved" : "Rejected"}`,
+            message: `Admin ${req.user.name || 'User'} has ${isApproved ? "approved" : "rejected"} driver profile for ${driverProfile.user.name || driverProfile.user.email}.`,
+            type: "audit",
+            metadata: { 
+                action: isApproved ? "approved" : "rejected",
+                profileId: id,
+                driverId: driverProfile.user._id,
+                category: "driver"
+            }
+        });
+
         res.status(200).json({
             success: true,
             message: `Driver profile ${isApproved ? "approved" : "rejected"} successfully.`,

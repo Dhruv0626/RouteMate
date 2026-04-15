@@ -171,7 +171,8 @@ const AnalyticsPage = () => {
             avgRating: "0.0 ★",
             cancellationRate: "0.0%",
             vehicleBreakdown: [],
-            geographic: []
+            geographic: [],
+            weeklyRides: [0, 0, 0, 0, 0, 0, 0]
           };
           
           if (statsRes.data.success && statsRes.data.stats) {
@@ -182,7 +183,8 @@ const AnalyticsPage = () => {
                 avgRating: s.business.avgRating,
                 cancellationRate: s.business.cancellationRate,
                 vehicleBreakdown: s.drivers.vehicleBreakdown,
-                geographic: s.geographic
+                geographic: s.geographic,
+                weeklyRides: s.business.weeklyRides || [0, 0, 0, 0, 0, 0, 0]
             };
           }
 
@@ -211,7 +213,8 @@ const AnalyticsPage = () => {
             avgRating: businessStats.avgRating,
             cancellationRate: businessStats.cancellationRate,
             vehicleBreakdown: businessStats.vehicleBreakdown,
-            areaBreakdown: businessStats.geographic
+            areaBreakdown: businessStats.geographic,
+            weeklyRides: businessStats.weeklyRides
           });
         }
       } catch (e) {
@@ -326,8 +329,8 @@ const AnalyticsPage = () => {
     vehicleTypes:  stats.vehicleBreakdown || [],
     areaBreakdown: stats.areaBreakdown || [],
     weekDays: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
-    weekRides: [20, 45, 30, 80, 50, 95, 60], // Demo volume for now
-    weeklyMax: 100,
+    weekRides: stats.weeklyRides || [0, 0, 0, 0, 0, 0, 0],
+    weeklyMax: Math.max(...(stats.weeklyRides || [100])) || 100,
   };
 
   if (loading) return <Loader fullPage text="Compiling platform metrics..." />;
@@ -568,10 +571,10 @@ const AnalyticsPage = () => {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="font-display font-black text-(--text-main) text-lg">Weekly Ride Volume</h3>
-                <p className="text-xs text-(--text-dim) font-medium">Rides per day this week · Demo data</p>
+                <p className="text-xs text-(--text-dim) font-medium">Rides per day this week · Live data</p>
               </div>
               <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
-                <ArrowUpRight size={11} /> +12.4% vs last week
+                <ArrowUpRight size={11} /> Active
               </div>
             </div>
             <div className="flex items-end gap-3 h-40">
@@ -583,8 +586,7 @@ const AnalyticsPage = () => {
                     style={{ height: `${(UI_STATS.weekRides[i] / UI_STATS.weeklyMax) * 100}%` }}
                   >
                     <div
-                      className="w-full bg-primary rounded-xl transition-all duration-700 group-hover:opacity-80"
-                      style={{ height: `${Math.min(70, 40 + i * 5)}%` }}
+                      className="w-full bg-primary rounded-xl transition-all duration-700 group-hover:opacity-80 h-full"
                     />
                   </div>
                   <span className="text-[10px] font-bold text-(--text-dim) uppercase">{day}</span>

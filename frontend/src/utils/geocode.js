@@ -5,9 +5,25 @@
 // Multi-route     — OSRM alternatives first; small offsets only as fallback
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Reverse Geocoding (Nominatim) ────────────────────────────────────────────
+export async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { "Accept-Language": "en", "User-Agent": "RouteMate/1.0" } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  } catch (e) {
+    console.error("[geocode] reverseGeocode:", e.message);
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
+}
+
 // ─── Location Search ──────────────────────────────────────────────────────────
 export async function searchLocation(query) {
-  if (!query || query.trim().length < 2) return [];
+  if (!query || query.trim().length < 1) return [];
   
   // Strict Ahmedabad restriction: Append city/state and use bounded viewbox
   const ahmedabadViewbox = "&viewbox=72.42,22.92,72.72,23.12&bounded=1";

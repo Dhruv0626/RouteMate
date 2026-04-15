@@ -115,6 +115,15 @@ export const notifyUserBlocked = async ({ targetUser, adminId }) => {
         link: "/admin/dashboard/manage-users",
         metadata: { targetUserId: targetUser._id, action: "blocked" }
     });
+
+    // Global System Audit Log
+    await NotificationModel.create({
+        sender: adminId,
+        title: "User Blocked",
+        message: `User ${targetUser.name} (${targetUser.role}) has been blocked.`,
+        type: "audit",
+        metadata: { targetUserId: targetUser._id, action: "blocked", category: "security" }
+    });
 };
 
 /**
@@ -138,6 +147,15 @@ export const notifyUserUnblocked = async ({ targetUser, adminId }) => {
         type: "success",
         link: "/admin/dashboard/manage-users",
         metadata: { targetUserId: targetUser._id, action: "unblocked" }
+    });
+
+    // Global System Audit Log
+    await NotificationModel.create({
+        sender: adminId,
+        title: "User Unblocked",
+        message: `User ${targetUser.name} (${targetUser.role}) has been unblocked.`,
+        type: "audit",
+        metadata: { targetUserId: targetUser._id, action: "unblocked", category: "security" }
     });
 };
 
@@ -312,6 +330,15 @@ export const notifySettingsUpdated = async ({ adminId, updateData }) => {
             link: "/passenger/dashboard",
         });
     }
+
+    // Global System Audit Log
+    await NotificationModel.create({
+        sender: adminId,
+        title: "Platform Settings Updated",
+        message: `System configurations were modified: ${readableChanges.join(", ")}.`,
+        type: "audit",
+        metadata: { changedFields, action: "settings_updated", category: "system" }
+    });
 };
 
 /**
@@ -347,5 +374,14 @@ export const notifyPricingUpdated = async ({ adminId, newPricing, surgeMultiplie
         type: "info",
         link: "/admin/dashboard/system-settings",
         metadata: { newPricing, surgeMultiplier, isIncrease }
+    });
+
+    // Global System Audit Log
+    await NotificationModel.create({
+        sender: adminId,
+        title: title,
+        message: `Fare structure updated on platform.`,
+        type: "audit",
+        metadata: { action: "pricing_updated", category: "system" }
     });
 };

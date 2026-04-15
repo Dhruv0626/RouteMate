@@ -286,7 +286,7 @@ const NotificationsPage = () => {
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-primary hover:bg-primary hover:text-black transition-all"
+                className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-black hover:scale-105 transition-all shadow-md shadow-primary/10"
               >
                 <CheckCheck size={12} />
                 Mark all read
@@ -385,7 +385,7 @@ const NotificationsPage = () => {
             {activeFilter !== "all" && (
               <button
                 onClick={() => setActiveFilter("all")}
-                className="mt-5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 text-xs font-black uppercase tracking-wider text-primary hover:bg-primary hover:text-black transition-all"
+                className="mt-5 rounded-xl bg-primary px-4 py-2 text-xs font-black uppercase tracking-wider text-black hover:scale-105 transition-all shadow-md shadow-primary/10"
               >
                 Show all notifications
               </button>

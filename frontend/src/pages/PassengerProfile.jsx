@@ -21,6 +21,15 @@ import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import api from "../services/api";
 
+const getImageUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+  const baseUrl = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace("/api", "");
+  const normalizedPath = url.replace(/\\/g, "/");
+  const path = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+  return `${baseUrl}${path}`;
+};
+
 const PassengerProfile = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -63,7 +72,7 @@ const PassengerProfile = () => {
         profileImage: user.profileImage || "",
       });
       if (user.profileImage) {
-        setProfileImagePreview(user.profileImage);
+        setProfileImagePreview(getImageUrl(user.profileImage));
       }
       fetchStats();
       setLoading(false);
@@ -145,7 +154,7 @@ const PassengerProfile = () => {
               <div className="relative mx-auto mb-6 h-32 w-32 group">
                 <div className="from-primary to-primary-dark flex h-full w-full items-center justify-center overflow-hidden rounded-3xl bg-linear-to-br text-4xl font-black text-black shadow-2xl transition-all group-hover:scale-105">
                   {profileImagePreview ? (
-                    <img src={profileImagePreview} alt="Profile" className="h-full w-full object-cover" />
+                    <img src={getImageUrl(profileImagePreview)} alt="Profile" className="h-full w-full object-cover" />
                   ) : (
                     getInitials(formData.name)
                   )}

@@ -49,9 +49,11 @@ const ActiveRidesPage = () => {
             setActiveRides(ridesRes.data.data || []);
             setRideStats(prev => ({
                 ...prev,
-                activeRides: ridesRes.data.stats.activeCount,
-                completedRides: ridesRes.data.stats.todayRides,
-                totalEarningsToday: ridesRes.data.stats.todayEarnings
+                activeRides: ridesRes.data.stats.activeCount || 0,
+                completedRides: ridesRes.data.stats.todayRides || 0,
+                totalEarningsToday: ridesRes.data.stats.todayEarnings || 0,
+                averageRating: ridesRes.data.stats.averageRating?.toFixed(1) || "0.0",
+                onlineHours: ridesRes.data.stats.onlineHours || 0
             }));
         }
 

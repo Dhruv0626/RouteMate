@@ -17,6 +17,7 @@ import uploadRoutes from "./src/routes/Upload.js";
 import notificationRoutes from "./src/routes/Notification.js";
 import rideRoutes from "./src/routes/Ride.js";
 import publishedRideRoutes from "./src/routes/PublishedRide.js";
+import savedPlaceRoutes from "./src/routes/SavedPlace.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 import { initSocket } from "./src/utils/SocketManager.js";
 
@@ -96,6 +97,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/published-rides", publishedRideRoutes);
+app.use("/api/saved-places", savedPlaceRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {

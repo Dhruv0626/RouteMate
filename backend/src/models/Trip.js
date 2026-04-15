@@ -45,10 +45,10 @@ const TripSchema = new Schema(
 
     // ── Driver Matching ────────────────────────────────────────────────────
     driversNotified: [
-        {
-            driver: { type: Schema.Types.ObjectId, ref: "User" },
-            notifiedAt: { type: Date, default: Date.now }
-        }
+      {
+        driver: { type: Schema.Types.ObjectId, ref: "User" },
+        notifiedAt: { type: Date, default: Date.now }
+      }
     ],
     driversRejected: [{ type: Schema.Types.ObjectId, ref: "User" }],
     expiresAt: { type: Date },                           // auto-cancel if no driver found
@@ -68,13 +68,12 @@ const TripSchema = new Schema(
       baseFare: { type: Number, default: 0 },
       distanceFare: { type: Number, default: 0 },
       timeFare: { type: Number, default: 0 },
+      nightFare: { type: Number, default: 0 },
       surgeFare: { type: Number, default: 0 },
       discount: { type: Number, default: 0 },
       co2Saved: { type: Number, default: 0 },
       total: { type: Number, default: 0 }, // Backwards compatibility / base total
       surgedTotal: { type: Number, default: 0 },
-      taxAmount: { type: Number },
-      totalWithTax: { type: Number },
       configVersion: { type: Number }
     },
 

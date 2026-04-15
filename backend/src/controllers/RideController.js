@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import TripModel from "../models/Trip.js";
 import SystemConfig from "../models/SystemConfig.js";
 import DriverProfileModel from "../models/DriverProfile.js";
@@ -67,7 +68,7 @@ export const GetPassengerHistory = async (req, res) => {
     
     // Calculate total spent using the nested fare.total field
     const stats = await TripModel.aggregate([
-      { $match: { passenger: userId, phase: "completed" } },
+      { $match: { passenger: new mongoose.Types.ObjectId(userId), phase: "completed" } },
       { $group: { _id: null, totalSpent: { $sum: "$fare.total" } } },
     ]);
 
@@ -108,37 +109,54 @@ export const GetDriverHistory = async (req, res) => {
     startOfWeek.setDate(now.getDate() - now.getDay());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+    const driverProfile = await DriverProfileModel.findOne({ user: userId });
+
     const stats = await TripModel.aggregate([
-      { $match: { driver: userId, phase: "completed" } },
+      { $match: { driver: new mongoose.Types.ObjectId(userId) } },
       {
         $group: {
           _id: null,
           totalRides: { $sum: 1 },
-          totalEarnings: { $sum: "$fare.total" },
+          completedRides: { $sum: { $cond: [{ $eq: ["$phase", "completed"] }, 1, 0] } },
+          cancelledRides: { $sum: { $cond: [{ $eq: ["$phase", "cancelled"] }, 1, 0] } },
+          totalEarnings: { $sum: { $cond: [{ $eq: ["$phase", "completed"] }, "$fare.total", 0] } },
           todayEarnings: {
-            $sum: { $cond: [{ $gte: ["$createdAt", startOfDay] }, "$fare.total", 0] }
+            $sum: { $cond: [{ $and: [{ $gte: ["$createdAt", startOfDay] }, { $eq: ["$phase", "completed"] }] }, "$fare.total", 0] }
           },
           todayRides: {
-            $sum: { $cond: [{ $gte: ["$createdAt", startOfDay] }, 1, 0] }
+            $sum: { $cond: [{ $and: [{ $gte: ["$createdAt", startOfDay] }, { $eq: ["$phase", "completed"] }] }, 1, 0] }
           },
           weekEarnings: {
-            $sum: { $cond: [{ $gte: ["$createdAt", startOfWeek] }, "$fare.total", 0] }
+            $sum: { $cond: [{ $and: [{ $gte: ["$createdAt", startOfWeek] }, { $eq: ["$phase", "completed"] }] }, "$fare.total", 0] }
           },
           weekRides: {
-            $sum: { $cond: [{ $gte: ["$createdAt", startOfWeek] }, 1, 0] }
+            $sum: { $cond: [{ $and: [{ $gte: ["$createdAt", startOfWeek] }, { $eq: ["$phase", "completed"] }] }, 1, 0] }
           },
           monthEarnings: {
-            $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, "$fare.total", 0] }
+            $sum: { $cond: [{ $and: [{ $gte: ["$createdAt", startOfMonth] }, { $eq: ["$phase", "completed"] }] }, "$fare.total", 0] }
           },
           monthRides: {
-            $sum: { $cond: [{ $gte: ["$createdAt", startOfMonth] }, 1, 0] }
+            $sum: { $cond: [{ $and: [{ $gte: ["$createdAt", startOfMonth] }, { $eq: ["$phase", "completed"] }] }, 1, 0] }
           }
         },
       },
     ]);
 
+    const s = stats[0] || {
+      totalRides: 0,
+      completedRides: 0,
+      cancelledRides: 0,
+      totalEarnings: 0,
+      todayEarnings: 0,
+      todayRides: 0,
+      weekEarnings: 0,
+      weekRides: 0,
+      monthEarnings: 0,
+      monthRides: 0
+    };
+
     const typeBreakdown = await TripModel.aggregate([
-      { $match: { driver: userId, phase: "completed" } },
+      { $match: { driver: new mongoose.Types.ObjectId(userId), phase: "completed" } },
       {
         $group: {
           _id: "$vehicleTypeRequested",
@@ -153,20 +171,24 @@ export const GetDriverHistory = async (req, res) => {
       data: {
         rides: trips,
         stats: {
-          totalRides: stats[0]?.totalRides || 0,
-          totalEarnings: stats[0]?.totalEarnings || 0,
-          todayEarnings: stats[0]?.todayEarnings || 0,
-          todayRides: stats[0]?.todayRides || 0,
-          weekEarnings: stats[0]?.weekEarnings || 0,
-          weekRides: stats[0]?.weekRides || 0,
-          monthEarnings: stats[0]?.monthEarnings || 0,
-          monthRides: stats[0]?.monthRides || 0,
-          avgRating: "5.0",
+          totalRides: s.totalRides,
+          completedRides: s.completedRides,
+          cancelledRides: s.cancelledRides,
+          totalEarnings: s.totalEarnings,
+          todayEarnings: s.todayEarnings,
+          todayRides: s.todayRides,
+          weekEarnings: s.weekEarnings,
+          weekRides: s.weekRides,
+          monthEarnings: s.monthEarnings,
+          monthRides: s.monthRides,
+          avgRating: driverProfile?.averageRating || 0,
+          acceptanceRate: s.totalRides > 0 ? Math.round(((s.totalRides - s.cancelledRides) / s.totalRides) * 100) : 100,
+          cancellationRate: s.totalRides > 0 ? Math.round((s.cancelledRides / s.totalRides) * 100) : 0,
           rideTypeBreakdown: typeBreakdown.map(b => ({
             type: b._id,
             earnings: b.total,
             rides: b.count,
-            percentage: stats[0]?.totalEarnings > 0 ? Math.round((b.total / stats[0].totalEarnings) * 100) : 0
+            percentage: s.totalEarnings > 0 ? Math.round((b.total / s.totalEarnings) * 100) : 0
           }))
         },
       },
@@ -190,9 +212,17 @@ export const GetActiveTrips = async (req, res) => {
         // Simple aggregation for today's stats to show on the dashboard
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const stats = await TripModel.aggregate([
-            { $match: { driver: userId, phase: "completed", createdAt: { $gte: startOfDay } } },
-            { $group: { _id: null, count: { $sum: 1 }, earnings: { $sum: "$fare.total" } } }
+        // Corrected aggregation with ObjectId casting and added driver profile fetch
+        const [statsResult, driverProfile] = await Promise.all([
+            TripModel.aggregate([
+                { $match: { 
+                    driver: new mongoose.Types.ObjectId(userId), 
+                    phase: "completed", 
+                    createdAt: { $gte: startOfDay } 
+                } },
+                { $group: { _id: null, count: { $sum: 1 }, earnings: { $sum: "$fare.total" } } }
+            ]),
+            DriverProfileModel.findOne({ user: userId })
         ]);
 
         res.status(200).json({
@@ -200,8 +230,10 @@ export const GetActiveTrips = async (req, res) => {
             data: trips,
             stats: {
                 activeCount: trips.length,
-                todayRides: stats[0]?.count || 0,
-                todayEarnings: stats[0]?.earnings || 0
+                todayRides: statsResult[0]?.count || 0,
+                todayEarnings: statsResult[0]?.earnings || 0,
+                averageRating: driverProfile?.averageRating || 0,
+                onlineHours: 0 // Placeholder/computed logic can be added later
             }
         });
     } catch (error) {
@@ -253,9 +285,10 @@ export const CreateDemoRide = async (req, res) => {
       },
       vehicleTypeRequested: vType,
       fare: {
-        total: finalFare,
-        baseFare: finalFare * 0.4,
-        distanceFare: finalFare * 0.6
+        total: Math.round(finalFare),
+        baseFare: Math.round(finalFare * 0.4),
+        distanceFare: Math.round(finalFare * 0.6),
+        nightFare: 0
       },
       paymentMethod: "cash",
       paymentStatus: "paid",

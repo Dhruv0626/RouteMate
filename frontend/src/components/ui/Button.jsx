@@ -14,13 +14,13 @@ const Button = ({
     primary:
       "bg-primary hover:bg-primary-dark text-black shadow-lg shadow-primary/10 font-black",
     secondary:
-      "bg-[var(--card-bg)] hover:bg-[var(--card-border)] text-[var(--text-main)] border border-[var(--card-border)] shadow-md",
+      "bg-primary hover:bg-primary-dark text-black shadow-lg shadow-primary/10 font-black",
     outline:
-      "bg-transparent border border-[var(--card-border)] hover:border-primary text-[var(--text-dim)] hover:text-primary",
+      "bg-primary hover:bg-primary-dark text-black shadow-lg shadow-primary/10 font-black",
     ghost:
-      "bg-transparent hover:bg-[var(--card-bg)] text-[var(--text-dim)] hover:text-[var(--text-main)]",
+      "bg-primary hover:bg-primary-dark text-black shadow-lg shadow-primary/10 font-black",
     danger:
-      "bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 shadow-lg shadow-red-500/10",
+      "bg-primary hover:bg-primary-dark text-black shadow-lg shadow-primary/10 font-black",
   };
 
   return (

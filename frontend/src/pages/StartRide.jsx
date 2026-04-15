@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Navigation, Play, Square, Loader2,
@@ -109,6 +109,7 @@ const StartRide = () => {
   const prevLocRef  = useRef(null);
   const stepIdxRef  = useRef(0);
   const REROUTE_THRESHOLD_M = 80;
+  const isActive = ride?.status === "in_progress";
 
   // ─── Derived ──────────────────────────────────────────────────────────────
   const firstPassenger = ride?.bookings
@@ -122,7 +123,7 @@ const StartRide = () => {
   const destCoords   = firstPassenger?.passengerDestination?.location?.coordinates || ride?.destination?.location?.coordinates;
 
   let isNearDestination = false;
-  if (driverLocation && destCoords && ride?.status === "in_progress") {
+  if (driverLocation && destCoords && isActive) {
     isNearDestination = distanceMetres(driverLocation.lat, driverLocation.lng, destCoords[1], destCoords[0]) <= 2000;
   }
 
@@ -169,19 +170,6 @@ const StartRide = () => {
     go();
   }, [rideId, user.role]);
 
-  // ─── Block browser back during active mission ───
-  useEffect(() => {
-    // Only block if ride is active (Arrived or In Progress)
-    if (!ride || !isDriver || !["arrived", "in_progress"].includes(ride.status)) return;
-    
-    const block = (e) => { 
-      e.preventDefault(); 
-      window.history.pushState(null, "", window.location.href); 
-    };
-    window.history.pushState(null, "", window.location.href);
-    window.addEventListener("popstate", block);
-    return () => window.removeEventListener("popstate", block);
-  }, [ride?.status, isDriver]);
 
   // ─── Auto-mark arrived when OTP box opens ─────────────────────────────────
   useEffect(() => {
@@ -321,6 +309,28 @@ const StartRide = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driverLocation?.lat, driverLocation?.lng, isHeadingToPickup]);
 
+  // ─── Memoized display route (Path Cutting) ───────────────────────────────
+  const displayRoute = useMemo(() => {
+    if (route.length <= 1) return route;
+    if (!driverLocation) return route;
+
+    let minStep = Infinity;
+    let closestIdx = 0;
+    for (let i = 0; i < route.length; i++) {
+      const d = distanceMetres(driverLocation.lat, driverLocation.lng, route[i][0], route[i][1]);
+      if (d < minStep) {
+        minStep = d;
+        closestIdx = i;
+      }
+    }
+    return minStep < 200 ? route.slice(closestIdx) : route;
+  }, [route, driverLocation?.lat, driverLocation?.lng]);
+
+  const vehicleIcon = useMemo(() => {
+    if (!ride) return null;
+    return makeVehicleIcon(ride.vehicleType, heading);
+  }, [ride?.vehicleType, heading]);
+
   // Reset route on phase transition
   const prevIsHeadingRef = useRef(null);
   useEffect(() => {
@@ -442,12 +452,9 @@ const StartRide = () => {
       {/* ══ Header ══ */}
       <div className="absolute top-0 w-full z-50 p-4 flex items-center justify-between pointer-events-none"
            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
-        {/* Hide back button during active mission to prevent accidental navigation */}
-        {ride?.status !== "in_progress" && (
-          <button onClick={() => navigate(-1)} className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition">
+        <button onClick={() => navigate(-1)} className="pointer-events-auto bg-black/60 backdrop-blur border border-white/10 p-3 rounded-full hover:bg-white/10 transition">
             <ArrowLeft size={20} />
-          </button>
-        )}
+        </button>
         <div className="flex items-center gap-2">
           <div className="bg-black/60 backdrop-blur border border-white/10 px-4 py-2 rounded-full pointer-events-auto flex items-center gap-2 shadow-2xl">
             <span className={`w-2 h-2 rounded-full ${ride.status === "in_progress" ? "bg-emerald-500 animate-pulse" : "bg-amber-500 animate-pulse"}`} />
@@ -522,30 +529,31 @@ const StartRide = () => {
               <Popup><b style={{ color: "#ef4444" }}>Passenger Destination</b><br />{firstPassenger?.passengerDestination?.address || ride.destination?.address}</Popup>
             </Marker>
           )}
-          {driverLocation && (
-            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={makeVehicleIcon(ride.vehicleType, heading)}>
+          {driverLocation && vehicleIcon && (
+            <Marker position={[driverLocation.lat, driverLocation.lng]} icon={vehicleIcon}>
               <Popup><b>Your Location</b></Popup>
             </Marker>
           )}
 
-          {route.length > 1 && (() => {
-            let displayRoute = route;
-            if (driverLocation) {
-              let minStep = Infinity, closestIdx = 0;
-              for (let i = 0; i < route.length; i++) {
-                const d = distanceMetres(driverLocation.lat, driverLocation.lng, route[i][0], route[i][1]);
-                if (d < minStep) { minStep = d; closestIdx = i; }
-              }
-              if (minStep < 200) displayRoute = route.slice(closestIdx);
-            }
-            return (
-              <>
-                <Polyline positions={displayRoute} pathOptions={{ color: "#1e3a8a", weight: 12, opacity: 0.2, lineCap: "round", lineJoin: "round" }} />
-                <Polyline positions={displayRoute} pathOptions={{ color: ride.status === "in_progress" ? "#6366f1" : "#3b82f6", weight: 6, opacity: 1, lineCap: "round", lineJoin: "round" }} />
-                <Polyline positions={displayRoute} pathOptions={{ color: "white", weight: 2, opacity: 0.4, dashArray: "8 16", lineCap: "round", lineJoin: "round" }} />
-              </>
-            );
-          })()}
+          {displayRoute.length > 1 && (
+            <>
+              {/* Simplified route rendering for performance */}
+              <Polyline
+                positions={displayRoute}
+                pathOptions={{ color: "#1e3a8a", weight: 9, opacity: 0.15, lineCap: "round", lineJoin: "round" }}
+              />
+              <Polyline
+                positions={displayRoute}
+                pathOptions={{ color: ride.status === "in_progress" ? "#6366f1" : "#3b82f6", weight: 5, opacity: 1, lineCap: "round", lineJoin: "round" }}
+              />
+              {displayRoute.length < 500 && (
+                <Polyline
+                  positions={displayRoute}
+                  pathOptions={{ color: "white", weight: 1.5, opacity: 0.4, dashArray: "10 20", lineCap: "round", lineJoin: "round" }}
+                />
+              )}
+            </>
+          )}
 
           {route.length === 0 && fallbackFrom && fallbackTo && (
             <Polyline positions={[fallbackFrom, fallbackTo]} pathOptions={{ color: "#6b7280", weight: 3, opacity: 0.5, dashArray: "6 10" }} />
@@ -574,8 +582,8 @@ const StartRide = () => {
               <div className="flex flex-col gap-2 items-center">
                 {ride.status !== "in_progress" ? (
                   <a href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
-                    className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 transition">
-                    <Phone size={20} className="text-white" />
+                    className="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition">
+                    <Phone size={20} className="text-black" />
                   </a>
                 ) : (
                   <button onClick={() => navigate(-1)}
@@ -611,12 +619,12 @@ const StartRide = () => {
               <div className="flex flex-col gap-2 items-center">
                 {ride.status !== "in_progress" ? (
                   <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
-                    className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/30 active:scale-95 transition disabled:opacity-60">
+                    className="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition disabled:opacity-60">
                     <Play size={20} className="text-black" />
                   </button>
                 ) : isNearDestination ? (
                   <button onClick={() => handleUpdateStatus("completed")}
-                    className="px-4 py-2.5 bg-red-500 rounded-2xl font-black text-sm active:scale-95 transition animate-pulse shadow-lg shadow-red-500/30">
+                    className="px-4 py-2.5 bg-primary text-black rounded-2xl font-black text-sm active:scale-95 transition animate-pulse shadow-lg shadow-primary/30">
                     End Ride
                   </button>
                 ) : (
@@ -652,18 +660,18 @@ const StartRide = () => {
                   <>
                     <div className="flex gap-3">
                       <a href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
-                        className="flex-1 bg-emerald-500 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-sm">
+                        className="flex-1 bg-primary text-black font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all text-sm">
                         <Phone size={18} /> Call
                       </a>
                       <button onClick={handleManualReroute} disabled={!driverLocation || routeLoading}
-                        className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl flex justify-center items-center gap-2 text-sm disabled:opacity-50 transition active:scale-95">
+                        className="flex-1 bg-primary text-black font-black py-3 rounded-xl flex justify-center items-center gap-2 text-sm disabled:opacity-50 transition active:scale-95 shadow-md shadow-primary/10">
                         <Navigation size={18} className={routeLoading ? "animate-spin" : ""} />
                         {routeLoading ? "Routing…" : "Update Route"}
                       </button>
                     </div>
                     <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
-                      className="flex-1 bg-amber-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all">
-                      <Play size={20} className={isStartingRequest ? "animate-spin" : ""} /> Start Ride
+                      className="flex-1 bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all">
+                      <Play size={20} className={isStartingRequest ? "animate-spin" : ""} /> Start Mission
                     </button>
                   </>
                 )}
@@ -683,7 +691,7 @@ const StartRide = () => {
                     </div>
                     {isNearDestination ? (
                       <button onClick={() => handleUpdateStatus("completed")}
-                        className="flex-1 bg-red-500 hover:bg-red-600 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-red-500/20 transition-all animate-pulse active:scale-95">
+                        className="flex-1 bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 transition-all animate-pulse active:scale-95">
                         <Square size={20} /> Complete Ride
                       </button>
                     ) : (

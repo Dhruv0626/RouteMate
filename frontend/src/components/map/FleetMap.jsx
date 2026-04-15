@@ -34,12 +34,14 @@ const FleetMap = ({ vehicles = [] }) => {
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden border border-(--card-border) shadow-2xl">
       <style>{`
+        .fleet-custom-popup { pointer-events: none !important; margin-bottom: 25px; }
         .fleet-custom-popup .leaflet-popup-content-wrapper { 
           background: #0f172a !important; 
           border: 1px solid rgba(255,255,255,0.2) !important;
           border-radius: 8px !important;
           padding: 0 !important;
           box-shadow: 0 2px 10px rgba(0,0,0,0.5) !important;
+          pointer-events: none !important;
         }
         .fleet-custom-popup .leaflet-popup-content { margin: 0 !important; width: auto !important; }
         .fleet-custom-popup .leaflet-popup-tip { background: #0f172a !important; }
@@ -69,10 +71,10 @@ const FleetMap = ({ vehicles = [] }) => {
               <Marker 
                 position={[v.lat, v.lng]} 
                 icon={makeFleetVehicleIcon(v.type || "hatchback", v.status, v.status === 'active' ? 52 : 44)}
-                eventHandlers={v.status === "active" ? {
+                eventHandlers={{
                   mouseover: (e) => e.target.openPopup(),
                   mouseout: (e) => e.target.closePopup()
-                } : {}}
+                }}
               >
                 <Popup className="fleet-custom-popup" closeButton={false} autoPan={true}>
                   <div className="telematics-card">

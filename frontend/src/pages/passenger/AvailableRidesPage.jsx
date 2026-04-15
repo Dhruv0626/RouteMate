@@ -53,6 +53,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
   const [booking, setBooking]   = useState(false);
   const [error, setError]       = useState("");
   const [pRouteCoords, setPRouteCoords] = useState([]);
+  const [realDuration, setRealDuration] = useState(null);
 
   const mapCenter = srcPin ? [srcPin.lat, srcPin.lng]
     : dstPin ? [dstPin.lat, dstPin.lng]
@@ -94,8 +95,12 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
         const osrmRes = await fetch(osrmUrl);
         const osrmData = await osrmRes.json();
         
+        let durationMin = null;
         if (osrmData.code === "Ok" && osrmData.routes?.length > 0) {
-           setPRouteCoords(osrmData.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
+           const route = osrmData.routes[0];
+           setPRouteCoords(route.geometry.coordinates.map(c => [c[1], c[0]]));
+           durationMin = Math.round(route.duration / 60);
+           setRealDuration(durationMin);
         }
 
         // 2. Fetch fare from backend
@@ -105,6 +110,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
             passengerLat: srcPin.lat, passengerLng: srcPin.lng,
             destLat: dstPin.lat, destLng: dstPin.lng,
             bookingType, seats,
+            durationMin
           }
         });
         if (res.data.success) setFareData(res.data.data);
@@ -132,6 +138,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
           address: dstPin.address,
           location: { type: "Point", coordinates: [dstPin.lng, dstPin.lat] },
         },
+        durationMin: realDuration
       });
       if (res.data.success) {
         onBooked(res.data.message);

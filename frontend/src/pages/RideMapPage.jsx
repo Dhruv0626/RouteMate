@@ -4,7 +4,7 @@ import {
   Play, Square, AlertCircle, CheckCircle2, Shuffle, MapPinOff, ChevronRight,
 } from "lucide-react";
 import { useAuth }          from "../context/AuthContext";
-import { useNavigate }      from "react-router-dom";
+import { useNavigate, useLocation }      from "react-router-dom";
 import ThemeToggle          from "../components/ui/ThemeToggle";
 import LocationSearch       from "../components/map/LocationSearch";
 import { getMultipleRoutes, getTrafficCondition } from "../utils/geocode";
@@ -291,9 +291,31 @@ function Dot({ color }) {
 const RideMapPage = () => {
   const { user }   = useAuth();
   const navigate   = useNavigate();
+  const location   = useLocation();
 
   const [pickup,  setPickup]  = useState(null);
   const [dropoff, setDropoff] = useState(null);
+
+  // Initialize dropoff from navigation state (like Saved Places)
+  useEffect(() => {
+    if (location.state?.destination && location.state?.location?.coordinates) {
+      const { destination, location: dstLocation } = location.state;
+      setDropoff({
+        name: destination,
+        lng: dstLocation.coordinates[0],
+        lat: dstLocation.coordinates[1]
+      });
+      // Clear the state so it doesn't trigger again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
+  // Auto-fetch routes if user gets dropped into the page with a prefilled dropoff and GPS finally acquires pickup
+  useEffect(() => {
+    if (pickup && dropoff && routes.length === 0 && !isLoadingRoutes) {
+      fetchRoutes(pickup, dropoff);
+    }
+  }, [pickup, dropoff]);
 
   // Multi-route state
   const [routes,           setRoutes]           = useState([]);
@@ -431,7 +453,8 @@ const RideMapPage = () => {
         const res = await api.get("/published-rides/fare-estimate", {
           params: {
             rideId: selectedPublishedRide._id,
-            distanceKm: selectedRoute.distanceKm // PURE ROAD DISTANCE
+            distanceKm: selectedRoute.distanceKm, // PURE ROAD DISTANCE
+            durationMin: selectedRoute.durationMin // PURE ROAD DURATION
           }
         });
         if (res.data.success) {
@@ -455,6 +478,7 @@ const RideMapPage = () => {
         bookingType: "private",
         requestedSeats: 1,
         distanceKm: selectedRoute?.distanceKm,
+        durationMin: selectedRoute?.durationMin,
         passengerSource: {
           address: pickup.name,
           location: { type: "Point", coordinates: [pickup.lng, pickup.lat] }
@@ -605,6 +629,7 @@ const RideMapPage = () => {
                       label="Destination"
                       placeholder="Where are you going?"
                       onSelect={handleDropoffSelect}
+                      value={dropoff?.name || ""}
                     />
                   </div>
                 </div>
@@ -643,8 +668,8 @@ const RideMapPage = () => {
                 <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
                   {availableRides.map((ride, idx) => {
                     const isSelected = idx === selectedRideIdx;
-                    // Ensure the card shows the SAME price as the summary strip
-                    const displayPrice = (isSelected && fareEstimate) ? fareEstimate.totalFare : ride.price;
+                    // Hide price while calculating to avoid "jumping" numbers
+                    const displayPrice = (isSelected && isCalculatingFare) ? null : ((isSelected && fareEstimate) ? fareEstimate.totalFare : ride.price);
                     
                     return (
                       <PublishedRideCard
@@ -687,7 +712,7 @@ const RideMapPage = () => {
                         ) : (
                           <>
                             <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#a5b4fc", lineHeight: 1 }}>
-                                ₹{Math.round(fareEstimate?.totalFare || selectedPublishedRide.price)}
+                                ₹{Math.round(fareEstimate?.totalFare || 0)}
                             </p>
                             <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>final fare</p>
                           </>

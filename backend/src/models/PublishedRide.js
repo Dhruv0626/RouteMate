@@ -27,6 +27,7 @@ const BookingSchema = new Schema({
         baseFare: { type: Number },
         distanceFare: { type: Number },
         timeFare: { type: Number },
+        nightFare: { type: Number },
         surgeFare: { type: Number },
         surgeMultiplier: { type: Number },
         surgedTotal: { type: Number },

@@ -25,28 +25,29 @@ const RateCardPage = () => {
     const [config, setConfig] = useState(null);
     const [driverType, setDriverType] = useState(null);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoading(true);
-                const [configRes, profileRes] = await Promise.all([
-                    api.get("/users/system-settings"),
-                    getMyDriverProfile()
-                ]);
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const [configRes, profileRes] = await Promise.all([
+                api.get("/users/system-settings"),
+                getMyDriverProfile()
+            ]);
 
-                if (configRes.data.success) {
-                    setConfig(configRes.data.settings);
-                }
-                
-                if (profileRes.data.success && profileRes.data.data) {
-                    setDriverType(profileRes.data.data.vehicle?.type?.toUpperCase());
-                }
-            } catch (err) {
-                console.error("Failed to fetch rates or profile:", err);
-            } finally {
-                setLoading(false);
+            if (configRes.data.success) {
+                setConfig(configRes.data.settings);
             }
-        };
+            
+            if (profileRes.data.success && profileRes.data.data) {
+                setDriverType(profileRes.data.data.vehicle?.type?.toUpperCase());
+            }
+        } catch (err) {
+            console.error("Failed to fetch rates or profile:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchData();
     }, []);
 
@@ -69,12 +70,7 @@ const RateCardPage = () => {
                         <div>
                             <h1 className="text-lg font-display font-black tracking-tight leading-none">Rate Card</h1>
                             <p className="text-[10px] text-(--text-dim) font-bold uppercase tracking-widest">Pricing Structure</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                         <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black text-primary uppercase tracking-tighter">
-                            Active v{config?.version || 1}
-                         </div>
+                        </div>                 
                     </div>
                 </div>
             </header>
@@ -87,8 +83,8 @@ const RateCardPage = () => {
                         <Info size={18} />
                     </div>
                     <div>
-                        <p className="text-sm font-bold text-blue-100">Dynamic Pricing Active</p>
-                        <p className="text-[11px] text-blue-300/70 leading-relaxed font-medium">
+                        <p className="text-sm font-bold text-blue-700 dark:text-blue-100">Dynamic Pricing Active</p>
+                        <p className="text-[11px] text-blue-600 dark:text-blue-300/70 leading-relaxed font-medium">
                             Rates shown are base values. Final fares may include surge multipliers (up to {config?.surgeMultiplier || '1.8x'}) during high demand or night hours.
                         </p>
                     </div>
@@ -100,7 +96,13 @@ const RateCardPage = () => {
                         <h2 className="text-sm font-black uppercase tracking-widest text-(--text-dim)">
                             {driverType ? `Your Rates (${driverType})` : "Vehicle Categories"}
                         </h2>
-                        <RefreshCw size={14} className="text-(--text-dim) opacity-30" />
+                        <button 
+                            onClick={fetchData}
+                            className={`p-2 rounded-lg border border-(--card-border) bg-(--card-bg) text-(--text-dim) hover:text-primary transition-all ${loading ? 'animate-spin cursor-not-allowed' : ''}`}
+                            disabled={loading}
+                        >
+                            <RefreshCw size={14} />
+                        </button>
                     </div>
 
                     {Object.entries(pricing)
@@ -117,7 +119,7 @@ const RateCardPage = () => {
                                                 <img src={meta.image} alt={meta.label} className="w-full h-full object-contain filter group-hover:scale-110 transition-transform duration-500" />
                                             </div>
                                             <div>
-                                                <h3 className="text-lg font-display font-black text-white">{meta.label}</h3>
+                                                <h3 className="text-lg font-display font-black text-(--text-main)">{meta.label}</h3>
                                                 <p className="text-[10px] text-(--text-dim) font-bold uppercase tracking-wider">{meta.desc}</p>
                                             </div>
                                         </div>
@@ -131,20 +133,20 @@ const RateCardPage = () => {
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-3 border-t border-(--card-border) pt-6">
-                                        <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                                        <div className="bg-(--card-bg) p-3 rounded-2xl border border-(--card-border) flex flex-col items-center justify-center text-center">
                                             <MapPin size={12} className="text-(--text-dim) mb-1" />
                                             <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-tighter mb-0.5">Per KM</span>
-                                            <span className="text-xs font-black text-white">{data.costPerKm || "₹0/km"}</span>
+                                            <span className="text-xs font-black text-(--text-main)">{data.costPerKm || "₹0/km"}</span>
                                         </div>
-                                        <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                                        <div className="bg-(--card-bg) p-3 rounded-2xl border border-(--card-border) flex flex-col items-center justify-center text-center">
                                             <Clock size={12} className="text-(--text-dim) mb-1" />
                                             <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-tighter mb-0.5">Per MIN</span>
-                                            <span className="text-xs font-black text-white">{data.perMinRate || "₹0/min"}</span>
+                                            <span className="text-xs font-black text-(--text-main)">{data.perMinRate || "₹0/min"}</span>
                                         </div>
-                                        <div className="bg-black/20 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                                        <div className="bg-(--card-bg) p-3 rounded-2xl border border-(--card-border) flex flex-col items-center justify-center text-center">
                                             <IndianRupee size={12} className="text-(--text-dim) mb-1" />
                                             <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-tighter mb-0.5">Min Fare</span>
-                                            <span className="text-xs font-black text-white">{data.minFare || "₹0"}</span>
+                                            <span className="text-xs font-black text-(--text-main)">{data.minFare || "₹0"}</span>
                                         </div>
                                     </div>
 

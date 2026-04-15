@@ -29,14 +29,13 @@ const FleetOverviewPage = () => {
   const [filter, setFilter] = useState("all");
   const [viewMode, setViewMode] = useState("list"); // "list" or "map"
 
-  const fetchVehicles = async () => {
+  const fetchVehicles = async (initialLoad = false) => {
     try {
-      setLoading(true);
-      const { data } = await api.get("/driver-profiles/admin/all-drivers");
+      if (initialLoad) setLoading(true);
+      const { data } = await api.get("/driver-profiles/admin/all-drivers?limit=1000&isOnline=true");
       if (data.success && data.data) {
         // Map backend driverProfile to the format expected by the fleet UI
         const mapped = data.data
-          .filter(d => d.isOnline) // ONLY show vehicles that are online
           .map(d => {
             let status = "online_only"; // just online, no ride issued
             if (d.activeRide) status = "active";
@@ -61,14 +60,14 @@ const FleetOverviewPage = () => {
     } catch (e) {
       console.error("Failed to fetch fleet", e);
     } finally {
-      setLoading(false);
+      if (initialLoad) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchVehicles();
+    fetchVehicles(true);
     // ─── Real-time Telematics Polling (5s) ───
-    const interval = setInterval(fetchVehicles, 5000);
+    const interval = setInterval(() => fetchVehicles(false), 5000);
     return () => clearInterval(interval);
   }, []);
 

@@ -47,7 +47,8 @@ export const GetDashboardStats = async (req, res) => {
             revenueStats,
             ratingStats,
             vehicleBreakdown,
-            areaBreakdown
+            areaBreakdown,
+            weeklyRidesStats
         ] = await Promise.all([
             UserModel.countDocuments(),
             UserModel.countDocuments({ role: "passenger" }),
@@ -86,6 +87,23 @@ export const GetDashboardStats = async (req, res) => {
                 }},
                 { $sort: { count: -1 } },
                 { $limit: 5 }
+            ]),
+
+            // Weekly Rides Breakdown (Last 7 Days)
+            TripModel.aggregate([
+                { 
+                    $match: { 
+                        createdAt: { 
+                            $gte: new Date(new Date().setDate(new Date().getDate() - 7)) 
+                        } 
+                    } 
+                },
+                { 
+                    $group: { 
+                        _id: { $dayOfWeek: "$createdAt" }, 
+                        count: { $sum: 1 } 
+                    } 
+                }
             ])
         ]);
 
@@ -99,6 +117,16 @@ export const GetDashboardStats = async (req, res) => {
         const totalCancelledRides = tripPhaseMap.cancelled || 0;
         const totalRides = tripStats.reduce((a, b) => a + b.count, 0);
         const cancellationRate = totalRides > 0 ? (totalCancelledRides / totalRides) * 100 : 0;
+
+        // Process Weekly Rides (Mongo: 1 = Sun, 2 = Mon ... 7 = Sat) -> UI: Mon to Sun (0-6)
+        const weeklyRides = [0, 0, 0, 0, 0, 0, 0];
+        weeklyRidesStats.forEach(stat => {
+            const dayOfWeek = stat._id; // 1 to 7
+            const uiIndex = dayOfWeek === 1 ? 6 : dayOfWeek - 2; // Map to 0-6 (Mon-Sun)
+            if (uiIndex >= 0 && uiIndex <= 6) {
+                weeklyRides[uiIndex] = stat.count;
+            }
+        });
 
         const stats = {
             counts: {
@@ -125,7 +153,8 @@ export const GetDashboardStats = async (req, res) => {
                 cancellationRate: cancellationRate.toFixed(1) + "%",
                 revenue: revenueStats[0]?.total || 0,
                 avgRating: (ratingStats[0]?.avg || 0).toFixed(1) + " ★",
-                totalReviews: ratingStats[0]?.total || 0
+                totalReviews: ratingStats[0]?.total || 0,
+                weeklyRides
             },
             geographic: areaBreakdown.map((a, i) => ({
                 label: a._id ? a._id.trim() : "Other Areas",
@@ -180,15 +209,13 @@ export const GetAuditLogs = async (req, res) => {
         const { limit = 50, page = 1, category } = req.query;
         const skip = (page - 1) * limit;
 
-        // Query: Only get events that were sent to this admin (to ensure personalized view)
-        // or system-wide notification-type events
+        // Query: Get true system-wide audit logs
         const query = { 
-            recipient: req.user.id,
-            type: "notification"
+            type: "audit"
         };
         
         // Potential future enhancement: filtering by category in metadata
-        // if (category) query["metadata.category"] = category;
+        if (category) query["metadata.category"] = category;
 
         const total = await NotificationModel.countDocuments(query);
         const logs = await NotificationModel.find(query)
@@ -210,7 +237,7 @@ export const GetAuditLogs = async (req, res) => {
                 target: log.link || "System Internal",
                 date: log.createdAt,
                 status: "success", // For now, since logs are generated on success
-                category: log.metadata?.action ? "security" : (log.metadata?.profileId ? "driver" : "system"),
+                category: log.metadata?.category || "system",
                 urgent: log.metadata?.action === "blocked",
                 details: log.message,
                 metadata: log.metadata

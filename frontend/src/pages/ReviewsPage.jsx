@@ -113,12 +113,12 @@ const ReviewsPage = () => {
                  "{review.comment}"
               </p>
               <div className="mt-4 flex items-center gap-4 pt-4 border-t border-(--card-border)/50">
-                 <button className="flex items-center gap-2 text-[10px] font-black uppercase text-(--text-dim) hover:text-primary transition-all">
-                    <ThumbsUp size={12} /> Helpful
-                 </button>
-                 <button className="flex items-center gap-2 text-[10px] font-black uppercase text-(--text-dim) hover:text-primary transition-all">
-                    <MessageSquare size={12} /> View Reply
-                 </button>
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-black text-[10px] font-black uppercase hover:scale-105 transition-all shadow-sm shadow-primary/10">
+                     <ThumbsUp size={12} /> Helpful
+                  </button>
+                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-black text-[10px] font-black uppercase hover:scale-105 transition-all shadow-sm shadow-primary/10">
+                     <MessageSquare size={12} /> View Reply
+                  </button>
               </div>
             </div>
           ))}

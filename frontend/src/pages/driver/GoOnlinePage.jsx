@@ -33,13 +33,13 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
-import { makeVehicleIcon, makePin } from "../../utils/mapIcons";
+import { makeVehicleIcon, makePin, makeSimplePin } from "../../utils/mapIcons";
 import { getMyDriverProfile, updateDriverStatus } from "../../services/driverProfileService";
 import api from "../../services/api";
 
 // ── Leaflet icons ────────────────────────────────────────────────────────────
-const greenIcon = makePin("#22c55e", "PICKUP");
-const redIcon   = makePin("#ef4444", "DEST");
+const greenIcon = makeSimplePin("#22c55e");
+const redIcon   = makeSimplePin("#ef4444");
 
 // ── Haversine distance ────────────────────────────────────────────────────────
 const haversineKm = (lat1, lng1, lat2, lng2) => {
@@ -131,15 +131,16 @@ const GoOnlinePage = () => {
             const historyStats = historyRes.data.data.stats;
             const liveRides = liveRes.data?.data || [];
             
-            // Exact same formula as DashboardPage.jsx
-            const realTotal = (historyStats.totalRides || 0) + liveRides.filter(r => r.status === 'completed').length;
+            const activePublished = liveRides.filter(r => r.status !== 'completed' && r.status !== 'cancelled').length;
+            const completedRides = historyStats.completedRides || 0;
+            const realTotal = completedRides + activePublished;
             
             setProfile(prev => ({
               ...prev,
               stats: {
                 ...prev.stats,
                 totalRides: realTotal,
-                completedRides: realTotal
+                completedRides: completedRides
               }
             }));
           }
@@ -351,10 +352,10 @@ const GoOnlinePage = () => {
             <p className="text-sm text-center text-(--text-dim) mb-6">Enable <strong>Location Tracking</strong> in Settings before going online.</p>
             <div className="flex flex-col gap-3">
               <button onClick={() => { setShowLocationPopup(false); navigate("/driver/dashboard/settings"); }}
-                className="w-full bg-primary text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 hover:scale-105 transition-all">
+                className="w-full bg-primary text-black font-black py-3.5 rounded-xl flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-lg shadow-primary/20">
                 Open Settings <ChevronRight size={16} />
               </button>
-              <button onClick={() => setShowLocationPopup(false)} className="w-full py-3 rounded-xl text-sm font-bold text-(--text-dim) hover:text-(--text-main) transition-colors">Cancel</button>
+              <button onClick={() => setShowLocationPopup(false)} className="w-full py-3 rounded-xl bg-primary/10 text-primary border border-primary/20 text-sm font-black hover:bg-primary/20 transition-all">Cancel</button>
             </div>
           </div>
         </div>
@@ -412,7 +413,7 @@ const GoOnlinePage = () => {
               <p className="text-sm text-(--text-dim)">{isOnline ? "Visible to passengers." : "You are not visible to passengers."}</p>
             </div>
             <button onClick={handleOnlineToggle} disabled={loading}
-              className={`px-10 py-3.5 font-bold text-white rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95 ${isOnline ? "bg-gradient-to-r from-red-500 to-orange-500 hover:shadow-lg hover:shadow-red-500/40" : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:shadow-lg hover:shadow-emerald-500/40"}`}>
+              className="px-10 py-3.5 font-black text-black bg-primary rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95 hover:shadow-lg hover:shadow-primary/40">
               <span className="flex items-center gap-2">
                 {isOnline ? <><MapPinOff size={18} /> Go Offline</> : <><MapPin size={18} /> Go Online</>}
               </span>
@@ -433,7 +434,7 @@ const GoOnlinePage = () => {
             </div>
             {isOnline ? (
               <button onClick={() => { setShowPublishForm(!showPublishForm); setSourcePin(null); setDestPin(null); setPickingMode(null); }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all ${showPublishForm ? "bg-red-500/10 text-red-500 border border-red-500/20" : "bg-primary text-black hover:scale-105"}`}>
+                className="flex items-center gap-2 px-4 py-2 rounded-xl font-black text-sm bg-primary text-black transition-all hover:scale-105">
                 {showPublishForm ? <><X size={16} /> Cancel</> : <><Plus size={16} /> New Ride</>}
               </button>
             ) : (
@@ -478,14 +479,14 @@ const GoOnlinePage = () => {
                        <div className="flex gap-2">
                         <button type="button"
                           onClick={() => setPickingMode(pickingMode === "source" ? null : "source")}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${pickingMode === "source" ? "bg-emerald-500 text-white border-emerald-500 animate-pulse" : sourcePin ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border transition-all ${pickingMode === "source" ? "bg-primary text-black border-primary animate-pulse" : sourcePin ? "bg-primary/10 text-primary border-primary/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
+                          <div className={`w-2 h-2 rounded-full ${pickingMode === "source" ? "bg-black" : "bg-emerald-500"}`} />
                           {pickingMode === "source" ? "Click map..." : sourcePin ? "Set Pickup ✓" : "Set Pickup"}
                         </button>
                         <button type="button"
                           onClick={() => setPickingMode(pickingMode === "destination" ? null : "destination")}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${pickingMode === "destination" ? "bg-rose-500 text-white border-rose-500 animate-pulse" : destPin ? "bg-rose-500/10 text-rose-500 border-rose-500/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
-                          <div className="w-2 h-2 rounded-full bg-rose-500" />
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border transition-all ${pickingMode === "destination" ? "bg-primary text-black border-primary animate-pulse" : destPin ? "bg-primary/10 text-primary border-primary/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
+                          <div className={`w-2 h-2 rounded-full ${pickingMode === "destination" ? "bg-black" : "bg-rose-500"}`} />
                           {pickingMode === "destination" ? "Click map..." : destPin ? "Set Drop-off ✓" : "Set Drop-off"}
                         </button>
                       </div>
@@ -535,15 +536,6 @@ const GoOnlinePage = () => {
                       </Marker>
                     )}
 
-                    {/* Source marker */}
-                    {sourcePin && (
-                      <Marker position={[sourcePin.lat, sourcePin.lng]} icon={greenIcon}>
-                        <Popup>
-                          <p style={{ fontWeight: 700, color: "#166534", fontSize: 12, margin: 0 }}>📍 Pickup</p>
-                          <p style={{ margin: "4px 0 0", fontSize: 11, maxWidth: 200 }}>{sourcePin.address}</p>
-                        </Popup>
-                      </Marker>
-                    )}
 
                     {/* Dest marker */}
                     {destPin && (
@@ -566,7 +558,7 @@ const GoOnlinePage = () => {
                 </div>
 
                 <button onClick={handleUseLocation}
-                   className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-primary/20 bg-primary/10 text-primary font-bold hover:bg-primary/20 transition-all text-sm">
+                   className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-black font-black hover:scale-[1.02] transition-all text-sm shadow-lg shadow-primary/10">
                    <Navigation size={18} /> Use Current Live Location
                 </button>
 
@@ -738,7 +730,7 @@ const GoOnlinePage = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Total Rides</p><p className="text-2xl font-black">{profile?.stats?.totalRides || 0}</p></div>
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Completed</p><p className="text-2xl font-black text-emerald-500">{profile?.stats?.completedRides || 0}</p></div>
-              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Rating</p><p className="text-2xl font-black text-amber-500">{profile?.averageRating?.toFixed(1) || "0.0"} ⭐</p></div>
+              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Rating</p><p className="text-2xl font-black text-amber-500">{profile?.averageRating?.toFixed(1) || "0.0"}</p></div>
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Trust Score</p><p className="text-2xl font-black text-primary">{profile?.trustScore || 0}</p></div>
             </div>
           </div>

@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Send,
   Loader2,
+  Star,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
@@ -40,6 +41,8 @@ const EarningsPage = () => {
     completedRides: 0,
     cancelledRides: 0,
     averageRating: 0.0,
+    acceptanceRate: 100,
+    cancellationRate: 0,
   });
   const [rideBreakdown, setRideBreakdown] = useState([]);
   const [dailyEarnings, setDailyEarnings] = useState([]);
@@ -53,16 +56,18 @@ const EarningsPage = () => {
         if (res.data.success) {
           const { stats: s, rides } = res.data.data;
           setEarningsStats({
-            totalEarnings: s.totalEarnings,
-            todayEarnings: s.todayEarnings,
-            todayRides: s.todayRides,
-            weekEarnings: s.weekEarnings,
-            weekRides: s.weekRides,
-            thisMonthEarnings: s.monthEarnings,
-            monthRides: s.monthRides,
-            completedRides: s.totalRides,
-            cancelledRides: 0, // Should be fetched if available
-            averageRating: s.avgRating,
+            totalEarnings: s.totalEarnings || 0,
+            todayEarnings: s.todayEarnings || 0,
+            todayRides: s.todayRides || 0,
+            weekEarnings: s.weekEarnings || 0,
+            weekRides: s.weekRides || 0,
+            thisMonthEarnings: s.monthEarnings || 0,
+            monthRides: s.monthRides || 0,
+            completedRides: s.completedRides || 0,
+            cancelledRides: s.cancelledRides || 0,
+            averageRating: s.avgRating || 0,
+            acceptanceRate: s.acceptanceRate || 0,
+            cancellationRate: s.cancellationRate || 0,
           });
 
           setRideBreakdown(s.rideTypeBreakdown || []);
@@ -70,24 +75,38 @@ const EarningsPage = () => {
           setRecentTransactions(rides.map(r => ({
             id: r._id,
             type: "ride",
-            from: r.source.address,
-            to: r.destination.address,
-            amount: r.fare.totalWithTax || r.fare.total,
+            vehicleType: r.vehicleTypeRequested || "PRIME",
+            from: r.source.address.split(',').slice(0, 2).join(','),
+            to: r.destination.address.split(',').slice(0, 2).join(','),
+            amount: r.fare.totalWithTax || r.fare.total || 0,
             date: new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-            distance: `${r.distanceActual || 0} km`,
+            distance: `${r.distanceActual || r.distanceEstimate || 0} km`,
             rating: 0.0 // Default to 0.0 before review
           })));
 
-          // Hardcoded daily distribution for UI since we don't have separate time-series yet
-          setDailyEarnings([
-            { day: "Mon", amount: Math.floor(s.weekEarnings * 0.1), trips: 2 },
-            { day: "Tue", amount: Math.floor(s.weekEarnings * 0.15), trips: 3 },
-            { day: "Wed", amount: Math.floor(s.weekEarnings * 0.2), trips: 4 },
-            { day: "Thu", amount: Math.floor(s.weekEarnings * 0.12), trips: 2 },
-            { day: "Fri", amount: Math.floor(s.weekEarnings * 0.25), trips: 5 },
-            { day: "Sat", amount: Math.floor(s.weekEarnings * 0.1), trips: 2 },
-            { day: "Sun", amount: Math.floor(s.weekEarnings * 0.08), trips: 1 },
-          ]);
+          // Group by day for the chart
+          const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+          const last7Days = [...Array(7)].map((_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (6 - i));
+            return {
+              day: days[d.getDay()],
+              dateStr: d.toDateString(),
+              amount: 0,
+              trips: 0
+            };
+          });
+
+          rides.forEach(r => {
+            const rDate = new Date(r.createdAt).toDateString();
+            const daySlot = last7Days.find(d => d.dateStr === rDate);
+            if (daySlot) {
+              daySlot.amount += parseFloat(r.fare.totalWithTax || r.fare.total || 0);
+              daySlot.trips += 1;
+            }
+          });
+
+          setDailyEarnings(last7Days);
         }
       } catch (err) {
         console.error("Earnings fetch error:", err);
@@ -99,7 +118,7 @@ const EarningsPage = () => {
     fetchData();
   }, []);
 
-  const maxDailyEarning = dailyEarnings.length > 0 ? Math.max(...dailyEarnings.map((d) => d.amount)) : 100;
+  const maxDailyEarning = Math.max(...dailyEarnings.map((d) => d.amount), 1);
 
   const handleExport = () => {
     const today = new Date().toLocaleDateString("en-IN").replace(/\//g, "-");
@@ -119,6 +138,13 @@ const EarningsPage = () => {
       navigate("/driver/dashboard/profile");
       setShowNotification(null);
     }, 1500);
+  };
+
+  // Helper for Payout Day (Next Sunday)
+  const getNextPayoutDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + (7 - d.getDay()));
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   if (error) {
@@ -222,7 +248,7 @@ const EarningsPage = () => {
                   </div>
                 </div>
                 <p className="text-3xl font-black text-(--text-main)">
-                  ₹{earningsStats.totalEarnings.toLocaleString()}
+                  ₹{(earningsStats.totalEarnings || 0).toLocaleString()}
                 </p>
                 <p className="text-xs font-semibold text-emerald-500">
                   Lifetime performance data
@@ -243,10 +269,10 @@ const EarningsPage = () => {
                   </div>
                 </div>
                 <p className="text-3xl font-black text-(--text-main)">
-                  ₹{earningsStats.todayEarnings.toLocaleString()}
+                  ₹{(earningsStats.todayEarnings || 0).toLocaleString()}
                 </p>
                 <p className="text-xs font-semibold text-amber-500">
-                  {earningsStats.todayRides} trips completed
+                  {earningsStats.todayRides || 0} trips completed
                 </p>
               </div>
             </div>
@@ -264,10 +290,10 @@ const EarningsPage = () => {
                   </div>
                 </div>
                 <p className="text-3xl font-black text-(--text-main)">
-                  ₹{earningsStats.weekEarnings.toLocaleString()}
+                  ₹{(earningsStats.weekEarnings || 0).toLocaleString()}
                 </p>
                 <p className="text-xs font-semibold text-cyan-500">
-                  {earningsStats.weekRides} trips so far
+                  {earningsStats.weekRides || 0} trips so far
                 </p>
               </div>
             </div>
@@ -285,10 +311,10 @@ const EarningsPage = () => {
                   </div>
                 </div>
                 <p className="text-3xl font-black text-(--text-main)">
-                  ₹{earningsStats.thisMonthEarnings.toLocaleString()}
+                  ₹{(earningsStats.thisMonthEarnings || 0).toLocaleString()}
                 </p>
                 <p className="text-xs font-semibold text-lime-500">
-                  {earningsStats.monthRides} trips completed
+                  {earningsStats.monthRides || 0} trips completed
                 </p>
               </div>
             </div>
@@ -306,9 +332,7 @@ const EarningsPage = () => {
               onChange={(e) => setTimeFilter(e.target.value)}
               className="rounded-lg border border-(--card-border) bg-(--card-bg) px-3 py-1.5 text-sm font-semibold text-(--text-main) transition-all focus:border-primary/40 focus:outline-none"
             >
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-              <option value="year">This Year</option>
+              <option value="week">Past 7 Days</option>
             </select>
           </div>
 
@@ -329,14 +353,18 @@ const EarningsPage = () => {
                   >
                     <div className="relative h-full w-full flex items-end justify-center">
                       <div
-                        className="from-primary to-primary-dark group-hover:shadow-primary/30 w-3/5 rounded-t-xl bg-linear-to-t shadow-lg transition-all duration-300 group-hover:shadow-xl"
+                        className="w-3/5 rounded-t-xl transition-all duration-300 group-hover:opacity-80 shadow-lg"
                         style={{
-                          height: `${(day.amount / maxDailyEarning) * 100}%`,
+                          height: `${day.amount > 0 ? Math.max((day.amount / maxDailyEarning) * 100, 8) : 2}%`,
+                          backgroundColor: '#ffcc00',
+                          minHeight: '2px'
                         }}
                       >
-                        <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 dark:bg-white/80 text-white dark:text-black px-3 py-1.5 rounded-lg text-xs font-black whitespace-nowrap transition-opacity z-20">
-                          ₹{day.amount}
-                        </div>
+                        {day.amount > 0 && (
+                          <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-black/90 dark:bg-white text-white dark:text-black px-3 py-1.5 rounded-lg text-xs font-black whitespace-nowrap transition-opacity z-20 shadow-xl border border-(--card-border)">
+                            ₹{day.amount.toLocaleString()}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-center">
@@ -363,80 +391,57 @@ const EarningsPage = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {rideBreakdown.map((ride, idx) => (
-              <div
-                key={idx}
-                className="glass-card group relative overflow-hidden rounded-3xl border border-(--card-border) p-6 shadow-sm transition-all hover:border-primary/40 cursor-pointer"
-                onClick={() =>
-                  setExpandedRide(expandedRide === idx ? null : idx)
-                }
-              >
+            {rideBreakdown.length > 0 ? (
+              rideBreakdown.map((ride, idx) => (
                 <div
-                  className={`absolute right-0 top-0 h-20 w-20 rounded-full blur-3xl opacity-20 ${ride.color}`}
-                />
-                <div className="relative space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl">{ride.icon}</span>
-                      <div>
-                        <p className="text-sm font-black text-(--text-main)">
-                          {ride.type}
-                        </p>
-                        <p className="text-xs text-(--text-dim)">
-                          {ride.rides} trips
-                        </p>
+                  key={idx}
+                  className="glass-card group relative overflow-hidden rounded-3xl border border-(--card-border) p-6 shadow-sm transition-all hover:border-primary/40 cursor-pointer"
+                  onClick={() =>
+                    setExpandedRide(expandedRide === idx ? null : idx)
+                  }
+                >
+                  <div className="relative space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={`/images/${(ride.type || "Prime").charAt(0).toUpperCase() + (ride.type || "Prime").slice(1).toLowerCase()}.png`} 
+                          alt={ride.type}
+                          className="w-12 h-12 object-contain"
+                          onError={(e) => { e.target.src = "/images/Prime.png"; }}
+                        />
+                        <div>
+                          <p className="text-sm font-black text-(--text-main)">
+                            {ride.type}
+                          </p>
+                          <p className="text-xs text-(--text-dim)">
+                            {ride.rides} trips
+                          </p>
+                        </div>
                       </div>
                     </div>
-                    <div className="rounded-full bg-(--card-bg) p-2 text-primary">
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform ${
-                          expandedRide === idx ? "rotate-90" : ""
-                        }`}
-                      />
-                    </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-2xl font-black text-(--text-main)">
-                        ₹{ride.earnings.toLocaleString()}
+                    <div className="space-y-2">
+                        <p className="text-2xl font-black text-(--text-main)">
+                          ₹{ride.earnings.toLocaleString()}
+                        </p>
+                      <div className="relative h-2 rounded-full bg-(--card-border) overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all"
+                          style={{ width: `${ride.percentage}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-(--text-dim) font-semibold">
+                        {ride.percentage}% of total
                       </p>
                     </div>
-                    <div className="relative h-2 rounded-full bg-(--card-border) overflow-hidden">
-                      <div
-                        className={`h-full bg-linear-to-r ${ride.color} transition-all`}
-                        style={{ width: `${ride.percentage}%` }}
-                      />
-                    </div>
-                    <p className="text-[10px] text-(--text-dim) font-semibold">
-                      {ride.percentage}% of total
-                    </p>
                   </div>
-
-                  {expandedRide === idx && (
-                    <div className="mt-4 space-y-2 border-t border-(--card-border) pt-4">
-                      <div className="flex justify-between">
-                        <span className="text-xs text-(--text-dim)">
-                          Avg per trip:
-                        </span>
-                        <span className="text-xs font-bold text-(--text-main)">
-                          ₹{Math.round(ride.earnings / ride.rides)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-xs text-(--text-dim)">
-                          Total trips:
-                        </span>
-                        <span className="text-xs font-bold text-(--text-main)">
-                          {ride.rides}
-                        </span>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+                <div className="glass-card rounded-2xl border border-(--card-border) p-8 text-center shadow-sm lg:col-span-3">
+                  <p className="text-(--text-dim) font-medium text-sm">No completed ride data available yet.</p>
+                </div>
+            )}
           </div>
         </section>
 
@@ -446,70 +451,57 @@ const EarningsPage = () => {
             <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
               Recent Activity <span className="bg-primary h-1.5 w-1.5 rounded-full"></span>
             </h2>
-            <button className="text-primary hover:text-primary-dark text-sm font-bold transition-colors">
-              View All
-            </button>
           </div>
 
           <div className="space-y-3">
-            {recentTransactions.map((tx) => (
-              <div
-                key={tx.id}
-                className="glass-card group flex items-center justify-between rounded-2xl border border-(--card-border) p-4 transition-all hover:border-primary/40 shadow-sm lg:p-6"
-              >
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="hidden rounded-xl bg-(--card-bg) p-3 text-lg sm:flex h-14 w-14 items-center justify-center flex-shrink-0">
-                    {tx.type === "ride" ? "🚗" : "🎁"}
-                  </div>
+            {recentTransactions.length > 0 ? (
+              recentTransactions.map((tx) => (
+                <div
+                  key={tx.id}
+                  className="glass-card group flex items-center justify-between rounded-2xl border border-(--card-border) p-4 transition-all hover:border-primary/40 shadow-sm lg:p-6"
+                >
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="hidden rounded-xl bg-(--card-bg) p-1 sm:flex h-14 w-14 items-center justify-center flex-shrink-0 overflow-hidden">
+                       <img 
+                          src={`/images/${(tx.vehicleType || "Prime").charAt(0).toUpperCase() + (tx.vehicleType || "Prime").slice(1).toLowerCase()}.png`} 
+                          alt="Ride" 
+                          className="w-full h-full object-contain" 
+                          onError={(e) => { e.target.src = "/images/Prime.png"; }}
+                       />
+                    </div>
 
                   <div className="min-w-0 flex-1">
-                    {tx.type === "ride" ? (
-                      <>
-                        <p className="mb-1 flex items-center gap-2 text-sm font-bold text-(--text-main)">
-                          <MapPin size={14} className="text-primary" />
-                          {tx.from.split(" ")[0]} → {tx.to.split(" ")[0]}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-(--text-dim) font-medium">
-                          <span>{tx.distance}</span>
-                          <span>•</span>
-                          <span>{tx.date}</span>
-                          {tx.rating && (
-                            <>
-                              <span>•</span>
-                              <span className="text-amber-500 font-bold">
-                                ⭐ {tx.rating}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="mb-1 text-sm font-bold text-(--text-main)">
-                          {tx.description}
-                        </p>
-                        <p className="text-xs text-(--text-dim) font-medium">
-                          {tx.date}
-                        </p>
-                      </>
-                    )}
+                    <p className="mb-1 flex items-center gap-2 text-[11px] font-bold text-(--text-main) leading-tight">
+                      <MapPin size={12} className="text-primary flex-shrink-0" />
+                      <span className="line-clamp-2">{tx.from} → {tx.to}</span>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 text-[10px] text-(--text-dim) font-black uppercase tracking-wider">
+                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">{tx.distance}</span>
+                      <span className="opacity-30">•</span>
+                      <span>{tx.date}</span>
+                    </div>
+                  </div>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <p className="text-lg font-black text-emerald-500">
+                      +₹{tx.amount}
+                    </p>
+                    <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
+                      Earned
+                    </span>
                   </div>
                 </div>
-
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <p className="text-lg font-black text-emerald-500">
-                    +₹{tx.amount}
-                  </p>
-                  <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
-                    Earned
-                  </span>
+              ))
+            ) : (
+                <div className="glass-card rounded-2xl border border-(--card-border) p-8 text-center shadow-sm">
+                  <p className="text-(--text-dim) font-medium text-sm">No recent ride activity found.</p>
                 </div>
-              </div>
-            ))}
+            )}
           </div>
         </section>
 
-        {/* ── Payout Section ── */}
+        {/* ── Account & Payouts ── */}
         <section>
           <div className="mb-4 px-1">
             <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
@@ -518,7 +510,6 @@ const EarningsPage = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {/* Balance Info */}
             <div className="glass-card relative overflow-hidden rounded-3xl border border-(--card-border) p-8 shadow-sm">
               <div className="from-primary/20 to-primary/5 absolute right-0 top-0 h-32 w-32 rounded-full blur-3xl" />
               <div className="relative space-y-6">
@@ -527,33 +518,25 @@ const EarningsPage = () => {
                     Available Balance
                   </p>
                   <p className="text-4xl font-black text-(--text-main)">
-                    ₹{(earningsStats.totalEarnings * 0.7).toLocaleString()}
+                    ₹0
                   </p>
                 </div>
 
                 <div className="space-y-3 border-t border-(--card-border) pt-6">
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-(--text-dim)">
-                      Total Earnings
+                      Lifetime Earnings
                     </span>
                     <span className="font-bold text-(--text-main)">
-                      ₹{earningsStats.totalEarnings.toLocaleString()}
+                      ₹0
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-(--text-dim)">
-                      Paid Out
+                      Trips Completed
                     </span>
                     <span className="font-bold text-(--text-main)">
-                      ₹{(earningsStats.totalEarnings * 0.3).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium text-(--text-dim)">
-                      Pending
-                    </span>
-                    <span className="font-bold text-amber-500">
-                      ₹{(earningsStats.totalEarnings * 0.05).toLocaleString()}
+                      {earningsStats.completedRides || 0}
                     </span>
                   </div>
                 </div>
@@ -567,54 +550,6 @@ const EarningsPage = () => {
                 >
                   Request Payout
                 </Button>
-              </div>
-            </div>
-
-            {/* Payout Method */}
-            <div className="glass-card rounded-3xl border border-(--card-border) p-8 shadow-sm space-y-6">
-              <div>
-                <p className="mb-2 text-xs font-bold tracking-wider text-(--text-dim) uppercase">
-                  Preferred Payout Method
-                </p>
-                <div className="rounded-2xl border-2 border-primary bg-primary/5 p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <IndianRupee size={24} className="text-primary" />
-                    <div>
-                      <p className="text-sm font-bold text-(--text-main)">
-                        Bank Account
-                      </p>
-                      <p className="text-xs text-(--text-dim)">
-                        HDFC • ***4567
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={handleChangePaymentMethod}
-                className="w-full rounded-xl border border-(--card-border) bg-(--card-bg) px-4 py-3 text-sm font-black text-(--text-main) transition-all hover:border-primary/40 hover:bg-primary/5"
-              >
-                Change Payment Method
-              </button>
-
-              <div className="space-y-2 border-t border-(--card-border) pt-6">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-(--text-dim)">
-                    Next Payout
-                  </span>
-                  <span className="font-bold text-(--text-main)">
-                    Mar 10, 2026
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-(--text-dim)">
-                    Processing Time
-                  </span>
-                  <span className="font-bold text-(--text-main)">
-                    1-2 business days
-                  </span>
-                </div>
               </div>
             </div>
           </div>
@@ -634,10 +569,10 @@ const EarningsPage = () => {
                 Acceptance Rate
               </p>
               <p className="mb-1 text-2xl font-black text-(--text-main)">
-                98.5%
+                {earningsStats.acceptanceRate || 0}%
               </p>
               <div className="h-1 w-full rounded-full bg-(--card-border) overflow-hidden">
-                <div className="h-full bg-linear-to-r from-primary to-primary-dark w-[98.5%]" />
+                <div className="h-full bg-linear-to-r from-primary to-primary-dark" style={{ width: `${earningsStats.acceptanceRate || 0}%` }} />
               </div>
             </div>
 
@@ -646,10 +581,10 @@ const EarningsPage = () => {
                 Cancellation Rate
               </p>
               <p className="mb-1 text-2xl font-black text-(--text-main)">
-                0.0%
+                {earningsStats.cancellationRate || 0}%
               </p>
               <div className="h-1 w-full rounded-full bg-(--card-border) overflow-hidden">
-                <div className="h-full bg-linear-to-r from-rose-500 to-rose-600 w-[0%]" />
+                <div className="h-full bg-linear-to-r from-rose-500 to-rose-600" style={{ width: `${earningsStats.cancellationRate || 0}%` }} />
               </div>
             </div>
 
@@ -658,11 +593,13 @@ const EarningsPage = () => {
                 Average Rating
               </p>
               <p className="mb-1 text-2xl font-black text-(--text-main)">
-                {earningsStats.averageRating}
+                {Number(earningsStats.averageRating || 0).toFixed(1)}
               </p>
-              <p className="text-xs text-amber-500 font-bold">
-                ⭐ Excellent
-              </p>
+              <div className="flex items-center justify-center gap-1 text-[10px] text-amber-500">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} size={8} fill="currentColor" />
+                ))}
+              </div>
             </div>
 
             <div className="glass-card rounded-2xl border border-(--card-border) p-4 shadow-sm text-center">
@@ -670,10 +607,10 @@ const EarningsPage = () => {
                 Total Trips
               </p>
               <p className="mb-1 text-2xl font-black text-(--text-main)">
-                {earningsStats.completedRides}
+                {earningsStats.completedRides || 0}
               </p>
               <p className="text-xs text-emerald-500 font-bold">
-                {earningsStats.completedRides} completed
+                Lifetime trips
               </p>
             </div>
           </div>

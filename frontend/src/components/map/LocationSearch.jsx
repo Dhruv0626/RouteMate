@@ -108,6 +108,7 @@ const LocationSearch = ({
   const [gpsLocation, setGpsLocation] = useState(null); // { lat, lng, name }
 
   const containerRef = useRef(null);
+  const inputRef = useRef(null);
   const debouncedQuery = useDebounce(query, 200);
 
   // ─── Pre-resolve GPS name as soon as currentLocation prop arrives ────────
@@ -170,6 +171,7 @@ const LocationSearch = ({
       setIsOpen(false);
       setResults([]);
       setIsFocused(false);
+      if (inputRef.current) inputRef.current.blur();
       onSelect?.(location);
     },
     [onSelect]
@@ -263,6 +265,7 @@ const LocationSearch = ({
         </span>
 
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => {

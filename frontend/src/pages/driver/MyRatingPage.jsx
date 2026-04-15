@@ -390,164 +390,24 @@ const MyRatingPage = () => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {badgeAttributes.map((badge, idx) => (
-              <div
-                key={idx}
-                className={`glass-card rounded-2xl border p-4 shadow-sm transition-all ${
-                  badge.achieved
-                    ? "border-primary/40 hover:border-primary/60 bg-primary/5"
-                    : "border-(--card-border) opacity-60"
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="text-3xl">{badge.icon}</div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-(--text-main)">
-                      {badge.label}
-                    </p>
-                    <p className="text-xs text-(--text-dim) leading-relaxed">
-                      {badge.description}
-                    </p>
-                    {badge.achieved && (
-                      <p className="mt-2 text-xs font-semibold text-emerald-500 flex items-center gap-1">
-                        <CheckCircle size={12} /> Achieved
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="glass-card rounded-2xl border border-(--card-border) p-8 text-center shadow-sm">
+            <p className="text-(--text-dim) text-sm font-medium">
+              No achievements recorded yet. Complete more rides to unlock badges!
+            </p>
           </div>
         </section>
 
-        {/* ── Recent Reviews ── */}
         <section>
           <div className="mb-4 flex items-center justify-between px-1">
             <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
               Recent Reviews <span className="bg-primary h-1.5 w-1.5 rounded-full"></span>
             </h2>
-            <select
-              value={filterRating}
-              onChange={(e) => setFilterRating(e.target.value)}
-              className="rounded-lg border border-(--card-border) bg-(--card-bg) px-3 py-1.5 text-sm font-semibold text-(--text-main) transition-all focus:border-primary/40 focus:outline-none"
-            >
-              <option value="all">All Ratings</option>
-              <option value="5">5 Stars</option>
-              <option value="4">4 Stars</option>
-              <option value="3">3 Stars</option>
-              <option value="2">2 Stars</option>
-              <option value="1">1 Star</option>
-            </select>
           </div>
 
-          <div className="space-y-4">
-            {filteredReviews.length > 0 ? (
-              filteredReviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="glass-card group rounded-2xl border border-(--card-border) p-4 lg:p-6 shadow-sm transition-all hover:border-primary/40 cursor-pointer"
-                  onClick={() =>
-                    setExpandedReview(
-                      expandedReview === review.id ? null : review.id
-                    )
-                  }
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      {/* Header */}
-                      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                        <div className="flex items-center gap-3">
-                          <div className="text-2xl">{review.emoji}</div>
-                          <div>
-                            <p className="text-sm font-bold text-(--text-main)">
-                              {review.passenger}
-                            </p>
-                            <p className="text-xs text-(--text-dim)">
-                              {review.route}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {review.verified && (
-                            <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
-                              <CheckCircle size={12} /> Verified
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Rating Stars */}
-                      <div className="mb-3 flex items-center justify-between">
-                        <div className="flex gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              size={16}
-                              fill={i < review.rating ? "#FBBF24" : "currentColor"}
-                              className={
-                                i < review.rating
-                                  ? "text-amber-400"
-                                  : "text-(--text-dim)"
-                              }
-                            />
-                          ))}
-                        </div>
-                        <p className="text-xs text-(--text-dim)">
-                          {review.date}
-                        </p>
-                      </div>
-
-                      {/* Review Text */}
-                      <p
-                        className={`text-sm leading-relaxed text-(--text-main) transition-all ${
-                          expandedReview === review.id
-                            ? ""
-                            : "line-clamp-2"
-                        }`}
-                      >
-                        {review.text}
-                      </p>
-
-                      {/* Expanded Details */}
-                      {expandedReview === review.id && (
-                        <div className="mt-4 space-y-3 border-t border-(--card-border) pt-4">
-                          <div className="flex items-center gap-3 bg-(--card-bg) rounded-lg p-3">
-                            <ThumbsUp
-                              size={16}
-                              className="text-(--text-dim)"
-                            />
-                            <span className="text-sm text-(--text-dim)">
-                              {review.helpful} people found this helpful
-                            </span>
-                          </div>
-                          <button className="flex items-center gap-2 rounded-lg border border-(--card-border) bg-(--card-bg) w-full px-3 py-2 text-sm font-semibold text-(--text-main) transition-all hover:border-primary/40 hover:bg-primary/5">
-                            <Heart size={14} />
-                            Thank the rider
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Chevron */}
-                    <div className="flex-shrink-0 text-primary">
-                      <ChevronRight
-                        size={20}
-                        className={`transition-transform ${
-                          expandedReview === review.id ? "rotate-90" : ""
-                        }`}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="glass-card rounded-2xl border border-(--card-border) p-8 text-center shadow-sm">
-                <p className="text-(--text-dim) font-medium">
-                  No reviews with this rating yet.
-                </p>
-              </div>
-            )}
+          <div className="glass-card rounded-2xl border border-(--card-border) p-8 text-center shadow-sm">
+            <p className="text-(--text-dim) font-medium">
+              No reviews received yet.
+            </p>
           </div>
         </section>
 
@@ -559,86 +419,18 @@ const MyRatingPage = () => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {improvementTips.map((tip, idx) => (
-              <div
-                key={idx}
-                className="glass-card group relative overflow-hidden rounded-3xl border border-(--card-border) p-6 shadow-sm transition-all hover:border-emerald-500/40"
-              >
-                <div className="from-emerald-500/20 to-emerald-500/5 absolute right-0 top-0 h-24 w-24 rounded-full blur-3xl" />
-                <div className="relative space-y-3">
-                  <div className="text-4xl">{tip.icon}</div>
-                  <div>
-                    <h3 className="text-sm font-bold text-(--text-main) mb-1">
-                      {tip.title}
-                    </h3>
-                    <p className="text-xs leading-relaxed text-(--text-dim)">
-                      {tip.description}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-emerald-500/10 px-3 py-2">
-                    <p className="text-xs font-bold text-emerald-500">
-                      {tip.improvement}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="glass-card rounded-2xl border border-(--card-border) p-8 text-center shadow-sm">
+            <p className="text-(--text-dim) text-sm font-medium">
+              No improvement tips available at this time.
+            </p>
           </div>
         </section>
 
         {/* ── Rating Insights ── */}
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="glass-card rounded-2xl border border-(--card-border) p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400">
-                <TrendingUp size={20} />
-              </div>
-              <h3 className="text-sm font-bold text-(--text-main)">
-                Your Strength
-              </h3>
-            </div>
-            <p className="text-xs leading-relaxed text-(--text-dim) mb-3">
-              Passengers love your communication skills and friendly nature.
-            </p>
-            <div className="text-lg font-black text-(--text-main)">
-              Professional Attitude
-            </div>
-          </div>
-
-          <div className="glass-card rounded-2xl border border-(--card-border) p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="rounded-lg bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400">
-                <Target size={20} />
-              </div>
-              <h3 className="text-sm font-bold text-(--text-main)">
-                Area to Improve
-              </h3>
-            </div>
-            <p className="text-xs leading-relaxed text-(--text-dim) mb-3">
-              A few passengers mentioned vehicle cleanliness. Focus on this to boost ratings.
-            </p>
-            <div className="text-lg font-black text-(--text-main)">
-              Vehicle Maintenance
-            </div>
-          </div>
-
-          <div className="glass-card rounded-2xl border border-(--card-border) p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="rounded-lg bg-cyan-500/10 p-2 text-cyan-600 dark:text-cyan-400">
-                <Award size={20} />
-              </div>
-              <h3 className="text-sm font-bold text-(--text-main)">
-                Next Milestone
-              </h3>
-            </div>
-            <p className="text-xs leading-relaxed text-(--text-dim) mb-3">
-              You're 2 five-star reviews away from reaching 200 perfect ratings!
-            </p>
-            <div className="text-lg font-black text-primary">
-              2 reviews away
-            </div>
-          </div>
+        <section className="glass-card rounded-2xl border border-(--card-border) p-8 text-center shadow-sm">
+          <p className="text-(--text-dim) text-sm font-medium">
+            Rating insights will appear here as you gather more passenger feedback.
+          </p>
         </section>
       </main>
 

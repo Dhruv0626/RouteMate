@@ -43,8 +43,10 @@ const getPlatformStats = async () => {
 };
 
 // ─── Help: Check if current time is night (10PM - 6AM) ─────────────────────────
-const isNightTime = () => {
-    const hour = new Date().getHours();
+const isNightTime = (date = new Date()) => {
+    const d = new Date(date);
+    const hour = d.getHours();
+    // Night charge logic: 10 PM to 6 AM
     return hour >= 22 || hour < 6;
 };
 
@@ -96,6 +98,8 @@ const calcFare = async ({
             baseFare: fareData.base_fare,
             distanceFare: fareData.distance_charge,
             timeFare: fareData.time_charge,
+            nightFare: fareData.night_charge_applied,
+            surgeFare: Math.round(fareData.final_price - fareData.subtotal_after_night),
             surgeMultiplier: fareData.surge_multiplier,
             surgedTotal: fareData.final_price,
             totalWithTax: fareData.final_price // Tax is 0%
@@ -270,7 +274,7 @@ export const GetAvailableRides = async (req, res) => {
                 category: ride.vehicleType || "PRIME",
                 distanceKm: estimatedRoadDist,
                 timeMin: estimatedRoadDist * 2, // 2 mins per km estimate
-                isNight: isNightTime()
+                isNight: isNightTime(ride.departureTime)
             });
 
             rideObj.price = fareData.final_price;
@@ -299,7 +303,7 @@ export const GetAvailableRides = async (req, res) => {
 // ─── Get fare estimate (for passenger preview before booking) ─────────────────
 export const GetFareEstimate = async (req, res) => {
     try {
-        const { rideId, passengerLat, passengerLng, destLat, destLng, seats, distanceKm: passedDist } = req.query;
+        const { rideId, passengerLat, passengerLng, destLat, destLng, seats, distanceKm: passedDist, durationMin: passedTime } = req.query;
 
         const ride = await PublishedRideModel.findById(rideId);
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found" });
@@ -318,8 +322,8 @@ export const GetFareEstimate = async (req, res) => {
         const fareData = await calcFare({
             category: ride.vehicleType || "PRIME",
             distanceKm,
-            timeMin: distanceKm * 2,
-            isNight: isNightTime()
+            timeMin: parseFloat(passedTime) || (distanceKm * 2),
+            isNight: isNightTime(ride.departureTime)
         });
         const finalPrice = fareData.final_price;
 
@@ -345,7 +349,8 @@ export const BookRide = async (req, res) => {
         const {
             passengerSource,       // { address, location: { coordinates: [lng, lat] } }
             passengerDestination,  // same shape
-            distanceKm: passedDist
+            distanceKm: passedDist,
+            durationMin: passedTime
         } = req.body;
 
         const ride = await PublishedRideModel.findById(rideId).populate("driver", "name");
@@ -374,8 +379,8 @@ export const BookRide = async (req, res) => {
         const fareData = await calcFare({
             category: ride.vehicleType || "PRIME",
             distanceKm,
-            timeMin: distanceKm * 2,
-            isNight: isNightTime()
+            timeMin: parseFloat(passedTime) || (distanceKm * 2),
+            isNight: isNightTime(ride.departureTime)
         });
         const amountPaid = fareData.totalWithTax;
 
@@ -383,6 +388,7 @@ export const BookRide = async (req, res) => {
              baseFare: fareData.baseFare || 0,
              distanceFare: fareData.distanceFare || 0,
              timeFare: fareData.timeFare || 0,
+             nightFare: fareData.nightFare || 0,
              surgeFare: fareData.surgeFare || 0,
              surgeMultiplier: fareData.surgeMultiplier || 1.0,
              surgedTotal: fareData.surgedTotal || 0,
@@ -493,6 +499,7 @@ export const RespondToBooking = async (req, res) => {
                     baseFare: booking.fareBreakdown?.baseFare || 0,
                     distanceFare: booking.fareBreakdown?.distanceFare || 0,
                     timeFare: booking.fareBreakdown?.timeFare || 0,
+                    nightFare: booking.fareBreakdown?.nightFare || 0,
                     surgeFare: booking.fareBreakdown?.surgeFare || 0,
                     surgedTotal: booking.fareBreakdown?.surgedTotal || 0,
                     totalWithTax: booking.fareBreakdown?.totalWithTax || booking.amountPaid,

@@ -162,11 +162,11 @@ const SettingsPage = () => {
                   await logout();
                   navigate('/signin');
                 }}
-                className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-500/10 transition-colors text-left"
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-primary text-black hover:scale-[1.02] transition-all text-left shadow-lg shadow-primary/10"
               >
-                <div className="flex items-center gap-3 text-red-500">
+                <div className="flex items-center gap-3">
                   <LogOut size={18} />
-                  <p className="font-bold text-sm">Sign Out</p>
+                  <p className="font-black text-sm uppercase tracking-widest">Sign Out</p>
                 </div>
               </button>
               
@@ -192,11 +192,11 @@ const SettingsPage = () => {
                    }
                 }}
                 disabled={isDeleting}
-                className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-500/10 transition-colors text-left"
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-primary text-black hover:scale-[1.02] transition-all text-left shadow-lg shadow-primary/10 mt-2"
               >
-                <div className="flex items-center gap-3 text-red-500">
+                <div className="flex items-center gap-3">
                   <Trash2 size={18} />
-                  <p className="font-bold text-sm">{isDeleting ? "Deleting..." : "Delete Account"}</p>
+                  <p className="font-black text-sm uppercase tracking-widest">{isDeleting ? "Deleting..." : "Delete Account"}</p>
                 </div>
               </button>
             </div>

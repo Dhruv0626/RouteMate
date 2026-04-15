@@ -64,19 +64,26 @@ export const makeRouteLabelIcon = (route, isSelected) => {
 };
 
 /**
- * Generic branded pin with a label
+ * Generic branded pin with a label (Now simplified per user request to match simple pins)
  */
-export const makePin = (color, label) => L.divIcon({
+export const makePin = (color, label) => makeSimplePin(color);
+
+/**
+ * Simple branded pin without a label
+ */
+export const makeSimplePin = (color) => L.divIcon({
   html: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.4))">
-    <div style="background:${color};color:white;font-size:10px;font-weight:900;padding:2px 14px;border-radius:6px;white-space:nowrap;margin-bottom:2px;text-transform:uppercase">${label}</div>
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="white"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+      <circle cx="12" cy="10" r="3" fill="white"/>
+    </svg>
   </div>`,
-  className: "map-pin-badge",
-  iconSize: [80, 50],
-  iconAnchor: [40, 50],
+  className: "map-pin-simple",
+  iconSize: [34, 34],
+  iconAnchor: [17, 34],
 });
 
-export const makeDestPin = (isActive) => makePin("#ef4444", isActive ? "DEST" : "PICKUP");
+export const makeDestPin = (isActive) => makeSimplePin(isActive ? "#ef4444" : "#3b82f6");
 
 export const makeFleetVehicleIcon = (type, status, size = 48) => {
   const t = (type || "").toUpperCase();

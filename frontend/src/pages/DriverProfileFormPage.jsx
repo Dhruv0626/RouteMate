@@ -407,7 +407,6 @@ const DriverProfileFormPage = () => {
                     error={errors.vehicleNumber}
                     disabled={loading}
                   />
-
                 </div>
               </div>
 

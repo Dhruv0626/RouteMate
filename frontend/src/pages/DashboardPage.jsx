@@ -2,6 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications } from "../context/NotificationContext";
+
+const getImageUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+  const baseUrl = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace("/api", "");
+  const normalizedPath = url.replace(/\\/g, "/");
+  const path = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+  return `${baseUrl}${path}`;
+};
 import api from "../services/api";
 import { getPassengerHistory, getDriverHistory } from "../services/rideService";
 import {
@@ -75,18 +84,18 @@ const ROLE_CARDS = {
       color: "rose",
       href: "/passenger/dashboard/payments",
     },
-    {
+    /* {
       icon: Users,
       title: "Refer a Friend",
       desc: "Earn credits for every referral",
       color: "cyan",
       href: "/passenger/dashboard/referral",
-    },
+    }, */
     {
       icon: User,
       title: "My Profile",
       desc: "Manage your personal information",
-      color: "violet",
+      color: "indigo",
       href: "/passenger/dashboard/profile",
     },
 
@@ -106,13 +115,13 @@ const ROLE_CARDS = {
       color: "primary",
       href: "/driver/dashboard/earnings",
     },
-    {
+    /* {
       icon: Calendar,
       title: "My Schedule",
       desc: "Plan your driving hours",
-      color: "violet",
+      color: "cyan",
       href: "/driver/dashboard/schedule",
-    },
+    }, */
     {
       icon: MapPin,
       title: "Active Rides",
@@ -127,13 +136,13 @@ const ROLE_CARDS = {
       color: "rose",
       href: "/driver/dashboard/rating",
     },
-    {
+    /* {
       icon: Wallet,
       title: "Payouts",
       desc: "Withdraw your earnings",
       color: "cyan",
       href: "/driver/dashboard/payouts",
-    },
+    }, */
     {
       icon: Clock,
       title: "My Rides",
@@ -145,7 +154,7 @@ const ROLE_CARDS = {
       icon: FileCheck,
       title: "My Profile",
       desc: "Manage your driver credentials",
-      color: "violet",
+      color: "rose",
       href: "/driver/dashboard/profile",
     },
     {
@@ -178,13 +187,13 @@ const ROLE_CARDS = {
       color: "emerald",
       href: "/admin/dashboard/fleet",
     },
-    {
+    /* {
       icon: Shield,
       title: "Security",
       desc: "Audit logs and access control",
       color: "rose",
       href: "/admin/dashboard/security",
-    },
+    }, */
     {
       icon: UserCheck,
       title: "Driver Approvals",
@@ -207,40 +216,46 @@ const ACTIVITIES_INITIAL = [];
 
 const COLOR_MAP = {
   primary: {
-    bg: "bg-primary/10",
-    icon: "text-primary",
-    border: "border-primary/20",
-    hover: "hover:border-primary/40 hover:bg-primary/20",
+    bg: "bg-blue-500/10",
+    icon: "text-blue-500",
+    border: "border-blue-500/20",
+    hover: "hover:border-blue-500/40 hover:bg-blue-500/20",
   },
   violet: {
     bg: "bg-violet-500/10",
-    icon: "text-violet-600 dark:text-violet-400",
+    icon: "text-violet-500",
     border: "border-violet-500/20",
     hover: "hover:border-violet-500/40 hover:bg-violet-500/20",
   },
   emerald: {
     bg: "bg-emerald-500/10",
-    icon: "text-emerald-600 dark:text-emerald-400",
+    icon: "text-emerald-500",
     border: "border-emerald-500/20",
     hover: "hover:border-emerald-500/40 hover:bg-emerald-500/20",
   },
   amber: {
     bg: "bg-amber-500/10",
-    icon: "text-amber-600 dark:text-amber-400",
+    icon: "text-amber-500",
     border: "border-amber-500/20",
     hover: "hover:border-amber-500/40 hover:bg-amber-500/20",
   },
   rose: {
     bg: "bg-rose-500/10",
-    icon: "text-rose-600 dark:text-rose-400",
+    icon: "text-rose-500",
     border: "border-rose-500/20",
     hover: "hover:border-rose-500/40 hover:bg-rose-500/20",
   },
   cyan: {
     bg: "bg-cyan-500/10",
-    icon: "text-cyan-600 dark:text-cyan-400",
+    icon: "text-cyan-500",
     border: "border-cyan-500/20",
     hover: "hover:border-cyan-500/40 hover:bg-cyan-500/20",
+  },
+  indigo: {
+    bg: "bg-indigo-500/10",
+    icon: "text-indigo-500",
+    border: "border-indigo-500/20",
+    hover: "hover:border-indigo-500/40 hover:bg-indigo-500/20",
   },
 };
 
@@ -340,21 +355,26 @@ const DashboardPage = () => {
           const fetchFn = user.role === "driver" ? getDriverHistory : getPassengerHistory;
           const liveEndpoint = user.role === "driver" ? "/published-rides/my-published" : "/published-rides/my-booked";
           
-          const [historyRes, liveRes] = await Promise.all([
+          const profilePromise = user.role === "driver" ? api.get("/driver-profiles/my-profile").catch(() => null) : Promise.resolve(null);
+
+          const [historyRes, liveRes, profileRes] = await Promise.all([
             fetchFn({ limit: 10 }),
-            api.get(liveEndpoint).catch(() => ({ data: { data: [] } }))
+            api.get(liveEndpoint).catch(() => ({ data: { data: [] } })),
+            profilePromise
           ]);
           
           if (historyRes.data.success) {
             const { stats: s, rides } = historyRes.data.data;
             const liveRides = liveRes.data?.data || [];
+            const driverProfile = profileRes?.data?.data;
             
             // Adjust stats to include live rides if needed
             if (user.role === "driver") {
+              const publishedCount = liveRides.filter(r => r.status !== "completed" && r.status !== "cancelled").length;
               setStats([
-                { label: "Total Rides", value: (s.totalRides + liveRides.filter(r => r.status === 'completed').length).toString() },
-                { label: "Earnings", value: `₹${s.totalEarnings.toLocaleString()}` },
-                { label: "Published", value: liveRides.filter(r => r.status === 'open' || r.status === 'active').length.toString() },
+                { label: "Completed", value: s.completedRides.toString() || "0" },
+                { label: "Published", value: publishedCount.toString() },
+                { label: "Rating", value: `${driverProfile?.averageRating?.toFixed(1) || "0.0"}` },
               ]);
             } else {
               setStats([
@@ -517,11 +537,11 @@ const DashboardPage = () => {
             <div className="relative">
               <button 
                 onClick={() => navigate(`/${role}/dashboard/notifications`)}
-                className="relative rounded-xl border border-(--card-border) bg-(--card-bg) p-2.5 text-(--text-dim) shadow-lg backdrop-blur-md transition-all duration-300 hover:text-primary"
+                className="relative rounded-xl border border-(--card-border) bg-(--card-bg) p-2.5 text-(--text-dim) transition-all duration-300 hover:text-(--text-main) hover:bg-(--total-border)"
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute top-2.5 right-2.5 flex h-2 w-2 items-center justify-center rounded-full bg-amber-500 border-2 border-(--bg-main)">
+                  <span className="absolute top-2.5 right-2.5 flex h-2 w-2 items-center justify-center rounded-full bg-primary animate-pulse">
                   </span>
                 )}
               </button>
@@ -541,14 +561,18 @@ const DashboardPage = () => {
               </div>
               <div className="relative">
                 <div className="from-primary via-primary-dark to-primary shadow-primary/10 group-hover:shadow-primary/30 flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-linear-to-br font-bold text-black shadow-lg transition-all duration-500">
-                  {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                  {user?.profileImage ? (
+                    <img src={getImageUrl(user.profileImage)} alt="U" className="h-full w-full object-cover" />
+                  ) : (
+                    user?.name?.charAt(0)?.toUpperCase() || "U"
+                  )}
                 </div>
               </div>
             </div>
 
             <button
               onClick={() => navigate(`/${role}/dashboard/settings`)}
-              className="ml-1 rounded-xl bg-primary/10 p-2 text-primary transition-all hover:bg-primary hover:text-black"
+              className="ml-1 rounded-xl border border-(--card-border) bg-(--card-bg) p-2 text-(--text-dim) transition-all hover:text-(--text-main) hover:bg-(--total-border)"
             >
               <Settings size={18} />
             </button>
@@ -640,7 +664,7 @@ const DashboardPage = () => {
                   className={`group glass-card relative cursor-pointer rounded-3xl p-6 text-left transition-all duration-300 hover:-translate-y-1 ${c.hover} border-(--card-border) shadow-sm`}
                 >
                   <div
-                    className={`h-12 w-12 ${c.bg} ${c.icon} group-hover:bg-primary mb-6 flex items-center justify-center rounded-xl transition-all duration-500 group-hover:text-black`}
+                    className={`h-12 w-12 ${c.bg} ${c.icon} mb-6 flex items-center justify-center rounded-xl transition-all duration-500`}
                   >
                     <Icon size={24} />
                   </div>
@@ -654,7 +678,7 @@ const DashboardPage = () => {
                         {card.desc}
                       </p>
                     </div>
-                    <div className="group-hover:bg-primary flex h-8 w-8 items-center justify-center rounded-full bg-(--card-bg) text-slate-600 transition-all duration-300 group-hover:text-black">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-(--card-bg) text-slate-600 transition-all duration-300">
                       <ChevronRight size={16} />
                     </div>
                   </div>
@@ -772,7 +796,7 @@ const DashboardPage = () => {
                   {activities.filter(a => !a.isLive).length > 3 && (
                     <button 
                       onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
-                      className="w-full p-4 flex items-center justify-center gap-2 text-(--text-main) rounded-b-3xl font-bold text-xs uppercase tracking-widest bg-(--card-bg) hover:bg-primary/5 transition-colors border-t border-(--card-border)"
+                      className="w-full p-4 flex items-center justify-center gap-2 text-black rounded-b-3xl font-black text-xs uppercase tracking-widest bg-primary hover:bg-primary-dark transition-colors shadow-lg shadow-primary/10"
                     >
                       {isHistoryExpanded ? "Hide Past Trips" : "View More Past Trips"}
                       <ChevronRight size={14} className={`transition-transform duration-300 ${isHistoryExpanded ? "-rotate-90" : "rotate-90"}`} />
@@ -908,7 +932,7 @@ const DashboardPage = () => {
 
               <div className="flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
                 <div className="mr-4 flex items-start gap-3">
-                  <Navigation className="text-emerald-500 mt-0.5" size={20} />
+                  <Navigation className="text-primary mt-0.5" size={20} />
                   <div>
                     <p className="font-bold text-sm text-(--text-main)">Location Tracking</p>
                     <p className="text-[10px] text-(--text-dim) mt-0.5">Shows drivers your exact pickup spot</p>
@@ -916,7 +940,7 @@ const DashboardPage = () => {
                 </div>
                 <button 
                   onClick={() => setModalSettings(prev => ({...prev, locationTracking: !prev.locationTracking}))}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${modalSettings.locationTracking ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${modalSettings.locationTracking ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${modalSettings.locationTracking ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>

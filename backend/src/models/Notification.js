@@ -6,8 +6,8 @@ const { Schema } = mongoose;
 
 const NotificationSchema = new Schema(
   {
-    recipient: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    sender: { type: Schema.Types.ObjectId, ref: "User" }, // Admin or null
+    recipient: { type: Schema.Types.ObjectId, ref: "User" }, // Optional for system-wide logs
+    sender: { type: Schema.Types.ObjectId, ref: "User" }, // Admin or actor
     title: { type: String, required: true },
     message: { type: String, required: true },
     type: { type: String, default: "system" },

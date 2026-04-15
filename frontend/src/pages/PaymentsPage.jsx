@@ -55,9 +55,9 @@ const PaymentsPage = () => {
                 </p>
              </div>
              <div className="flex gap-3">
-                <button className="bg-black text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black/80 transition-all shadow-xl">
-                   Top Up Wallet
-                </button>
+                 <button className="bg-primary text-black px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl border border-black/20">
+                    Top Up Wallet
+                 </button>
              </div>
           </div>
         </section>
