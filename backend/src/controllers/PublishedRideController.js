@@ -141,8 +141,6 @@ export const PublishRide = async (req, res) => {
             source,
             destination,
             departureTime,
-            totalSeats: 1,
-            availableSeats: 1,
             vehicleType: (driverProfile.vehicle?.type || "PRIME").toUpperCase(),
             routeCoords: sampledCoords,
             status: "open",
@@ -399,7 +397,6 @@ export const BookRide = async (req, res) => {
         // Push booking (status = pending until driver confirms)
         ride.bookings.push({
             passenger: passengerId,
-            seats: 1,
             bookingType: "private",
             passengerSource: passengerSource || ride.source,
             passengerDestination: passengerDestination || ride.destination,
@@ -409,8 +406,10 @@ export const BookRide = async (req, res) => {
             status: "pending",
         });
 
-        ride.availableSeats = 0;
-        ride.status = "booked";
+        // ── KEEP RIDE OPEN UNTIL CONFIRMED ──
+        // Logic changed: We no longer set status to "booked" or availableSeats to 0 here.
+        // The ride remains "open" so other passengers can still see/request it until 
+        // the driver explicitly confirms one of them.
 
         await ride.save();
 
@@ -510,6 +509,8 @@ export const RespondToBooking = async (req, res) => {
                 paymentStatus: "pending"
             });
         } else {
+            // Updated: Set status to cancelled instead of deleting
+            // This allows the passenger to see the "REJECTED" status in their dashboard
             booking.status = "cancelled";
             booking.rejectedAt = new Date();
             ride.status = "open";
@@ -596,6 +597,19 @@ export const UpdateRideStatus = async (req, res) => {
             if (!validTrip) return res.status(400).json({ success: false, message: "Invalid OTP. Please check with your passenger." });
         }
 
+        // ── UPDATE DRIVER STATS ──
+        if (status === "completed" && ride.status !== "completed") {
+            await DriverProfileModel.findOneAndUpdate(
+                { user: req.user.id },
+                {
+                    $inc: {
+                        "stats.totalRides": 1,
+                        "stats.completedRides": 1
+                    }
+                }
+            );
+        }
+
         ride.status = status;
         await ride.save();
 
@@ -607,17 +621,11 @@ export const UpdateRideStatus = async (req, res) => {
         }
 
         // ── UPDATE ASSOCIATED TRIPS ──
-        // Map each status to the correct target phase AND the phases that are eligible
-        // to be updated — this prevents dropped/unstarted trips from being swept up.
         const tripPhase = status === "in_progress" ? "ongoing"
             : status === "completed" ? "completed"
                 : status === "arrived" ? "arrived"
                     : "matched";
 
-        // Only touch trips that are in the EXPECTED phase for this transition:
-        //  arrived   → only "matched" trips
-        //  in_progress    → only the specific OTP trip (matched / arrived)
-        //  completed → only "ongoing" trips  ← KEY FIX: never touch matched/cancelled stays
         const eligiblePhases = {
             arrived: { $in: ["matched"] },
             in_progress: { $in: ["matched", "arrived"] },
@@ -625,7 +633,7 @@ export const UpdateRideStatus = async (req, res) => {
         };
 
         const query = { publishedRide: rideId, phase: eligiblePhases[status] || { $ne: "cancelled" } };
-        if (status === "in_progress") query.otp = otp; // Must match the passenger's OTP
+        if (status === "in_progress") query.otp = otp;
 
         const trips = await TripModel.find(query);
 
@@ -633,7 +641,6 @@ export const UpdateRideStatus = async (req, res) => {
             trip.phase = tripPhase;
 
             if (status === "completed") {
-                // Only rides the driver explicitly completed via the map button
                 trip.completedAt = new Date();
                 await UserModel.findByIdAndUpdate(trip.passenger, {
                     $inc: { "passengerStats.totalTrips": 1 }
@@ -647,7 +654,6 @@ export const UpdateRideStatus = async (req, res) => {
 
             if (status === "arrived") {
                 trip.driverArrivedAt = new Date();
-                
                 const sys = await SystemConfig.findOne();
                 const platformCommission = sys ? parseFloat(sys.commission || "0") : 0;
                 
@@ -667,19 +673,6 @@ export const UpdateRideStatus = async (req, res) => {
             }
 
             await trip.save();
-        }
-
-        // ── UPDATE DRIVER STATS ──
-        if (status === "completed") {
-            await DriverProfileModel.findOneAndUpdate(
-                { user: req.user.id },
-                {
-                    $inc: {
-                        "stats.totalRides": 1,
-                        "stats.completedRides": 1
-                    }
-                }
-            );
         }
 
         res.status(200).json({ success: true, message: `Ride marked as ${status}`, data: ride });

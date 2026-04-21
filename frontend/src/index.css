@@ -127,6 +127,22 @@
 
 /* ─── Global Browser Overrides ────────────────────────────────────────────── */
 
+/* Navigation Map Classes */
+.nav-tilt-wrapper {
+  perspective: 1000px;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.nav-tilt-wrapper .leaflet-container {
+  transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.leaflet-control-attribution {
+  display: none !important;
+}
+
 /* Force-hide ALL native browser password reveal and clear buttons */
 /* This prevents "double eye" icons in Edge, Chrome, Safari, etc. */
 input::-ms-reveal,

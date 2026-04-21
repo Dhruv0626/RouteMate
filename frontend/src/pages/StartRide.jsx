@@ -103,6 +103,7 @@ const StartRide = () => {
   const [routeLoading, setRouteLoading]     = useState(false);
   const [heading, setHeading]               = useState(0);
   const [gpsReady, setGpsReady]             = useState(false);
+  const [isPerspectiveMode, setIsPerspectiveMode] = useState(true); // Default to on for drivers
   const [map, setMap]                       = useState(null);
 
   const abortRef    = useRef(null);
@@ -343,22 +344,21 @@ const StartRide = () => {
 
   // Auto-fit bounds
   useEffect(() => {
-    if (!map || !driverLocation) return;
+    if (!map || !driverLocation || isPerspectiveMode) return;
     const targetCoords = isHeadingToPickup ? pickupCoords : destCoords;
     if (!targetCoords) return;
     map.fitBounds(
       L.latLngBounds([[driverLocation.lat, driverLocation.lng], [targetCoords[1], targetCoords[0]]]),
       { padding: [70, 70], maxZoom: 16, animate: true }
     );
-  }, [map, driverLocation?.lat, driverLocation?.lng, isHeadingToPickup]);
+  }, [map, driverLocation?.lat, driverLocation?.lng, isHeadingToPickup, isPerspectiveMode]);
 
   // ─── OTP handlers ─────────────────────────────────────────────────────────
-  const [isPerspectiveMode, setIsPerspectiveMode] = useState(false);
-
+  
   // Auto-track vehicle in Perspective Mode
   useEffect(() => {
     if (isPerspectiveMode && map && driverLocation) {
-      map.panTo([driverLocation.lat, driverLocation.lng], { animate: true, duration: 1.0 });
+      map.setView([driverLocation.lat, driverLocation.lng], 18, { animate: true, duration: 1.0 });
     }
   }, [isPerspectiveMode, driverLocation, map]);
 
@@ -436,19 +436,6 @@ const StartRide = () => {
 
   return (
     <div className="relative flex flex-col h-screen text-white bg-black overflow-hidden">
-      <style>{`
-        .nav-tilt-wrapper {
-          perspective: 1000px;
-          height: 100%;
-          width: 100%;
-          overflow: hidden;
-        }
-        .nav-tilt-wrapper .leaflet-container {
-          transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .leaflet-touch .leaflet-control-attribution { display: none; }
-      `}</style>
-
       {/* ══ Header ══ */}
       <div className="absolute top-0 w-full z-50 p-4 flex items-center justify-between pointer-events-none"
            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)" }}>
@@ -474,7 +461,7 @@ const StartRide = () => {
           onClick={() => {
             setIsPerspectiveMode(!isPerspectiveMode);
             if (!isPerspectiveMode && map && driverLocation) {
-              map.setView([driverLocation.lat, driverLocation.lng], 17, { animate: true });
+              map.setView([driverLocation.lat, driverLocation.lng], 18, { animate: true });
             } else if (isPerspectiveMode && map && driverLocation) {
               const target = isHeadingToPickup ? pickupCoords : destCoords;
               if (target) map.fitBounds(
@@ -511,10 +498,14 @@ const StartRide = () => {
       {/* ══ Map ══ */}
       <div className="flex-1 w-full relative z-0 nav-tilt-wrapper">
         <div 
-          className={`w-full h-full transform-gpu transition-all duration-700`}
+          className={`w-full h-full transform-gpu`}
           style={isPerspectiveMode ? { 
-            transform: `rotateX(35deg) translateY(-5%) scale(1.2)` 
-          } : {}}
+            transform: `scale(1.5) rotateZ(${-heading}deg)`,
+            transition: 'transform 1s cubic-bezier(0.4, 0, 0.2, 1)'
+          } : {
+            transform: `scale(1) rotateZ(0deg)`,
+            transition: 'transform 1s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
         >
           <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" maxZoom={19} />

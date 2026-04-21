@@ -97,6 +97,7 @@ const LocationSearch = ({
   const [isOpen, setIsOpen]           = useState(false);
   const [selectedName, setSelectedName] = useState(value || "");
   const [isFocused, setIsFocused]     = useState(false);
+  const selectingRef = useRef(false);
 
   // Update internal state when value prop changes
   useEffect(() => {
@@ -128,7 +129,7 @@ const LocationSearch = ({
       if (!(showCurrentLocation && isFocused)) setIsOpen(false);
       return;
     }
-    if (debouncedQuery === selectedName) return;
+    if (debouncedQuery === selectedName || selectingRef.current) return;
 
     const fetchSuggestions = async () => {
       setIsLoading(true);
@@ -139,8 +140,16 @@ const LocationSearch = ({
           loc.name.toLowerCase().includes("ahmedabad") || 
           loc.name.toLowerCase().includes("gujarat")
         );
+        
+        // If selection was made while fetching, don't show results
+        if (selectingRef.current) {
+          setResults([]);
+          setIsOpen(false);
+          return;
+        }
+
         setResults(filtered);
-        setIsOpen(true);
+        setIsOpen(filtered.length > 0);
       } catch {
         setResults([]);
       } finally {
@@ -166,13 +175,31 @@ const LocationSearch = ({
   // ─── Handle selection ────────────────────────────────────────────────────
   const handleSelect = useCallback(
     (location) => {
+      if (!location) {
+        setSelectedName("");
+        setQuery("");
+        setIsOpen(false);
+        setResults([]);
+        return;
+      }
+      
+      selectingRef.current = true;
       setSelectedName(location.name);
       setQuery(location.name);
       setIsOpen(false);
       setResults([]);
       setIsFocused(false);
-      if (inputRef.current) inputRef.current.blur();
+      
+      if (inputRef.current) {
+        inputRef.current.blur();
+      }
+      
       onSelect?.(location);
+      
+      // Keep selecting state for a bit to prevent race conditions with debounce
+      setTimeout(() => {
+        selectingRef.current = false;
+      }, 500);
     },
     [onSelect]
   );

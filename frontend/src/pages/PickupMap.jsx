@@ -75,9 +75,9 @@ const PickupMap = () => {
   const [destEtaMins, setDestEtaMins]   = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [gpsReady, setGpsReady]         = useState(false);     // first GPS fix received
+  const [isPerspectiveMode, setIsPerspectiveMode] = useState(true);
   const [map, setMap]                   = useState(null);
   const [heading, setHeading]           = useState(0);         // car rotation
-  const [isPerspectiveMode, setIsPerspectiveMode] = useState(false);
 
   const abortRef   = useRef(null);
   const prevLocRef = useRef(null);   // last location that triggered a route fetch
@@ -312,14 +312,14 @@ const PickupMap = () => {
   // ─── Perspective Mode Tracking ─────────────────────────────────────────────
   useEffect(() => {
     if (isPerspectiveMode && map && driverLocation) {
-      map.panTo([driverLocation.lat, driverLocation.lng], { animate: true, duration: 1.0 });
+      map.setView([driverLocation.lat, driverLocation.lng], 18, { animate: true, duration: 1.0 });
     }
   }, [isPerspectiveMode, driverLocation, map]);
 
   // ─── Auto-fit map bounds ───────────────────────────────────────────────────
   const hasFittedBounds = useRef(null);
   useEffect(() => {
-    if (!map) return;
+    if (!map || isPerspectiveMode) return;
     const phaseKey = ride?.status || "unknown";
     if (hasFittedBounds.current === phaseKey) return;
     
@@ -337,7 +337,7 @@ const PickupMap = () => {
     map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16, animate: true });
     
     hasFittedBounds.current = phaseKey;
-  }, [map, driverLocation?.lat, driverLocation?.lng, ride?.status]);
+  }, [map, driverLocation?.lat, driverLocation?.lng, ride?.status, isPerspectiveMode]);
   
   const handleRecenter = () => {
     if (!map) return;
@@ -382,19 +382,6 @@ const PickupMap = () => {
 
   return (
     <div className="relative flex flex-col h-screen text-white bg-black overflow-hidden">
-      <style>{`
-        .nav-tilt-wrapper {
-          perspective: 1000px;
-          height: 100%;
-          width: 100%;
-          overflow: hidden;
-        }
-        .nav-tilt-wrapper .leaflet-container {
-          transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .leaflet-touch .leaflet-control-attribution { display: none; }
-      `}</style>
-
       {/* ── Header ── */}
       <div className="absolute top-0 w-full z-50 p-4 shrink-0 flex items-center justify-between pointer-events-none">
         <button
@@ -432,10 +419,14 @@ const PickupMap = () => {
       {/* ── Map ── */}
       <div className="flex-1 w-full relative z-0 nav-tilt-wrapper">
         <div 
-          className={`w-full h-full transform-gpu transition-all duration-700`}
+          className={`w-full h-full transform-gpu`}
           style={isPerspectiveMode ? { 
-            transform: `rotateX(35deg) translateY(-5%) scale(1.2)` 
-          } : {}}
+            transform: `scale(1.5) rotateZ(${-heading}deg)`,
+            transition: 'transform 1s cubic-bezier(0.4, 0, 0.2, 1)'
+          } : {
+            transform: `scale(1) rotateZ(0deg)`,
+            transition: 'transform 1s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
         >
           <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
           <TileLayer
@@ -509,7 +500,7 @@ const PickupMap = () => {
                 onClick={() => {
                   setIsPerspectiveMode(!isPerspectiveMode);
                   if (!isPerspectiveMode && map && driverLocation) {
-                    map.setView([driverLocation.lat, driverLocation.lng], 17, { animate: true });
+                    map.setView([driverLocation.lat, driverLocation.lng], 18, { animate: true });
                   } else if (isPerspectiveMode && map && driverLocation) {
                     const target = isActive ? destCoords : pickupCoords;
                     if (target) map.fitBounds(

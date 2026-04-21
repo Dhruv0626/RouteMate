@@ -2,6 +2,8 @@ import DriverProfileModel from "../models/DriverProfile.js";
 import UserModel from "../models/User.js";
 import NotificationModel from "../models/Notification.js";
 import PublishedRideModel from "../models/PublishedRide.js";
+import TripModel from "../models/Trip.js";
+import mongoose from "mongoose";
 import { notifyDriverProfileSubmitted, notifyDriverApproved, notifyDriverRejected } from "../utils/NotifyUtil.js";
 
 // ─── Create Driver Profile ────────────────────────────────────────────────────
@@ -110,10 +112,38 @@ export const GetDriverProfile = async (req, res) => {
             });
         }
 
+        // ─── Attach Live Stats from TripModel ───
+        const stats = await TripModel.aggregate([
+            { $match: { driver: new mongoose.Types.ObjectId(userId) } },
+            {
+                $group: {
+                    _id: null,
+                    totalRides: { $sum: 1 },
+                    completedRides: { $sum: { $cond: [{ $eq: ["$phase", "completed"] }, 1, 0] } },
+                    cancelledRides: { $sum: { $cond: [{ $eq: ["$phase", "cancelled"] }, 1, 0] } },
+                }
+            }
+        ]);
+
+        const profileObj = driverProfile.toObject();
+        if (stats.length > 0) {
+            profileObj.stats = {
+                totalRides: stats[0].totalRides,
+                completedRides: stats[0].completedRides,
+                cancelledRides: stats[0].cancelledRides
+            };
+        } else {
+            profileObj.stats = {
+                totalRides: 0,
+                completedRides: 0,
+                cancelledRides: 0
+            };
+        }
+
         res.status(200).json({
             success: true,
             message: "Driver profile retrieved successfully.",
-            data: driverProfile
+            data: profileObj
         });
     } catch (error) {
         console.error("Get Driver Profile Error:", error.message);
@@ -138,10 +168,38 @@ export const GetDriverProfileById = async (req, res) => {
             });
         }
 
+        // ─── Attach Live Stats from TripModel ───
+        const stats = await TripModel.aggregate([
+            { $match: { driver: driverProfile.user._id } },
+            {
+                $group: {
+                    _id: null,
+                    totalRides: { $sum: 1 },
+                    completedRides: { $sum: { $cond: [{ $eq: ["$phase", "completed"] }, 1, 0] } },
+                    cancelledRides: { $sum: { $cond: [{ $eq: ["$phase", "cancelled"] }, 1, 0] } },
+                }
+            }
+        ]);
+
+        const profileObj = driverProfile.toObject();
+        if (stats.length > 0) {
+            profileObj.stats = {
+                totalRides: stats[0].totalRides,
+                completedRides: stats[0].completedRides,
+                cancelledRides: stats[0].cancelledRides
+            };
+        } else {
+            profileObj.stats = {
+                totalRides: 0,
+                completedRides: 0,
+                cancelledRides: 0
+            };
+        }
+
         res.status(200).json({
             success: true,
             message: "Driver profile retrieved successfully.",
-            data: driverProfile
+            data: profileObj
         });
     } catch (error) {
         console.error("Get Driver Profile By ID Error:", error.message);

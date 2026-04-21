@@ -69,5 +69,19 @@ export const sendPushNotification = async (userId, notification) => {
     console.log(`📲 Native status-bar notification sent to user ${userId}:`, response);
   } catch (error) {
     console.error(`❌ Push Notification Error for user ${userId}:`, error.message);
+
+    // ─── Handle Mismatched Credentials ────────────────────────────────────────
+    // This happens if the user's FCM token was generated for a different Firebase Project
+    // (Sender ID). We should clear the token so it can be refreshed on next login.
+    if (error.code === "messaging/mismatched-credential" || 
+        error.message?.includes("SenderId mismatch") ||
+        error.code === "messaging/registration-token-not-registered") {
+      try {
+        await UserModel.findByIdAndUpdate(userId, { $unset: { fcmToken: 1 } });
+        console.warn(`♻️ Cleared invalid/mismatched FCM token for user ${userId}`);
+      } catch (dbError) {
+        console.error("Failed to clear invalid fcmToken:", dbError.message);
+      }
+    }
   }
 };

@@ -349,7 +349,7 @@ const SavedPlacesPage = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-2">
                     <button 
                       onClick={() => navigate('/passenger/dashboard/ride', { state: { destination: place.address, location: place.location } })}
                       className="p-2.5 rounded-xl bg-primary text-black hover:scale-110 transition-all shadow-md shadow-primary/20"

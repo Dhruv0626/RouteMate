@@ -46,8 +46,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
   const [pickMode, setPickMode] = useState(null); // "source" | "dest"
   const [srcPin, setSrcPin]     = useState(null);
   const [dstPin, setDstPin]     = useState(null);
-  const [bookingType, setBookingType] = useState("shared");
-  const [seats, setSeats] = useState(1);
+  const [bookingType, setBookingType] = useState("private");
   const [fareData, setFareData] = useState(null);
   const [fetchingFare, setFetchingFare] = useState(false);
   const [booking, setBooking]   = useState(false);
@@ -109,7 +108,6 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
             rideId: ride._id,
             passengerLat: srcPin.lat, passengerLng: srcPin.lng,
             destLat: dstPin.lat, destLng: dstPin.lng,
-            bookingType, seats,
             durationMin
           }
         });
@@ -118,7 +116,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
       setFetchingFare(false);
     };
     fetch();
-  }, [srcPin, dstPin, bookingType, seats]);
+  }, [srcPin, dstPin]);
 
   const handleBook = async () => {
     setError("");
@@ -128,8 +126,6 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
     setBooking(true);
     try {
       const res = await api.post(`/published-rides/book/${ride._id}`, {
-        bookingType,
-        requestedSeats: seats,
         passengerSource: {
           address: srcPin.address,
           location: { type: "Point", coordinates: [srcPin.lng, srcPin.lat] },
@@ -168,38 +164,6 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          {/* Type selector */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { type: "shared", icon: Share2, label: "Shared", desc: "Split cost with others", color: "emerald" },
-              { type: "private", icon: Lock, label: "Private", desc: "Full vehicle for you", color: "primary" },
-            ].map(({ type, icon: Icon, label, desc, color }) => (
-              <button key={type} type="button"
-                onClick={() => setBookingType(type)}
-                className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${bookingType === type
-                  ? type === "shared" ? "border-emerald-500 bg-emerald-500/10" : "border-primary bg-primary/10"
-                  : "border-(--card-border) hover:border-white/20"}`}>
-                <Icon size={22} className={bookingType === type ? (type === "shared" ? "text-emerald-500" : "text-primary") : "text-(--text-dim)"} />
-                <p className="font-bold text-sm text-(--text-main)">{label}</p>
-                <p className="text-xs text-(--text-dim) text-center">{desc}</p>
-              </button>
-            ))}
-          </div>
-
-          {/* Seats (shared only) */}
-          {bookingType === "shared" && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-(--text-dim) uppercase tracking-wider flex items-center gap-1.5">
-                <Users size={12} /> Number of Seats
-              </label>
-              <input type="number" min={1} max={ride.availableSeats} value={seats}
-                onChange={(e) => setSeats(Math.min(ride.availableSeats, Math.max(1, parseInt(e.target.value))))}
-                className="w-full px-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm focus:border-primary/60 outline-none"
-              />
-              <p className="text-[10px] text-(--text-dim)">{ride.availableSeats} seat(s) available</p>
-            </div>
-          )}
-
           {/* Map to pick passenger's own route */}
           <div className="space-y-2">
             <p className="text-xs font-bold text-(--text-dim) uppercase tracking-wider">Your Pickup & Drop-off</p>
@@ -263,12 +227,10 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
               <div className="p-4 bg-primary/5 border-b border-(--card-border)">
                 <p className="text-xs font-bold text-(--text-dim) uppercase tracking-wider mb-1">Fare Estimate</p>
                 <p className="text-3xl font-black text-primary">
-                  ₹{bookingType === "private" ? fareData.privateAmount : fareData.sharedTotal}
+                  ₹{fareData.totalWithTax || fareData.final_price || 0}
                 </p>
                 <p className="text-xs text-(--text-dim)">
-                  {bookingType === "shared"
-                    ? `₹${fareData.sharedAmountPerSeat} × ${seats} seat(s) | ${fareData.distanceKm} km`
-                    : `Full vehicle · ${fareData.distanceKm} km`}
+                  Full vehicle · {fareData.distanceKm} km
                 </p>
               </div>
               <div className="grid grid-cols-3 divide-x divide-(--card-border) text-center text-[10px] text-(--text-dim)">
@@ -486,9 +448,6 @@ const AvailableRidesPage = () => {
                         <span className="flex items-center gap-1 bg-(--bg-main) border border-(--card-border) rounded-full px-3 py-1 text-xs font-semibold">
                           <Clock size={10} /> {depDate.toLocaleDateString("en-IN", { day:"numeric", month:"short" })} · {depDate.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}
                         </span>
-                        <span className="flex items-center gap-1 bg-primary/10 text-primary rounded-full px-3 py-1 text-xs font-bold">
-                          <Users size={10} /> {ride.availableSeats} seat{ride.availableSeats !== 1 ? "s" : ""} left
-                        </span>
                         {ride.vehicle?.number && (
                           <span className="flex items-center gap-1 bg-(--bg-main) border border-(--card-border) rounded-full px-3 py-1 text-xs font-semibold">
                             <Car size={10} /> {ride.vehicle.number}
@@ -509,9 +468,8 @@ const AvailableRidesPage = () => {
 
                     <button
                       onClick={() => setSelectedRide(ride)}
-                      disabled={ride.availableSeats === 0}
-                      className="w-full py-3 bg-primary text-black font-black rounded-xl hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2">
-                      {ride.availableSeats === 0 ? "Fully Booked" : <><Navigation size={16} /> Book This Ride</>}
+                      className="w-full py-3 bg-primary text-black font-black rounded-xl hover:scale-[1.02] active:scale-95 transition-all shadow-lg shadow-primary/20 text-sm flex items-center justify-center gap-2">
+                       <Navigation size={16} /> Book This Ride
                     </button>
                   </div>
                 </div>

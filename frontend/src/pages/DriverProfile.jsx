@@ -636,10 +636,10 @@ const DriverProfile = () => {
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-(--card-border)/50">
                   <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                     <p className="text-xs font-semibold text-emerald-500 uppercase">
-                      Total Rides
+                      Completed Rides
                     </p>
                     <p className="text-2xl font-black text-(--text-main) mt-2">
-                      {profile.stats?.totalRides || 0}
+                      {profile.stats?.completedRides || 0}
                     </p>
                   </div>
                   <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">

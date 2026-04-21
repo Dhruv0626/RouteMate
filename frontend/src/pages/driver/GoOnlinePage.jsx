@@ -109,7 +109,6 @@ const GoOnlinePage = () => {
   // Form state (no baseFare — system-calculated)
   const [rideForm, setRideForm] = useState({
     departureTime: "",
-    totalSeats: 2,
   });
 
   // ── Lifecycle ----------------------------------------------------------------
@@ -315,14 +314,13 @@ const GoOnlinePage = () => {
           location: { type: "Point", coordinates: [destPin.lng, destPin.lat] },
         },
         departureTime: new Date(rideForm.departureTime).toISOString(),
-        totalSeats: Number(rideForm.totalSeats),
         routeCoords: finalCoords, // Save full path for proximity matching
       });
 
       if (res.data.success) {
         setPublishSuccess("🎉 Ride published! Path-based matching enabled.");
         setSourcePin(null); setDestPin(null); setDistanceKm(null);
-        setRideForm({ departureTime: "", totalSeats: 2 });
+        setRideForm({ departureTime: "" });
         setShowPublishForm(false);
       }
     } catch (err) {
@@ -625,7 +623,6 @@ const GoOnlinePage = () => {
                   <p className="text-sm font-bold text-(--text-main)">Fare is Auto-Calculated</p>
                   <p className="text-xs text-(--text-dim) mt-0.5">
                     System computes: <strong>Base Fare + (Per Km × Distance) × Surge Multiplier</strong>.
-                    Shared per-seat price = Total Fare ÷ Seats.
                   </p>
                 </div>
               </div>
