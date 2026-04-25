@@ -20,57 +20,7 @@ import ThemeToggle from "../components/ui/ThemeToggle";
 import { createDriverProfile, getMyDriverProfile, updateDriverProfile } from "../services/driverProfileService";
 import { compressImage } from "../utils/imageCompressor";
 
-const VEHICLE_TYPES = [
-  "MOTO",
-  "EVMOTO",
-  "AUTO",
-  "EVAUTO",
-  "GO",
-  "EVGO",
-  "PRIME",
-  "XL"
-];
-const VEHICLE_MODELS = {
-  MOTO: [
-    "Honda Activa 6G", "TVS Jupiter 125", "Hero Splendor Plus", "Bajaj Pulsar 125",
-    "Honda Shine 100", "TVS Raider 125", "Hero HF Deluxe", "Suzuki Access 125",
-    "Yamaha FZ-S V3", "Bajaj CT 110X"
-  ],
-  EVMOTO: [
-    "Ola Electric S1 Air", "Ather 450X", "TVS iQube S", "Bajaj Chetak Electric",
-    "Hero Vida V1 Pro", "Ola Electric S1 Pro", "Ampere Nexus", "Greaves Ampere Magnus",
-    "Pure EV ETrance Neo", "Okinawa Praise Pro"
-  ],
-  AUTO: [
-    "Bajaj RE Compact 4S", "Piaggio Ape City Plus", "TVS King Duramax", "Mahindra Alfa Plus",
-    "Atul Gem Paxx", "Bajaj RE 4S", "Piaggio Ape Xtra", "Mahindra Treo Yaari",
-    "TVS King Deluxe", "Atul Smart"
-  ],
-  EVAUTO: [
-    "Mahindra Treo", "Piaggio Ape E-City", "Euler HiLoad EV", "Bajaj RE EV",
-    "Kinetic Safar Star", "OSM Rage Plus", "YC Electric Auto", "Saarthi EV Auto",
-    "ETrio Touro Max", "Gayam Motor EV"
-  ],
-  GO: [
-    "Maruti Suzuki Swift", "Maruti WagonR", "Tata Tiago", "Hyundai Grand i10 Nios",
-    "Renault Kwid", "Maruti Celerio", "Tata Punch", "Hyundai i20", "Honda Brio",
-    "Maruti Alto K10"
-  ],
-  EVGO: [
-    "Tata Tiago EV", "MG Comet EV", "Citroen e-C3", "Tata Punch EV", "Maruti eVX",
-    "Hyundai Casper EV", "BYD Seagull", "Renault Kwid EV", "PMV EaS-E", "Strom R3"
-  ],
-  PRIME: [
-    "Honda City", "Hyundai Verna", "Maruti Suzuki Ciaz", "Skoda Slavia",
-    "Volkswagen Virtus", "Toyota Yaris", "Hyundai Aura", "Tata Tigor",
-    "Honda Amaze", "Maruti Dzire"
-  ],
-  XL: [
-    "Toyota Innova Crysta", "Mahindra XUV700", "Hyundai Creta", "Kia Seltos",
-    "Tata Safari", "MG Hector Plus", "Mahindra Scorpio N", "Toyota Fortuner",
-    "Kia Carens", "Maruti Ertiga"
-  ]
-};
+import { searchVehicle, categoryLabels } from "../utils/vehicles";
 
 const DriverProfileFormPage = () => {
   const navigate = useNavigate();
@@ -102,6 +52,8 @@ const DriverProfileFormPage = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [isUpdating, setIsUpdating] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showFallback, setShowFallback] = useState(false);
 
   // Redirect if not driver, or fetch existing profile if driver
   React.useEffect(() => {
@@ -149,14 +101,48 @@ const DriverProfileFormPage = () => {
     fetchExistingProfile();
   }, [user, navigate]);
 
-  const handleVehicleTypeChange = (e) => {
+  const handleVehicleNameChange = (e) => {
+    const value = e.target.value;
+    setFormData({ ...formData, vehicleName: value, vehicleType: "" });
+    
+    if (errors.vehicleName) {
+      setErrors({ ...errors, vehicleName: "" });
+    }
+    if (errors.vehicleType) {
+      setErrors({ ...errors, vehicleType: "" });
+    }
+
+    if (value.trim().length >= 1) {
+      const results = searchVehicle(value);
+      setSuggestions(results);
+      if (results.length === 0 && value.trim().length >= 3) {
+        setShowFallback(true);
+      } else {
+        setShowFallback(false);
+      }
+    } else {
+      setSuggestions([]);
+      setShowFallback(false);
+    }
+  };
+
+  const handleSuggestionClick = (selected) => {
     setFormData({
       ...formData,
-      vehicleType: e.target.value,
-      vehicleName: "", // Reset model when type changes
+      vehicleName: selected.name,
+      vehicleType: selected.type
+    });
+    setSuggestions([]);
+    setShowFallback(false);
+  };
+  
+  const handleFallbackTypeChange = (e) => {
+    setFormData({
+      ...formData,
+      vehicleType: e.target.value
     });
     if (errors.vehicleType) {
-      setErrors({ ...errors, vehicleType: "", vehicleName: "" });
+      setErrors({ ...errors, vehicleType: "" });
     }
   };
 
@@ -345,54 +331,84 @@ const DriverProfileFormPage = () => {
 
               {/* Vehicle Information */}
               <div className="pt-4 border-t border-(--card-border)/50">
-                {/* Vehicle Type Dropdown */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div>
+                  {/* Vehicle Name Search */}
+                  <div className="relative">
                     <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
-                      Vehicle Type
+                      Vehicle Name
                     </label>
-                    <select
-                      className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleType ? "border-red-500/50 ring-red-500/10" : ""}`}
-                      value={formData.vehicleType || ""}
-                      onChange={handleVehicleTypeChange}
+                    <input
+                      type="text"
+                      className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleName ? "border-red-500/50 ring-red-500/10" : ""}`}
+                      placeholder="e.g. Honda Activa 6G"
+                      value={formData.vehicleName || ""}
+                      onChange={handleVehicleNameChange}
                       disabled={loading}
-                    >
-                      <option value="">Select vehicle type</option>
-                      {VEHICLE_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.vehicleType && (
-                      <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <AlertCircle size={12} className="text-red-500" />
-                        <span className="text-[10px] font-bold text-red-500">{errors.vehicleType}</span>
+                      autoComplete="off"
+                    />
+                    {suggestions.length > 0 && (
+                      <div className="absolute z-20 w-full mt-2 rounded-xl border border-(--card-border) bg-(--card-bg) shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        {suggestions.map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSuggestionClick(suggestion)}
+                            className="w-full flex items-center justify-between p-3 text-left hover:bg-primary/5 transition-colors border-b border-(--card-border)/50 last:border-0"
+                          >
+                            <span className="text-sm font-medium text-(--text-main)">{suggestion.name}</span>
+                            <span className="text-xs text-(--text-dim) flex items-center gap-1 bg-(--card-border)/30 px-2 py-1 rounded-md">
+                              {categoryLabels[suggestion.type]?.icon} {suggestion.type}
+                            </span>
+                          </button>
+                        ))}
                       </div>
                     )}
-                  </div>
-
-                  <div>
-                    <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
-                      Vehicle Model
-                    </label>
-                    <select
-                      className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleName ? "border-red-500/50 ring-red-500/10" : ""}`}
-                      value={formData.vehicleName || ""}
-                      onChange={(e) => handleInputChange(e, 'vehicleName')}
-                      disabled={loading || !formData.vehicleType}
-                    >
-                      <option value="">{formData.vehicleType ? `Select ${formData.vehicleType} model` : 'Select type first'}</option>
-                      {formData.vehicleType && VEHICLE_MODELS[formData.vehicleType]?.map((model) => (
-                        <option key={model} value={model}>
-                          {model}
-                        </option>
-                      ))}
-                    </select>
                     {errors.vehicleName && (
                       <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
                         <AlertCircle size={12} className="text-red-500" />
                         <span className="text-[10px] font-bold text-red-500">{errors.vehicleName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Vehicle Type (Auto-filled or Fallback) */}
+                  <div>
+                    <label className="font-display ml-1 text-xs font-bold tracking-widest text-(--text-dim) uppercase transition-colors duration-500 mb-2 block">
+                      Vehicle Type
+                    </label>
+                    
+                    {(!showFallback && formData.vehicleType) ? (
+                      <div className="w-full flex items-center gap-3 rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans opacity-70 cursor-not-allowed transition-all duration-500">
+                        <span className="text-xl">{categoryLabels[formData.vehicleType]?.icon}</span>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-(--text-main)">{categoryLabels[formData.vehicleType]?.label}</span>
+                          <span className="text-[10px] text-(--text-dim)">{categoryLabels[formData.vehicleType]?.desc}</span>
+                        </div>
+                      </div>
+                    ) : showFallback ? (
+                      <select
+                        className={`w-full rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans text-sm text-(--text-main) transition-all duration-500 focus:ring-primary/20 focus:border-primary/50 focus:ring-2 focus:outline-none ${errors.vehicleType ? "border-red-500/50 ring-red-500/10" : ""}`}
+                        value={formData.vehicleType || ""}
+                        onChange={handleFallbackTypeChange}
+                        disabled={loading}
+                      >
+                        <option value="">Select category manually</option>
+                        {Object.keys(categoryLabels).map((type) => (
+                          <option key={type} value={type}>
+                            {categoryLabels[type].icon} {type} - {categoryLabels[type].desc}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="w-full flex items-center rounded-xl border border-(--card-border) bg-(--card-bg) p-3 font-sans opacity-50 cursor-not-allowed h-[50px] transition-all duration-500">
+                        <span className="text-sm text-(--text-dim)">Auto-fills after selection</span>
+                      </div>
+                    )}
+
+                    {errors.vehicleType && (
+                      <div className="flex items-center gap-1.5 ml-1 mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <AlertCircle size={12} className="text-red-500" />
+                        <span className="text-[10px] font-bold text-red-500">{errors.vehicleType}</span>
                       </div>
                     )}
                   </div>

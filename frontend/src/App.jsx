@@ -53,6 +53,8 @@ import PaymentsPage from "./pages/PaymentsPage";
 import ReferralPage from "./pages/ReferralPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import SettingsPage from "./pages/SettingsPage";
+import EmergencyPage from "./pages/EmergencyPage";
+import AdminSOSPage from "./pages/admin/AdminSOSPage";
 import { ShieldAlert } from "lucide-react";
 
 import { getMyDriverProfile } from "./services/driverProfileService";
@@ -309,6 +311,9 @@ function AppContent() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/loader" element={<Loader fullPage text="System Demo Mode..." />} />
 
+        {/* Public Emergency Page — no auth required */}
+        <Route path="/emergency/:token" element={<EmergencyPage />} />
+
         {/* User Auth Routes */}
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/signup" element={<SignupPage />} />
@@ -383,6 +388,14 @@ function AppContent() {
           element={
             <AdminProtectedRoute>
               <AdminHistoryPage />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/dashboard/sos"
+          element={
+            <AdminProtectedRoute>
+              <AdminSOSPage />
             </AdminProtectedRoute>
           }
         />

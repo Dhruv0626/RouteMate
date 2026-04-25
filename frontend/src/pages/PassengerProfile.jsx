@@ -20,6 +20,7 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import api from "../services/api";
+import EmergencyContactsManager from "../components/passenger/EmergencyContactsManager";
 
 const getImageUrl = (url) => {
   if (!url) return null;
@@ -286,6 +287,12 @@ const PassengerProfile = () => {
                 <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">No places saved</p>
               </div>
             </div>
+
+            {/* ── Safety Settings ── */}
+            <div className="glass-card rounded-3xl p-6 border-(--card-border)">
+              <EmergencyContactsManager />
+            </div>
+
           </section>
 
         </div>

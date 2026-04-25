@@ -208,6 +208,13 @@ const ROLE_CARDS = {
       color: "cyan",
       href: "/admin/dashboard/settings",
     },
+    {
+      icon: Shield,
+      title: "SOS Management",
+      desc: "Monitor & resolve emergency alerts",
+      color: "rose",
+      href: "/admin/dashboard/sos",
+    },
   ],
 };
 

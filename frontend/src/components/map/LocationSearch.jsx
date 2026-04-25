@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { searchLocation } from "../../utils/geocode";
+import { searchLocation, reverseGeocode } from "../../utils/geocode";
 
 // ─── Simple debounce hook ─────────────────────────────────────────────────────
 function useDebounce(value, delay) {
@@ -11,19 +11,6 @@ function useDebounce(value, delay) {
   return debounced;
 }
 
-// ─── Reverse-geocode a lat/lng → human-readable name (Nominatim) ─────────────
-async function reverseGeocode(lat, lng) {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      { headers: { "Accept-Language": "en", "User-Agent": "RouteMate/1.0" } }
-    );
-    const data = await res.json();
-    return data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  } catch {
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  }
-}
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function SearchIcon({ size = 16 }) {
@@ -110,46 +97,44 @@ const LocationSearch = ({
 
   const containerRef = useRef(null);
   const inputRef = useRef(null);
-  const debouncedQuery = useDebounce(query, 200);
+  const abortRef = useRef(null);
+  const debouncedQuery = useDebounce(query, 400); // 400ms — respects Nominatim 1 req/sec limit
 
   // ─── Pre-resolve GPS name as soon as currentLocation prop arrives ────────
   useEffect(() => {
     if (!showCurrentLocation || !currentLocation) return;
     if (gpsLocation) return; // already resolved
-    reverseGeocode(currentLocation.lat, currentLocation.lng).then((name) => {
-      setGpsLocation({ lat: currentLocation.lat, lng: currentLocation.lng, name });
+    reverseGeocode(currentLocation.lat, currentLocation.lng).then((locObj) => {
+      if (locObj) setGpsLocation(locObj);
     });
   }, [showCurrentLocation, currentLocation, gpsLocation]);
 
-  // ─── Fetch search suggestions ────────────────────────────────────────────
+  // ─── Fetch search suggestions (fires from 1st character) ────────────────
   useEffect(() => {
     if (!debouncedQuery || debouncedQuery.trim().length < 1) {
       setResults([]);
-      // Keep dropdown open on focus if showing GPS option
       if (!(showCurrentLocation && isFocused)) setIsOpen(false);
       return;
     }
     if (debouncedQuery === selectedName || selectingRef.current) return;
 
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
         const data = await searchLocation(debouncedQuery);
-        // Strict filter: Only show Ahmedabad locations
-        const filtered = data.filter(loc => 
-          loc.name.toLowerCase().includes("ahmedabad") || 
-          loc.name.toLowerCase().includes("gujarat")
-        );
-        
-        // If selection was made while fetching, don't show results
+
         if (selectingRef.current) {
           setResults([]);
           setIsOpen(false);
           return;
         }
 
-        setResults(filtered);
-        setIsOpen(filtered.length > 0);
+        setResults(data);
+        setIsOpen(data.length > 0);
       } catch {
         setResults([]);
       } finally {
@@ -159,6 +144,7 @@ const LocationSearch = ({
 
     fetchSuggestions();
   }, [debouncedQuery, selectedName, showCurrentLocation, isFocused]);
+
 
   // ─── Close on outside click ──────────────────────────────────────────────
   useEffect(() => {
@@ -221,10 +207,11 @@ const LocationSearch = ({
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        const name = await reverseGeocode(lat, lng);
-        const loc = { lat, lng, name };
-        setGpsLocation(loc);
-        handleSelect(loc);
+        const locObj = await reverseGeocode(lat, lng);
+        if (locObj) {
+          setGpsLocation(locObj);
+          handleSelect(locObj);
+        }
         setGpsLoading(false);
       },
       (err) => {
@@ -243,11 +230,6 @@ const LocationSearch = ({
     }
   };
 
-  // ─── Shorten long display names ──────────────────────────────────────────
-  const shortenName = (name) => {
-    if (!name) return "";
-    return name.split(", ").slice(0, 3).join(", ");
-  };
 
   // Whether to show the GPS suggestion row
   const showGpsRow = showCurrentLocation && isFocused && !selectedName;
@@ -389,13 +371,28 @@ const LocationSearch = ({
                   📍 Use My Current Location
                 </span>
                 {gpsLocation ? (
-                  <span style={{
-                    display: "block", fontSize: "10px", color: "var(--text-dim)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    maxWidth: "260px",
+                  <div style={{
+                    fontSize: "10px",
+                    color: "var(--text-dim)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "5px",
+                    opacity: 0.8
                   }}>
-                    {shortenName(gpsLocation.name)}
-                  </span>
+                    {/* Bold specific part of current location */}
+                    <span style={{ fontWeight: 700, color: "var(--text-main)" }}>
+                      {gpsLocation.specificName}
+                    </span>
+                    {/* Grey subtitle context */}
+                    {gpsLocation.subtitle && (
+                      <span style={{ fontWeight: 400 }}>
+                        {gpsLocation.subtitle}
+                      </span>
+                    )}
+                  </div>
                 ) : (
                   <span style={{ display: "block", fontSize: "10px", color: "var(--text-dim)" }}>
                     Tap to detect your GPS position
@@ -427,20 +424,34 @@ const LocationSearch = ({
             >
               <span style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
                 <PinIcon color="#6366f1" size={13} />
-                <span>
-                  <span style={{
-                    display: "block", fontSize: "12px", fontWeight: 600,
-                    color: "var(--text-main)", marginBottom: "2px",
-                  }}>
-                    {shortenName(loc.name)}
-                  </span>
-                  <span style={{
-                    display: "block", fontSize: "10px", color: "var(--text-dim)",
-                    opacity: 0.9, overflow: "hidden", textOverflow: "ellipsis", 
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  {/* Primary — clean short name (e.g. "Ahmedabad Station, Kalupur, Ahmedabad") */}
+                  <div style={{
+                    fontSize: "12px",
+                    color: "var(--text-main)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "6px"
                   }}>
-                    {loc.name}
-                  </span>
+                    {/* Bold primary name */}
+                    <span style={{ fontWeight: 700 }}>
+                      {loc.specificName || loc.name}
+                    </span>
+                    {/* Grey subtitle context */}
+                    {loc.subtitle && (
+                      <span style={{ 
+                        fontSize: "10px", 
+                        color: "var(--text-dim)", 
+                        fontWeight: 400,
+                        opacity: 0.8
+                      }}>
+                        {loc.subtitle}
+                      </span>
+                    )}
+                  </div>
                 </span>
               </span>
             </button>

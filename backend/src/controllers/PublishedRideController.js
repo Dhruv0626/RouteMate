@@ -25,7 +25,7 @@ const getPlatformStats = async () => {
     try {
         // Supply = Total Drivers Online
         const available_drivers = await DriverProfileModel.countDocuments({ isOnline: true, isApproved: true });
-        
+
         // Demand = Total "pending" or "booked" rides in the last 15 minutes
         const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
         const total_requests = await PublishedRideModel.countDocuments({
@@ -214,7 +214,7 @@ export const GetAvailableRides = async (req, res) => {
                 }
                 // If still not found, check final destination as a last resort (unlikely for pickup but safe)
                 if (pickupIdx === -1 && haversineKm(pSrc, driverDst) <= MAX_PICK_KM) pickupIdx = 999998;
-                
+
                 if (pickupIdx === -1) return false;
             }
 
@@ -383,15 +383,15 @@ export const BookRide = async (req, res) => {
         const amountPaid = fareData.totalWithTax;
 
         const mappedFareBreakdown = {
-             baseFare: fareData.baseFare || 0,
-             distanceFare: fareData.distanceFare || 0,
-             timeFare: fareData.timeFare || 0,
-             nightFare: fareData.nightFare || 0,
-             surgeFare: fareData.surgeFare || 0,
-             surgeMultiplier: fareData.surgeMultiplier || 1.0,
-             surgedTotal: fareData.surgedTotal || 0,
-             totalWithTax: fareData.totalWithTax || 0,
-             co2Saved: fareData.co2_saved_kg || 0
+            baseFare: fareData.baseFare || 0,
+            distanceFare: fareData.distanceFare || 0,
+            timeFare: fareData.timeFare || 0,
+            nightFare: fareData.nightFare || 0,
+            surgeFare: fareData.surgeFare || 0,
+            surgeMultiplier: fareData.surgeMultiplier || 1.0,
+            surgedTotal: fareData.surgedTotal || 0,
+            totalWithTax: fareData.totalWithTax || 0,
+            co2Saved: fareData.co2_saved_kg || 0
         };
 
         // Push booking (status = pending until driver confirms)
@@ -531,13 +531,13 @@ export const RespondToBooking = async (req, res) => {
                 : `Your ride booking was rejected by the driver. Please search for another ride.`,
             type: action === "confirm" ? "booking_confirmed" : "booking_rejected",
             link: `/passenger/dashboard/my-rides`,
-            metadata: { 
-                 rideId, 
-                 bookingId, 
-                 amountPaid: booking.amountPaid, 
-                 otp: trip?.otp,
-                 platformFeePercentage: platformCommission,
-                 motive: action === "confirm" ? "booking_confirmed" : "booking_rejected"
+            metadata: {
+                rideId,
+                bookingId,
+                amountPaid: booking.amountPaid,
+                otp: trip?.otp,
+                platformFeePercentage: platformCommission,
+                motive: action === "confirm" ? "booking_confirmed" : "booking_rejected"
             }
         });
 
@@ -567,10 +567,10 @@ export const GetMyPublishedRides = async (req, res) => {
         res.status(200).json({ success: true, data: rides });
     } catch (error) {
         console.error("🔴 Error fetching published rides:", error);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             message: "Error fetching published rides",
-            error: process.env.NODE_ENV === "production" ? undefined : error.message 
+            error: process.env.NODE_ENV === "production" ? undefined : error.message
         });
     }
 };
@@ -602,6 +602,7 @@ export const UpdateRideStatus = async (req, res) => {
             await DriverProfileModel.findOneAndUpdate(
                 { user: req.user.id },
                 {
+                    $set: { isOnline: false },
                     $inc: {
                         "stats.totalRides": 1,
                         "stats.completedRides": 1
@@ -656,7 +657,7 @@ export const UpdateRideStatus = async (req, res) => {
                 trip.driverArrivedAt = new Date();
                 const sys = await SystemConfig.findOne();
                 const platformCommission = sys ? parseFloat(sys.commission || "0") : 0;
-                
+
                 await NotificationModel.create({
                     recipient: trip.passenger,
                     sender: req.user.id,
@@ -664,7 +665,7 @@ export const UpdateRideStatus = async (req, res) => {
                     message: "Your driver has arrived at the pickup location. Please meet your driver to start the trip.",
                     type: "driver_arrived",
                     link: "/passenger/dashboard/my-rides",
-                    metadata: { 
+                    metadata: {
                         rideId,
                         platformFeePercentage: platformCommission,
                         motive: "driver_arrived"
@@ -690,9 +691,9 @@ export const GetSingleRide = async (req, res) => {
         const ride = await PublishedRideModel.findById(rideId)
             .populate("driver", "name email Mobile_no profileImage")
             .populate("bookings.passenger", "name email Mobile_no profileImage");
-        
+
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found" });
-        
+
         res.status(200).json({ success: true, data: ride });
     } catch (error) {
         res.status(500).json({ success: false, message: "Error fetching ride details" });

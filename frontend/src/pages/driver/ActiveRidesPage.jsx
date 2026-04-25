@@ -310,7 +310,11 @@ const ActiveRidesPage = () => {
                     {/* Quick Actions */}
                     <div className="grid grid-cols-2 gap-3">
                       <button 
-                        onClick={() => navigate(`/pickup-map/${ride.publishedRide?._id || ride.publishedRide || ride._id}`)}
+                        onClick={() => {
+                          const id = ride.publishedRide?._id || ride.publishedRide || ride._id;
+                          const idStr = typeof id === 'object' ? id._id : id;
+                          navigate(`/pickup-map/${idStr}`);
+                        }}
                         className="flex items-center justify-center gap-2 py-3 px-4 bg-amber-400 hover:bg-amber-500 text-black rounded-lg font-bold transition"
                       >
                         <Navigation className="w-5 h-5" />
@@ -330,7 +334,11 @@ const ActiveRidesPage = () => {
                     {(ride.phase === "matched" || ride.phase === "arrived") && (
                         <>
                           <button 
-                            onClick={() => navigate(`/start-ride/${ride.publishedRide?._id || ride.publishedRide || ride._id}`)}
+                            onClick={() => {
+                              const id = ride.publishedRide?._id || ride.publishedRide || ride._id;
+                              const idStr = typeof id === 'object' ? id._id : id;
+                              navigate(`/start-ride/${idStr}`);
+                            }}
                             className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition"
                           >
                             {ride.phase === "arrived" ? "Enter OTP & Start" : "Start Ride"}
@@ -346,7 +354,11 @@ const ActiveRidesPage = () => {
                       {ride.phase === "ongoing" && (
                         <>
                           <button 
-                            onClick={() => navigate(`/start-ride/${ride.publishedRide || ride._id}`)}
+                            onClick={() => {
+                              const id = ride.publishedRide?._id || ride.publishedRide || ride._id;
+                              const idStr = typeof id === 'object' ? id._id : id;
+                              navigate(`/start-ride/${idStr}`);
+                            }}
                             className="flex-1 py-3 px-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold transition flex justify-center items-center gap-2"
                           >
                             <Navigation size={18} /> Live Map

@@ -5,69 +5,186 @@
 // Multi-route     — OSRM alternatives first; small offsets only as fallback
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Build a full "Name, Area, City, State – Pincode" from Nominatim address ──
+// ─── Internal helper to split full name into bold + grey parts ────────────────
+function splitAddress(item) {
+  const a = item?.address || {};
+  
+  // Specific name: The most specific landmark/building/road
+  const specificName =
+    a.amenity || a.shop || a.tourism || a.leisure || a.stadium ||
+    a.university || a.hospital || a.school || a.place_of_worship ||
+    a.building || a.road || a.pedestrian || a.path || a.place;
+
+  const area = a.neighbourhood || a.suburb || a.quarter || a.city_district;
+  const taluka = a.county || a.state_district;
+  const city = a.city || a.town || a.village || a.municipality || a.district;
+  const state = a.state;
+  const pin = a.postcode;
+
+  // Build ordered list: Area -> Taluka -> City -> State
+  const parts = [area, taluka, city].filter(Boolean);
+  
+  // Ensure Ahmedabad is explicitly present if in Gujarat
+  const hasAhmedabad = parts.some(pt => pt.toLowerCase().includes("ahmedabad") || pt.toLowerCase().includes("amdavad"));
+  if (state === "Gujarat" && !hasAhmedabad && specificName?.toLowerCase() !== "ahmedabad") {
+    parts.push("Ahmedabad");
+  }
+  if (state) parts.push(state);
+
+  // Deduplicate and join
+  const uniqueParts = parts.filter((v, i, arr) => arr.indexOf(v) === i);
+  const subtitle = uniqueParts.join(", ") + (pin ? ` – ${pin}` : "");
+
+  return { specificName, subtitle };
+}
+
+// ─── Build a full "Name, Area, City, State – Pincode" from Nominatim address ──
+export function buildCleanName(item) {
+  const { specificName, subtitle } = splitAddress(item);
+
+  const locationParts = [specificName, subtitle].filter(Boolean);
+
+  if (!specificName && !subtitle) {
+    return item?.display_name?.split(", ").slice(0, 4).join(", ") || "";
+  }
+
+  // Deduplicate and join
+  const unique = [specificName].concat(subtitle.split(", ")).filter(Boolean);
+  const cleanUnique = unique.filter((v, i, arr) => arr.indexOf(v) === i);
+  
+  const base = cleanUnique.join(", ");
+  return base;
+}
+
+// ─── Reverse Geocoding (Nominatim) ────────────────────────────────────────────
 // ─── Reverse Geocoding (Nominatim) ────────────────────────────────────────────
 export async function reverseGeocode(lat, lng) {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
       { headers: { "Accept-Language": "en", "User-Agent": "RouteMate/1.0" } }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data?.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    const name = buildCleanName(data);
+    const { specificName, subtitle } = splitAddress(data);
+    
+    return { 
+      name, 
+      specificName: specificName || name, 
+      subtitle, 
+      fullAddress: data?.display_name || name,
+      lat, 
+      lng 
+    };
   } catch (e) {
     console.error("[geocode] reverseGeocode:", e.message);
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    const coords = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    return { name: coords, specificName: coords, subtitle: "", lat, lng };
   }
 }
 
-// ─── Location Search ──────────────────────────────────────────────────────────
+// ─── Location Search (Photon by Komoot — OSM autocomplete, no key, no rate-limit) ────
 export async function searchLocation(query) {
   if (!query || query.trim().length < 1) return [];
-  
-  // Strict Ahmedabad restriction: Append city/state and use bounded viewbox
-  const ahmedabadViewbox = "&viewbox=72.42,22.92,72.72,23.12&bounded=1";
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ", Ahmedabad, Gujarat")}&format=json&limit=8&countrycodes=in${ahmedabadViewbox}`;
-  
+
+  // Gujarat bounding box: minLon, minLat, maxLon, maxLat
+  const gujaratBbox = "68.0,20.1,74.5,24.7";
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=10&lang=en&bbox=${gujaratBbox}`;
+
   try {
-    const res = await fetch(url, {
-      headers: { "Accept-Language": "en", "User-Agent": "RouteMate/1.0 (ride-sharing app)" },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.map((item) => ({
-      name: item.display_name,
-      lat: parseFloat(item.lat),
-      lng: parseFloat(item.lon),
-    }));
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    if (!res.ok) throw new Error(`Photon HTTP ${res.status}`);
+    const json = await res.json();
+    const features = json.features || [];
+
+    return features
+      .filter(f => {
+        // Keep only results in India (Photon bbox is a bias, not hard filter)
+        const country = (f.properties.country || "").toLowerCase();
+        return country === "india" || country === "";
+      })
+      .map(f => {
+        const p = f.properties;
+        const [lng, lat] = f.geometry.coordinates;
+
+        // Primary bold name (most specific)
+        const specificName = p.name || p.street || p.city || query;
+
+        // Grey subtitle parts
+        const parts = [];
+        if (p.district && p.district !== specificName) parts.push(p.district);
+        if (p.city && p.city !== specificName) parts.push(p.city);
+        if (p.county && p.county !== specificName) parts.push(p.county);
+        
+        // Ensure Ahmedabad is explicitly present if in Gujarat
+        const state = p.state;
+        const hasAhmedabad = parts.some(pt => pt.toLowerCase().includes("ahmedabad") || pt.toLowerCase().includes("amdavad"));
+        
+        if (state === "Gujarat" && !hasAhmedabad && specificName.toLowerCase() !== "ahmedabad") {
+          parts.push("Ahmedabad");
+        }
+        
+        if (state && state !== specificName) parts.push(state);
+        if (p.postcode) parts.push(`– ${p.postcode}`);
+        
+        const subtitle = parts.filter((v, i, arr) => arr.indexOf(v) === i).join(", ");
+
+        const fullName = subtitle ? `${specificName}, ${subtitle}` : specificName;
+
+        return { name: fullName, specificName, subtitle, fullAddress: fullName, lat, lng };
+      });
   } catch (e) {
-    console.error("[geocode] searchLocation:", e.message);
-    return [];
+    console.warn("[geocode] Photon failed, falling back to Nominatim:", e.message);
+    // Fallback: Nominatim India-wide
+    try {
+      const fallbackUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=10&countrycodes=in&addressdetails=1`;
+      const res2 = await fetch(fallbackUrl, {
+        headers: { "Accept-Language": "en", "User-Agent": "RouteMate/1.0" },
+      });
+      if (!res2.ok) return [];
+      const data = await res2.json();
+      return data.map(item => {
+        const { specificName, subtitle } = splitAddress(item);
+        const name = buildCleanName(item) || item.display_name;
+        return {
+          name,
+          specificName: specificName || name,
+          subtitle,
+          fullAddress: item.display_name,
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lon),
+        };
+      });
+    } catch {
+      return [];
+    }
   }
 }
 
 // ─── Traffic Condition (IST time-of-day) ──────────────────────────────────────
 export function getTrafficCondition() {
-  const now   = new Date();
+  const now = new Date();
   const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const h     = new Date(utcMs + 5.5 * 3600 * 1000).getHours();
+  const h = new Date(utcMs + 5.5 * 3600 * 1000).getHours();
 
   if ((h >= 8 && h < 11) || (h >= 17 && h < 21))
-    return { multiplier: 1.55, label: "Heavy Traffic",    color: "#ef4444", icon: "🔴" };
+    return { multiplier: 1.55, label: "Heavy Traffic", color: "#ef4444", icon: "🔴" };
   if (h >= 11 && h < 17)
     return { multiplier: 1.20, label: "Moderate Traffic", color: "#f59e0b", icon: "🟡" };
   if (h >= 21 || h < 6)
-    return { multiplier: 0.85, label: "Light Traffic",    color: "#22c55e", icon: "🟢" };
-  return       { multiplier: 1.05, label: "Normal Traffic",  color: "#22c55e", icon: "🟢" };
+    return { multiplier: 0.85, label: "Light Traffic", color: "#22c55e", icon: "🟢" };
+  return { multiplier: 1.05, label: "Normal Traffic", color: "#22c55e", icon: "🟢" };
 }
 
 // ─── Fare Tiers (₹ fixed rates) ───────────────────────────────────────────────
 export const FARE_TIERS = [
-  { id: "bike",  label: "Bike",  emoji: "🏍️", baseFare: 15,  perKm: 6,  perMin: 0.6, capacity: "1 seat"  },
-  { id: "auto",  label: "Auto",  emoji: "🛺",  baseFare: 30,  perKm: 9,  perMin: 1.0, capacity: "3 seats" },
-  { id: "mini",  label: "Mini",  emoji: "🚗",  baseFare: 50,  perKm: 12, perMin: 1.5, capacity: "4 seats" },
-  { id: "sedan", label: "Sedan", emoji: "🚙",  baseFare: 70,  perKm: 15, perMin: 2.0, capacity: "4 seats" },
-  { id: "suv",   label: "SUV",   emoji: "🚐",  baseFare: 100, perKm: 20, perMin: 2.5, capacity: "6 seats" },
+  { id: "bike", label: "Bike", emoji: "🏍️", baseFare: 15, perKm: 6, perMin: 0.6, capacity: "1 seat" },
+  { id: "auto", label: "Auto", emoji: "🛺", baseFare: 30, perKm: 9, perMin: 1.0, capacity: "3 seats" },
+  { id: "mini", label: "Mini", emoji: "🚗", baseFare: 50, perKm: 12, perMin: 1.5, capacity: "4 seats" },
+  { id: "sedan", label: "Sedan", emoji: "🚙", baseFare: 70, perKm: 15, perMin: 2.0, capacity: "4 seats" },
+  { id: "suv", label: "SUV", emoji: "🚐", baseFare: 100, perKm: 20, perMin: 2.5, capacity: "6 seats" },
 ];
 
 export function calculateFares(distanceKm, durationMin, systemConfig = null) {
@@ -90,9 +207,9 @@ export function calculateFares(distanceKm, durationMin, systemConfig = null) {
 
 // ─── Route metadata (label / tag / color per slot) ────────────────────────────
 export const ROUTE_META = [
-  { label: "Fastest",       tag: "⚡ Recommended",   color: "#6366f1" },
-  { label: "Balanced",      tag: "🔀 Alternate Path", color: "#f59e0b" },
-  { label: "Scenic Route",  tag: "🛣️ Via Bypass",    color: "#10b981" },
+  { label: "Fastest", tag: "⚡ Recommended", color: "#6366f1" },
+  { label: "Balanced", tag: "🔀 Alternate Path", color: "#f59e0b" },
+  { label: "Scenic Route", tag: "🛣️ Via Bypass", color: "#10b981" },
 ];
 
 // ─── OSRM helpers ─────────────────────────────────────────────────────────────
@@ -112,7 +229,7 @@ async function fetchOsrmAlternatives(pickup, dropoff) {
     `${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}` +
     `?overview=full&geometries=geojson&alternatives=true`;
   try {
-    const res  = await fetch(url);
+    const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
     if (data.code !== "Ok" || !data.routes?.length) return [];
@@ -126,13 +243,13 @@ async function fetchOsrmAlternatives(pickup, dropoff) {
  * Fetch a single OSRM route through an optional via-waypoint.
  * via = { lat, lng } or null for direct.
  */
-async function fetchOsrmVia(pickup, via, dropoff) {
+export async function fetchOsrmVia(pickup, via, dropoff) {
   const coords = via
     ? `${pickup.lng},${pickup.lat};${via.lng},${via.lat};${dropoff.lng},${dropoff.lat}`
     : `${pickup.lng},${pickup.lat};${dropoff.lng},${dropoff.lat}`;
   const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
   try {
-    const res  = await fetch(url);
+    const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
     if (data.code !== "Ok" || !data.routes?.length) return null;
@@ -152,14 +269,14 @@ function lateralWaypoint(pickup, dropoff, fraction, side, kmOffset) {
   const midLat = pickup.lat + fraction * (dropoff.lat - pickup.lat);
   const midLng = pickup.lng + fraction * (dropoff.lng - pickup.lng);
 
-  const dx  = dropoff.lng - pickup.lng;
-  const dy  = dropoff.lat - pickup.lat;
+  const dx = dropoff.lng - pickup.lng;
+  const dy = dropoff.lat - pickup.lat;
   const len = Math.sqrt(dx * dx + dy * dy) || 1;
 
   const deg = kmOffset / 111;
   return {
     lat: midLat + (-dx / len) * deg * side,
-    lng: midLng + ( dy / len) * deg * side,
+    lng: midLng + (dy / len) * deg * side,
   };
 }
 
@@ -201,8 +318,8 @@ export async function getMultipleRoutes(pickup, dropoff, systemConfig = null) {
   const traffic = getTrafficCondition();
 
   // Direct straight-line km (Haversine approximation)
-  const dx       = dropoff.lng - pickup.lng;
-  const dy       = dropoff.lat - pickup.lat;
+  const dx = dropoff.lng - pickup.lng;
+  const dy = dropoff.lat - pickup.lat;
   const directKm = Math.sqrt(dx * dx + dy * dy) * 111;
 
   // Offset: 0.4–0.9 km (tiny — just enough to nudge OSRM onto a parallel road)
@@ -232,7 +349,7 @@ export async function getMultipleRoutes(pickup, dropoff, systemConfig = null) {
 
   // 3. Fastest route defines the acceptable-distance cap
   const fastestDist = pool[0].distanceM;
-  const maxAllowed  = fastestDist * 1.45; // up to 45% longer is OK
+  const maxAllowed = fastestDist * 1.45; // up to 45% longer is OK
 
   // 4. Pick up to 3 non-similar routes within the cap
   const chosen = [];
@@ -246,23 +363,23 @@ export async function getMultipleRoutes(pickup, dropoff, systemConfig = null) {
   // 5. Map to final shape
   const traffic2 = getTrafficCondition(); // re-read in case time ticked
   return chosen.map((r, idx) => {
-    const distanceKm  = parseFloat((r.distanceM / 1000).toFixed(1));
-    const rawMin      = Math.round(r.durationS / 60);
+    const distanceKm = parseFloat((r.distanceM / 1000).toFixed(1));
+    const rawMin = Math.round(r.durationS / 60);
     const durationMin = Math.max(1, Math.round(rawMin * traffic2.multiplier));
-    const meta        = ROUTE_META[idx] ?? { label: `Route ${idx + 1}`, tag: "", color: "#6366f1" };
+    const meta = ROUTE_META[idx] ?? { label: `Route ${idx + 1}`, tag: "", color: "#6366f1" };
 
     return {
-      id:          idx,
-      label:       meta.label,
-      tag:         meta.tag,
-      color:       meta.color,
+      id: idx,
+      label: meta.label,
+      tag: meta.tag,
+      color: meta.color,
       distanceKm,
       distanceStr: `${distanceKm} km`,
       durationMin,
       durationRaw: rawMin,
-      coords:      r.coords,
-      fares:       calculateFares(distanceKm, durationMin, systemConfig),
-      traffic:     traffic2,
+      coords: r.coords,
+      fares: calculateFares(distanceKm, durationMin, systemConfig),
+      traffic: traffic2,
     };
   });
 }

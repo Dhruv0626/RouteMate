@@ -13,6 +13,7 @@ import { makePin } from "../../utils/mapIcons";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import LocationSearch from "../../components/map/LocationSearch";
 import api from "../../services/api";
+import { reverseGeocode } from "../../utils/geocode";
 
 // ── Leaflet icons ─────────────────────────────────────────────────────────────
 const greenIcon = makePin("#22c55e", "PICKUP");
@@ -27,13 +28,6 @@ const haversineKm = (lat1, lng1, lat2, lng2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 };
 
-const reverseGeocode = async (lat, lng) => {
-  try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
-    const d = await r.json();
-    return d.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-  } catch { return `${lat.toFixed(4)}, ${lng.toFixed(4)}`; }
-};
 
 // ── Map click picker ──────────────────────────────────────────────────────────
 const MapPicker = ({ mode, onPick }) => {

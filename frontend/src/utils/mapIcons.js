@@ -5,16 +5,22 @@ import L from "leaflet";
  */
 export const makeVehicleIcon = (type, heading = 0, size = 48) => {
   const t = (type || "").toUpperCase();
-  let img = "/images/cars/hatchback.png"; // DEFAULT
+  let img = "/images/cars/go.png"; // DEFAULT
   
-  if (t.includes("MOTO") || t.includes("BIKE")) {
-    img = "/images/cars/bike.png";
+  if (t === "EVMOTO" || t.includes("EV_MOTO") || t.includes("EV MOTO")) {
+    img = "/images/cars/evmoto.png";
+  } else if (t.includes("MOTO") || t.includes("BIKE")) {
+    img = "/images/cars/moto.png";
+  } else if (t === "EVAUTO" || t.includes("EV_AUTO") || t.includes("EV AUTO")) {
+    img = "/images/cars/evauto.png";
   } else if (t.includes("AUTO") || t.includes("RICKSHAW")) {
     img = "/images/cars/auto.png";
+  } else if (t === "EVGO" || t.includes("EV_GO") || t.includes("EV GO")) {
+    img = "/images/cars/evgo.png";
   } else if (t === "XL" || t.includes("SUV")) {
-    img = "/images/cars/suv.png";
+    img = "/images/cars/xl.png";
   } else if (t === "PRIME" || t.includes("SEDAN")) {
-    img = "/images/cars/sedan.png";
+    img = "/images/cars/prime.png";
   }
 
   return L.divIcon({
@@ -87,11 +93,14 @@ export const makeDestPin = (isActive) => makeSimplePin(isActive ? "#ef4444" : "#
 
 export const makeFleetVehicleIcon = (type, status, size = 48) => {
   const t = (type || "").toUpperCase();
-  let img = "/images/cars/hatchback.png"; 
-  if (t.includes("MOTO") || t.includes("BIKE")) img = "/images/cars/bike.png";
+  let img = "/images/cars/go.png"; 
+  if (t === "EVMOTO" || t.includes("EV_MOTO") || t.includes("EV MOTO")) img = "/images/cars/evmoto.png";
+  else if (t.includes("MOTO") || t.includes("BIKE")) img = "/images/cars/moto.png";
+  else if (t === "EVAUTO" || t.includes("EV_AUTO") || t.includes("EV AUTO")) img = "/images/cars/evauto.png";
   else if (t.includes("AUTO") || t.includes("RICKSHAW")) img = "/images/cars/auto.png";
-  else if (t === "XL" || t.includes("SUV")) img = "/images/cars/suv.png";
-  else if (t === "PRIME" || t.includes("SEDAN")) img = "/images/cars/sedan.png";
+  else if (t === "EVGO" || t.includes("EV_GO") || t.includes("EV GO")) img = "/images/cars/evgo.png";
+  else if (t === "XL" || t.includes("SUV")) img = "/images/cars/xl.png";
+  else if (t === "PRIME" || t.includes("SEDAN")) img = "/images/cars/prime.png";
 
   const showTag = status === "active" || status === "idle";
   const tagColor = status === "active" ? "#10b981" : "#f59e0b";

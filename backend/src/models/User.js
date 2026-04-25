@@ -45,7 +45,26 @@ const UserSchema = new Schema(
       purpose: { type: String, enum: ["verification", "reset"], default: null }
     },
 
-    walletBalance: { type: Number, default: 0 }
+    walletBalance: { type: Number, default: 0 },
+
+    // ── Emergency Contacts (Passenger SOS) ────────────────────────────────────
+    emergencyContacts: {
+      type: [
+        {
+          name:            { type: String, required: true, trim: true },
+          mobile_no:       { type: String, required: true },  // +91XXXXXXXXXX
+          email:           { type: String, default: "" },     // optional
+          relation:        { type: String, required: true },  // "Mother", "Father" etc.
+          notifyViaEmail:  { type: Boolean, default: true },
+          notifyViaWA:     { type: Boolean, default: false }, // disabled (CallMeBot not implemented yet)
+        }
+      ],
+      validate: {
+        validator: (arr) => arr.length <= 2,
+        message: "Maximum 2 emergency contacts allowed"
+      },
+      default: []
+    }
   },
   { timestamps: true }
 );

@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Navigation, Loader2, User as UserIcon, MapPin, IndianRupee, Phone, RefreshCw } from "lucide-react";
+import { 
+  ArrowLeft, Navigation, Loader2, User as UserIcon, 
+  MapPin, IndianRupee, Phone, RefreshCw,
+  ChevronDown, ChevronUp
+} from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import L from "leaflet";
 import socket from "../services/socket";
@@ -9,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
 
 import { makeVehicleIcon, makeDestPin } from "../utils/mapIcons";
+import SOSButton from "../components/passenger/SOSButton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +82,12 @@ const PickupMap = () => {
   const [gpsReady, setGpsReady]         = useState(false);     // first GPS fix received
   const [isPerspectiveMode, setIsPerspectiveMode] = useState(true);
   const [map, setMap]                   = useState(null);
+
+  // ─── SOS State (Passenger) ───
+  const [sosWarningActive, setSosWarningActive] = useState(false);
+  const [sosWarningReason, setSosWarningReason] = useState("");
   const [heading, setHeading]           = useState(0);         // car rotation
+  const [isMinimized, setIsMinimized]   = useState(false);
 
   const abortRef   = useRef(null);
   const prevLocRef = useRef(null);   // last location that triggered a route fetch
@@ -112,20 +122,34 @@ const PickupMap = () => {
         setTimeout(() => navigate("/passenger/dashboard"), 3500);
       }
       if (data.status === "in_progress") {
-         showAlert("Your trip has started! Relax and enjoy the ride.", "Trip Started", "success");
+         showAlert("Your trip has started! Redirecting to live tracking...", "Trip Started", "success");
+         setTimeout(() => navigate(`/start-ride/${rideId}`), 2000);
+      }
+    });
+
+    // Auto-SOS warning from backend
+    socket.on("sos_warning", (data) => {
+      if (data.tripId === rideId && user.role !== "driver") {
+        setSosWarningReason(data.reason || "A safety concern has been detected on your trip.");
+        setSosWarningActive(true);
       }
     });
 
     return () => { 
       socket.off("location_update"); 
       socket.off("ride_status_update");
+      socket.off("sos_warning");
       socket.disconnect(); 
     };
   }, [rideId]);
 
   // ─── Fetch ride ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const go = async () => {
+    const fetchRide = async () => {
+      if (rideId === "[object Object]" || !rideId) {
+        navigate("/driver/dashboard");
+        return;
+      }
       try {
         const res = await api.get(`/published-rides/${rideId}`);
         if (res.data.success) {
@@ -139,7 +163,7 @@ const PickupMap = () => {
         setLoading(false);
       }
     };
-    go();
+    fetchRide();
   }, [rideId, user.role]);
 
   // ─── Driver GPS: immediate fix + continuous watch ─────────────────────────
@@ -201,7 +225,8 @@ const PickupMap = () => {
         // Update heading towards first point of route
         if (result.path.length > 1) {
           const p1 = result.path[0];
-          const angle = Math.atan2(p1[1] - dLng, p1[0] - dLat) * (180 / Math.PI);
+          const p2 = result.path[1];
+          const angle = (Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180) / Math.PI;
           setHeading(angle);
         }
       }
@@ -231,6 +256,18 @@ const PickupMap = () => {
       console.log(`Rerouting: deviance ${Math.round(deviance)}m > ${REROUTE_THRESHOLD_M}m`);
       fetchRoute(lat, lng, targetCoords[0], targetCoords[1], isActive);
     } else {
+      // Update heading
+      let closestIdx = 0, minD = Infinity;
+      for (let i = 0; i < route.length - 1; i++) {
+        const d = distanceMetres(lat, lng, route[i][0], route[i][1]);
+        if (d < minD) { minD = d; closestIdx = i; }
+      }
+      if (route[closestIdx + 1]) {
+        const p1 = route[closestIdx];
+        const p2 = route[closestIdx + 1];
+        setHeading((Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180) / Math.PI);
+      }
+
       // Still on route — just refresh ETA cheaply (no polyline re-draw)
       const prev = prevLocRef.current;
       if (prev && distanceMetres(prev.lat, prev.lng, lat, lng) < 20) return; // too close, skip
@@ -421,8 +458,8 @@ const PickupMap = () => {
         <div 
           className={`w-full h-full transform-gpu`}
           style={isPerspectiveMode ? { 
-            transform: `scale(1.5) rotateZ(${-heading}deg)`,
-            transition: 'transform 1s cubic-bezier(0.4, 0, 0.2, 1)'
+            transform: `scale(2.5) rotateZ(${-heading}deg)`,
+            transition: 'transform 1.2s cubic-bezier(0.4, 0, 0.2, 1)'
           } : {
             transform: `scale(1) rotateZ(0deg)`,
             transition: 'transform 1s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -500,7 +537,7 @@ const PickupMap = () => {
                 onClick={() => {
                   setIsPerspectiveMode(!isPerspectiveMode);
                   if (!isPerspectiveMode && map && driverLocation) {
-                    map.setView([driverLocation.lat, driverLocation.lng], 18, { animate: true });
+                    map.setView([driverLocation.lat, driverLocation.lng], 16, { animate: true });
                   } else if (isPerspectiveMode && map && driverLocation) {
                     const target = isActive ? destCoords : pickupCoords;
                     if (target) map.fitBounds(
@@ -528,7 +565,17 @@ const PickupMap = () => {
              </button>
         </div>
         
-        <div className="bg-black/85 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl">
+        <div className={`bg-black/85 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl relative overflow-hidden transition-all duration-500 ease-in-out ${isMinimized && !isDriver ? "max-h-[85px]" : "max-h-[600px]"}`}>
+          {/* Minimize toggle for passengers */}
+          {!isDriver && (
+            <button
+              onClick={() => setIsMinimized(!isMinimized)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all z-50 active:scale-90"
+              title={isMinimized ? "Expand" : "Minimize"}
+            >
+              {isMinimized ? <ChevronUp size={16} className="text-white/60" /> : <ChevronDown size={16} className="text-white/60" />}
+            </button>
+          )}
 
           {isDriver ? (
             /* ─── DRIVER HUD ─── */
@@ -577,13 +624,13 @@ const PickupMap = () => {
             /* ─── PASSENGER HUD ─── */
             <div className="flex flex-col gap-3">
               {/* Status banner */}
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
-                ride.status === "arrived"
-                  ? "bg-violet-500/10 border-violet-500/30"
-                  : ride.status === "in_progress"
-                  ? "bg-emerald-500/10 border-emerald-500/30"
-                  : "bg-amber-500/10 border-amber-500/30"
-              }`}>
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${
+              ride.status === "arrived"
+                ? "bg-violet-500/10 border-violet-500/30"
+                : ride.status === "in_progress"
+                ? "bg-emerald-500/10 border-emerald-500/30"
+                : "bg-amber-500/10 border-amber-500/30"
+            }`}>
                 <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
                   ride.status === "arrived" ? "bg-violet-500"
                   : ride.status === "in_progress" ? "bg-emerald-500"
@@ -600,77 +647,94 @@ const PickupMap = () => {
                 </span>
               </div>
 
-              {/* Driver info */}
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
-                  {ride.driver?.profileImage
-                    ? <img src={ride.driver.profileImage} alt="" className="w-full h-full object-cover" />
-                    : <UserIcon size={22} className="text-primary" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-black text-sm">{ride.driver?.name || "Your Driver"}</p>
-                      <p className="text-[10px] text-white/40 font-medium">{(ride.vehicleType || "Vehicle").toUpperCase()}</p>
+              {/* Main content - hidden when minimized */}
+              {!isMinimized && (
+                <>
+                  {/* Driver info */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0 border border-primary/20 overflow-hidden">
+                      {ride.driver?.profileImage
+                        ? <img src={ride.driver.profileImage} alt="" className="w-full h-full object-cover" />
+                        : <UserIcon size={22} className="text-primary" />}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {driverLocation && (
-                        <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/30">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                          <span className="text-[9px] font-black text-emerald-400 uppercase">Live</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-black text-sm">{ride.driver?.name || "Your Driver"}</p>
+                          <p className="text-[10px] text-white/40 font-medium">{(ride.vehicleType || "Vehicle").toUpperCase()}</p>
                         </div>
-                      )}
-                      <div className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
-                        <IndianRupee size={9} className="text-emerald-400" />
-                        <span className="text-xs font-black text-emerald-400">{firstPassenger?.amountPaid || 0}</span>
+                        <div className="flex items-center gap-2">
+                          {driverLocation && (
+                            <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                              <span className="text-[9px] font-black text-emerald-400 uppercase">Live</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
+                            <IndianRupee size={9} className="text-emerald-400" />
+                            <span className="text-xs font-black text-emerald-400">{firstPassenger?.amountPaid || 0}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* ETA / OTP info */}
-              {ride.status === "arrived" ? (
-                <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3 text-center">
-                  <p className="text-sm font-black text-violet-300">Share your OTP with the driver</p>
-                  <p className="text-[11px] text-white/50 mt-1">Your OTP was sent in your booking confirmation notification.</p>
-                </div>
-              ) : ride.status === "in_progress" ? (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
-                  <p className="text-sm font-black text-emerald-400 text-center">
-                    {destEtaMins !== null
-                      ? destEtaMins <= 1 ? "🏁 Arriving at destination soon!"
-                      : `~${destEtaMins} min to destination`
-                      : "Trip is ongoing — relax!"}
-                  </p>
-                  <p className="text-[11px] text-white/50 mt-1 text-center">Live ETA · Updates as driver moves</p>
-                </div>
-              ) : (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-black text-white">
-                        {liveEtaMins !== null
-                          ? liveEtaMins === 0 ? "Driver is arriving now!"
-                          : `~${liveEtaMins} min away (live)`
-                          : driverLocation ? "Calculating ETA…"
-                          : "Waiting for driver GPS signal"}
-                      </p>
-                      <p className="text-[10px] text-white/40 mt-0.5">
-                        {driverLocation
-                          ? "Updates live as driver moves"
-                          : "Driver location will appear once GPS connects"}
-                      </p>
+                  {/* ETA / OTP info */}
+                  {ride.status === "arrived" ? (
+                    <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3 text-center">
+                      <p className="text-sm font-black text-violet-300">Share your OTP with the driver</p>
+                      <p className="text-[11px] text-white/50 mt-1">Your OTP was sent in your booking confirmation notification.</p>
                     </div>
-                    {ride.driver?.Mobile_no && (
-                      <a
-                        href={`tel:${ride.driver.Mobile_no}`}
-                        className="bg-primary text-black p-2.5 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all flex-shrink-0 ml-3"
-                      >
-                        <Phone size={16} />
-                      </a>
-                    )}
-                  </div>
+                  ) : ride.status === "in_progress" ? (
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                      <p className="text-sm font-black text-emerald-400 text-center">
+                        {destEtaMins !== null
+                          ? destEtaMins <= 1 ? "🏁 Arriving at destination soon!"
+                          : `~${destEtaMins} min to destination`
+                          : "Trip is ongoing — relax!"}
+                      </p>
+                      <p className="text-[11px] text-white/50 mt-1 text-center">Live ETA · Updates as driver moves</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-black text-white">
+                            {liveEtaMins !== null
+                              ? liveEtaMins === 0 ? "Driver is arriving now!"
+                              : `~${liveEtaMins} min away (live)`
+                              : driverLocation ? "Calculating ETA…"
+                              : "Waiting for driver GPS signal"}
+                          </p>
+                          <p className="text-[10px] text-white/40 mt-0.5">
+                            {driverLocation
+                              ? "Updates live as driver moves"
+                              : "Driver location will appear once GPS connects"}
+                          </p>
+                        </div>
+                        {ride.driver?.Mobile_no && (
+                          <a
+                            href={`tel:${ride.driver.Mobile_no}`}
+                            className="bg-primary text-black p-2.5 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all flex-shrink-0 ml-3"
+                          >
+                            <Phone size={16} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* SOS Button — only when trip is ongoing (Passenger side fallback) */}
+              {ride.status === "in_progress" && !isDriver && !isMinimized && (
+                <div className="mt-3">
+                  <SOSButton
+                    tripId={rideId}
+                    warningActive={sosWarningActive}
+                    warningReason={sosWarningReason}
+                    onWarningClose={() => setSosWarningActive(false)}
+                  />
                 </div>
               )}
             </div>

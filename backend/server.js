@@ -18,8 +18,11 @@ import notificationRoutes from "./src/routes/Notification.js";
 import rideRoutes from "./src/routes/Ride.js";
 import publishedRideRoutes from "./src/routes/PublishedRide.js";
 import savedPlaceRoutes from "./src/routes/SavedPlace.js";
+import sosRoutes from "./src/routes/SOS.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 import { initSocket } from "./src/utils/SocketManager.js";
+import { initTripMonitorCron } from "./src/utils/TripMonitorCron.js";
+import TripModel from "./src/models/Trip.js";
 
 // ─── Passport Configuration ───────────────────────────────────────────────────
 import passport from "./src/config/passport.js";
@@ -98,6 +101,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/published-rides", publishedRideRoutes);
 app.use("/api/saved-places", savedPlaceRoutes);
+app.use("/api/sos", sosRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {
@@ -132,9 +136,57 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined ride ${rideId}`);
   });
 
-  socket.on("driver_location_update", (data) => {
-    // broadcast driver location to all passengers in the ride room
+  socket.on("driver_location_update", async (data) => {
+    // 1. Broadcast driver location to all passengers in the ride room
     socket.to(data.rideId).emit("location_update", data);
+
+    // 2. Update trip distance tracking for auto-SOS route-deviation detection
+    if (data.rideId && data.lat && data.lng) {
+      try {
+        const trip = await TripModel.findById(data.rideId)
+          .select("destination lastDistanceToDestination consecutiveNoProgress stoppedAt phase");
+
+        if (!trip || trip.phase !== "ongoing") return;
+
+        const destCoords = trip.destination?.location?.coordinates;
+        if (!destCoords || destCoords.length < 2) return;
+
+        const [destLng, destLat] = destCoords;
+        const R = 6371;
+        const dLat = ((destLat - data.lat) * Math.PI) / 180;
+        const dLon = ((destLng - data.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((data.lat * Math.PI) / 180) *
+          Math.cos((destLat * Math.PI) / 180) *
+          Math.sin(dLon / 2) ** 2;
+        const currentDistKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        const prevDist = trip.lastDistanceToDestination;
+        const isMovingAway = prevDist !== undefined && prevDist !== null && currentDistKm > prevDist + 0.1;
+        const isStopped = data.speed !== undefined && data.speed < 3;
+
+        const updates = { lastDistanceToDestination: currentDistKm };
+
+        // Track consecutive wrong-direction checks
+        if (isMovingAway) {
+          updates.consecutiveNoProgress = (trip.consecutiveNoProgress || 0) + 1;
+        } else {
+          updates.consecutiveNoProgress = 0; // reset on progress
+        }
+
+        // Track stop time for auto_timeout detection
+        if (isStopped && !trip.stoppedAt) {
+          updates.stoppedAt = new Date();
+        } else if (!isStopped) {
+          updates.stoppedAt = null; // driver moving again — reset
+        }
+
+        await TripModel.findByIdAndUpdate(data.rideId, updates);
+      } catch (err) {
+        console.error("[Socket] Location tracking error:", err.message);
+      }
+    }
   });
 
   socket.on("disconnect", () => {
@@ -143,13 +195,15 @@ io.on("connection", (socket) => {
 });
 
 httpServer.listen(PORT, "0.0.0.0", async () => {
+  // ⏱️  Start trip safety monitor cron (every 2 min)
+  initTripMonitorCron();
+
   // 🚀 KEEP-ALIVE: Ping the server every 10 minutes to prevent Render sleep mode
   const BACKEND_URL = process.env.BACKEND_URL;
   if (BACKEND_URL && BACKEND_URL.includes("onrender.com")) {
     const https = await import("https");
     setInterval(() => {
       https.get(`${BACKEND_URL}/ping`, (res) => {
-
         // Silent on success
       }).on("error", (err) => console.error("💔 Keep-Alive Error:", err.message));
     }, 10 * 60 * 1000); // 10 minutes

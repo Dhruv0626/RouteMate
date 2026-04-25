@@ -93,6 +93,15 @@ const TripSchema = new Schema(
     startedAt: { type: Date },
     completedAt: { type: Date },
     cancelledAt: { type: Date },
+
+    // ── SOS Auto-Detection Fields ───────────────────────────────────────────────
+    lastDistanceToDestination: { type: Number },    // km — Haversine check
+    consecutiveNoProgress:     { type: Number, default: 0 }, // counter — resets on progress
+    passengerConfirmedSafe:    { type: Boolean, default: false }, // true = SOS cancelled
+    sosWarningSentAt:          { type: Date },       // timestamp of last "Are you safe?" notification
+    stoppedAt:                 { type: Date },       // when driver stopped (speed < 3 km/h)
+    emergencyToken:            { type: String },
+    emergencyTokenExpiry:      { type: Date },
   },
   { timestamps: true }
 );

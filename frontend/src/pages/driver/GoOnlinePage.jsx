@@ -36,6 +36,7 @@ import L from "leaflet";
 import { makeVehicleIcon, makePin, makeSimplePin } from "../../utils/mapIcons";
 import { getMyDriverProfile, updateDriverStatus } from "../../services/driverProfileService";
 import api from "../../services/api";
+import { reverseGeocode } from "../../utils/geocode";
 
 // ── Leaflet icons ────────────────────────────────────────────────────────────
 const greenIcon = makeSimplePin("#22c55e");
@@ -54,18 +55,6 @@ const haversineKm = (lat1, lng1, lat2, lng2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// ── Reverse Geocode (Nominatim) ───────────────────────────────────────────────
-const reverseGeocode = async (lat, lng) => {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-    );
-    const data = await res.json();
-    return data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  } catch {
-    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  }
-};
 
 // ── MapClickPicker: inner component that handles click events ─────────────────
 const MapClickPicker = ({ pickingMode, onPick }) => {

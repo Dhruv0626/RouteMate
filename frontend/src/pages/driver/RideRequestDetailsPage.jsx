@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { fetchOsrmVia } from "../../utils/geocode";
 
 const RideMap = lazy(() => import("../../components/map/RideMap"));
 
@@ -17,6 +18,9 @@ const RideRequestDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [responding, setResponding] = useState(false);
+  const [driverLoc, setDriverLoc] = useState({ lat: 23.0225, lng: 72.5714 });
+  const [optimizedRoute, setOptimizedRoute] = useState(null);
+  const [fetchingRoute, setFetchingRoute] = useState(false);
 
   const fetchDetails = async () => {
     setLoading(true);
@@ -46,7 +50,52 @@ const RideRequestDetailsPage = () => {
 
   useEffect(() => {
     fetchDetails();
+
+    // Get real driver location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setDriverLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (err) => console.warn("Location error:", err.message)
+      );
+    }
   }, [rideId, bookingId]);
+
+  // Fetch optimized route: Driver -> Pickup -> Dropoff
+  useEffect(() => {
+    if (!data || !data.booking) return;
+    
+    const calculateRoute = async () => {
+      setFetchingRoute(true);
+      try {
+        const pickup = {
+          lat: data.booking.passengerSource?.location?.coordinates[1],
+          lng: data.booking.passengerSource?.location?.coordinates[0]
+        };
+        const dropoff = {
+          lat: data.booking.passengerDestination?.location?.coordinates[1],
+          lng: data.booking.passengerDestination?.location?.coordinates[0]
+        };
+
+        if (!pickup.lat || !dropoff.lat) return;
+
+        const route = await fetchOsrmVia(
+          { lat: driverLoc.lat, lng: driverLoc.lng }, // Start: Driver current location
+          pickup,                                     // Via: Passenger pickup
+          dropoff                                     // End: Passenger dropoff
+        );
+
+        if (route) {
+          setOptimizedRoute(route.coords);
+        }
+      } catch (err) {
+        console.error("Failed to fetch optimized route:", err);
+      } finally {
+        setFetchingRoute(false);
+      }
+    };
+
+    calculateRoute();
+  }, [data, driverLoc]);
 
   const handleRespond = async (action) => {
     setResponding(true);
@@ -135,14 +184,19 @@ const RideRequestDetailsPage = () => {
                 lng: booking.passengerDestination?.location?.coordinates[0], 
                 name: booking.passengerDestination?.address 
               }}
-              userLocation={{ lat: 23.0225, lng: 72.5714 }} // Simulated driver start point
-              driverVehicleType={ride.vehicleType} // SHOW DRIVER AS VEHICLE PHOTO
-              allRoutes={ride.routeCoords?.length ? [{
+              userLocation={driverLoc} 
+              driverVehicleType={ride.vehicleType} 
+              allRoutes={optimizedRoute ? [{
+                id: "optimized-route",
+                coords: optimizedRoute,
+                color: "#6366f1",
+                label: "Required Route"
+              }] : (ride.routeCoords?.length ? [{
                 id: ride._id,
                 coords: ride.routeCoords.map(c => [c[1], c[0]]),
                 color: "#6366f1",
                 label: "Planned Route"
-              }] : []}
+              }] : [])}
               availableRides={[]}
               selectedRouteIdx={0}
               isNavigating={false} 
