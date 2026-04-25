@@ -88,7 +88,7 @@ const StartRide = () => {
   const { rideId }    = useParams();
   const navigate      = useNavigate();
   const { user }      = useAuth();
-  const { showAlert } = useDialog();
+  const { showAlert, showConfirm } = useDialog();
 
   const [ride, setRide]                     = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
@@ -145,6 +145,10 @@ const StartRide = () => {
       if (data.status === "completed" && user.role !== "driver") {
         showAlert("Your ride has been completed successfully! Thank you for choosing RouteMate.", "Ride Completed", "success");
         setTimeout(() => navigate("/passenger/dashboard"), 3500);
+      }
+      if (data.status === "cancelled" && user.role !== "driver") {
+        showAlert("The driver has cancelled this ride.", "Ride Cancelled", "error");
+        setTimeout(() => navigate("/passenger/dashboard"), 3000);
       }
     });
     // Auto-SOS warning from backend cron
@@ -402,6 +406,26 @@ const StartRide = () => {
       document.getElementById(`otp-${index - 1}`)?.focus();
   };
 
+  const handleCancelRide = async () => {
+    const confirmed = await showConfirm(
+      "Are you sure you want to cancel this ride? This action cannot be undone.",
+      "Cancel Ride?",
+      "error",
+      "Yes, Cancel",
+      "No, Keep it"
+    );
+    if (!confirmed) return;
+    try {
+      const res = await api.patch(`/published-rides/${rideId}/status`, { status: "cancelled" });
+      if (res.data.success) {
+        navigate("/driver/dashboard/active-rides");
+      }
+    } catch (err) {
+      console.error("Failed to cancel ride", err);
+      showAlert("Failed to cancel the ride. Please try again.", "Error", "error");
+    }
+  };
+
   // ─── Status update ────────────────────────────────────────────────────────
   const handleUpdateStatus = async (status) => {
     const fullOtp = otpSlots.join("");
@@ -638,18 +662,45 @@ const StartRide = () => {
               {/* Right: Action button */}
               <div className="flex flex-col gap-2 items-center">
                 {ride.status !== "in_progress" ? (
-                  <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
-                    className="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition disabled:opacity-60">
-                    <Play size={20} className="text-black" />
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCancelRide}
+                      className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition"
+                      title="Cancel Ride"
+                    >
+                      <X size={20} />
+                    </button>
+                    <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
+                      className="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition disabled:opacity-60">
+                      <Play size={20} className="text-black" />
+                    </button>
+                  </div>
                 ) : isNearDestination ? (
-                  <button onClick={() => handleUpdateStatus("completed")}
-                    className="px-4 py-2.5 bg-primary text-black rounded-2xl font-black text-sm active:scale-95 transition animate-pulse shadow-lg shadow-primary/30">
-                    End Ride
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCancelRide}
+                      className="px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl font-black text-sm active:scale-95 transition shadow-lg"
+                      title="Cancel Ride"
+                    >
+                      Cancel
+                    </button>
+                    <button onClick={() => handleUpdateStatus("completed")}
+                      className="px-4 py-2.5 bg-primary text-black rounded-2xl font-black text-sm active:scale-95 transition animate-pulse shadow-lg shadow-primary/30">
+                      End Ride
+                    </button>
+                  </div>
                 ) : (
-                  <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center">
-                    <IndianRupee size={16} className="text-emerald-400" />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCancelRide}
+                      className="w-12 h-12 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition"
+                      title="Cancel Ride"
+                    >
+                      <X size={20} />
+                    </button>
+                    <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center">
+                      <IndianRupee size={16} className="text-emerald-400" />
+                    </div>
                   </div>
                 )}
               </div>
@@ -688,16 +739,15 @@ const StartRide = () => {
                 )}
                 {ride.status !== "in_progress" && (
                   <>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
+                      <button onClick={handleCancelRide}
+                        className="w-14 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl flex justify-center items-center shadow-lg active:scale-95 transition-all">
+                        <X size={20} />
+                      </button>
                       <a href={`tel:${firstPassenger?.passenger?.Mobile_no || ""}`}
                         className="flex-1 bg-primary text-black font-black py-3 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all text-sm">
                         <Phone size={18} /> Call
                       </a>
-                      <button onClick={handleManualReroute} disabled={!driverLocation || routeLoading}
-                        className="flex-1 bg-primary text-black font-black py-3 rounded-xl flex justify-center items-center gap-2 text-sm disabled:opacity-50 transition active:scale-95 shadow-md shadow-primary/10">
-                        <Navigation size={18} className={routeLoading ? "animate-spin" : ""} />
-                        {routeLoading ? "Routing…" : "Update Route"}
-                      </button>
                     </div>
                     <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
                       className="flex-1 bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all">
@@ -719,16 +769,22 @@ const StartRide = () => {
                         </span>
                       </div>
                     </div>
-                    {isNearDestination ? (
-                      <button onClick={() => handleUpdateStatus("completed")}
-                        className="flex-1 bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 transition-all animate-pulse active:scale-95">
-                        <Square size={20} /> Complete Ride
+                    <div className="flex gap-2">
+                      <button onClick={handleCancelRide}
+                        className="w-14 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl flex justify-center items-center shadow-lg active:scale-95 transition-all">
+                        <X size={20} />
                       </button>
-                    ) : (
-                      <div className="flex-1 bg-white/5 border border-white/10 text-white/50 font-black py-4 rounded-xl flex justify-center items-center gap-2">
-                        <Navigation size={18} /> Heading To Destination…
-                      </div>
-                    )}
+                      {isNearDestination ? (
+                        <button onClick={() => handleUpdateStatus("completed")}
+                          className="flex-1 bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 transition-all animate-pulse active:scale-95">
+                          <Square size={20} /> Complete Ride
+                        </button>
+                      ) : (
+                        <div className="flex-1 bg-white/5 border border-white/10 text-white/50 font-black py-4 rounded-xl flex justify-center items-center gap-2">
+                          <Navigation size={18} /> Heading To Destination…
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

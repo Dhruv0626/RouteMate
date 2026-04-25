@@ -430,7 +430,7 @@ const DashboardPage = () => {
               const tripActivities = rides.map(ride => ({
                 id: ride._id,
                 type: "Trip",
-                subType: "Completed",
+                subType: ride.phase === 'completed' ? 'Completed' : ride.phase === 'cancelled' ? 'Cancelled' : ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
                 from: ride.source?.address?.split(',')[0] || "Unknown",
                 to: ride.destination?.address?.split(',')[0] || "Unknown",
                 date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),

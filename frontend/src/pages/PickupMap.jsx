@@ -69,7 +69,7 @@ const PickupMap = () => {
   const { rideId }  = useParams();
   const navigate    = useNavigate();
   const { user }    = useAuth();
-  const { showAlert } = useDialog();
+  const { showAlert, showConfirm } = useDialog();
 
   const [ride, setRide]                 = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
@@ -124,6 +124,10 @@ const PickupMap = () => {
       if (data.status === "in_progress") {
          showAlert("Your trip has started! Redirecting to live tracking...", "Trip Started", "success");
          setTimeout(() => navigate(`/start-ride/${rideId}`), 2000);
+      }
+      if (data.status === "cancelled") {
+        showAlert("The driver has cancelled this ride.", "Ride Cancelled", "error");
+        setTimeout(() => navigate("/passenger/dashboard"), 3000);
       }
     });
 
@@ -287,6 +291,26 @@ const PickupMap = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [driverLocation?.lat, driverLocation?.lng, ride?.status, pickupCoords?.[0], destCoords?.[0]]);
+
+  const handleCancelRide = async () => {
+    const confirmed = await showConfirm(
+      "Are you sure you want to cancel this ride? This action cannot be undone.",
+      "Cancel Ride?",
+      "error",
+      "Yes, Cancel",
+      "No, Keep it"
+    );
+    if (!confirmed) return;
+    try {
+      const res = await api.patch(`/published-rides/${rideId}/status`, { status: "cancelled" });
+      if (res.data.success) {
+        navigate("/driver/dashboard/active-rides");
+      }
+    } catch (err) {
+      console.error("Failed to cancel ride", err);
+      showAlert("Failed to cancel the ride. Please try again.", "Error", "error");
+    }
+  };
 
   const vehicleIcon = useMemo(() => {
     if (!ride) return null;
@@ -601,7 +625,14 @@ const PickupMap = () => {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3">
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancelRide}
+                  className="w-14 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl flex justify-center items-center shadow-lg active:scale-95 transition-all"
+                  title="Cancel Ride"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
                 <button
                   onClick={() => navigate(`/start-ride/${rideId}`)}
                   className="flex-1 bg-primary text-black font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all text-sm"
@@ -612,10 +643,9 @@ const PickupMap = () => {
                 {firstPassenger?.passenger?.Mobile_no && (
                   <a
                     href={`tel:${firstPassenger.passenger.Mobile_no}`}
-                    className="flex-1 bg-primary text-black font-black py-3.5 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all text-sm"
+                    className="w-14 bg-white/5 text-white border border-white/10 font-black rounded-xl flex justify-center items-center shadow-lg active:scale-95 transition-all"
                   >
                     <Phone size={18} />
-                    Call
                   </a>
                 )}
               </div>

@@ -81,9 +81,17 @@ const PassengerBookingsPage = () => {
                    <p className="text-xs font-bold text-(--text-dim) uppercase tracking-wider">Driver</p>
                    <p className="font-bold text-(--text-main) text-lg">{ride.driver?.name}</p>
                  </div>
-                 <span className={`px-3 py-1 text-xs font-bold rounded-full border ${isConfirmed ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : myBooking.status === 'pending' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                   {myBooking.status.toUpperCase()}
-                 </span>
+                  <span className={`px-3 py-1 text-xs font-bold rounded-full border ${
+                    ride.status === 'cancelled' ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                    : ride.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : isConfirmed ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
+                    : myBooking.status === 'pending' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' 
+                    : 'bg-red-500/10 text-red-500 border-red-500/20'
+                  }`}>
+                    {ride.status === 'cancelled' ? 'CANCELLED' 
+                     : ride.status === 'completed' ? 'COMPLETED' 
+                     : myBooking.status.toUpperCase()}
+                  </span>
                </div>
 
                <div className="space-y-2 mb-4">

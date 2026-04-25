@@ -96,8 +96,9 @@ const GoOnlinePage = () => {
   const [userLocation, setUserLocation] = useState({ lat: 23.0225, lng: 72.5714 });
 
   // Form state (no baseFare — system-calculated)
+  const nowIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const [rideForm, setRideForm] = useState({
-    departureTime: "",
+    departureTime: nowIso,
   });
 
   // ── Lifecycle ----------------------------------------------------------------
@@ -309,7 +310,7 @@ const GoOnlinePage = () => {
       if (res.data.success) {
         setPublishSuccess("🎉 Ride published! Path-based matching enabled.");
         setSourcePin(null); setDestPin(null); setDistanceKm(null);
-        setRideForm({ departureTime: "" });
+        setRideForm({ departureTime: nowIso });
         setShowPublishForm(false);
       }
     } catch (err) {
@@ -319,7 +320,6 @@ const GoOnlinePage = () => {
     }
   };
 
-  const nowIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const mapCenter = sourcePin ? [sourcePin.lat, sourcePin.lng]
     : destPin ? [destPin.lat, destPin.lng]
     : [userLocation.lat, userLocation.lng];

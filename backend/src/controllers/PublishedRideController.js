@@ -611,6 +611,13 @@ export const UpdateRideStatus = async (req, res) => {
             );
         }
 
+        if (status === "cancelled" && ride.status !== "cancelled") {
+            await DriverProfileModel.findOneAndUpdate(
+                { user: req.user.id },
+                { $inc: { "stats.cancelledRides": 1 } }
+            );
+        }
+
         ride.status = status;
         await ride.save();
 
@@ -621,16 +628,17 @@ export const UpdateRideStatus = async (req, res) => {
             console.log(`🚀 PublishedRideController: Emitted status [${status}] to Ride ${rideId}`);
         }
 
-        // ── UPDATE ASSOCIATED TRIPS ──
         const tripPhase = status === "in_progress" ? "ongoing"
             : status === "completed" ? "completed"
                 : status === "arrived" ? "arrived"
-                    : "matched";
+                    : status === "cancelled" ? "cancelled"
+                        : "matched";
 
         const eligiblePhases = {
             arrived: { $in: ["matched"] },
             in_progress: { $in: ["matched", "arrived"] },
             completed: "ongoing",
+            cancelled: { $in: ["matched", "arrived", "ongoing"] },
         };
 
         const query = { publishedRide: rideId, phase: eligiblePhases[status] || { $ne: "cancelled" } };
@@ -640,6 +648,26 @@ export const UpdateRideStatus = async (req, res) => {
 
         for (const trip of trips) {
             trip.phase = tripPhase;
+
+            if (status === "cancelled") {
+                trip.cancelledAt = new Date();
+                
+                const booking = ride.bookings.find(b => b.passenger.toString() === trip.passenger.toString());
+                if (booking) booking.status = "cancelled";
+
+                await NotificationModel.create({
+                    recipient: trip.passenger,
+                    sender: req.user.id,
+                    title: "Ride Cancelled ❌",
+                    message: "The driver has cancelled the ride.",
+                    type: "ride_cancelled",
+                    link: "/passenger/dashboard/my-rides",
+                    metadata: {
+                        rideId,
+                        motive: "ride_cancelled"
+                    }
+                });
+            }
 
             if (status === "completed") {
                 trip.completedAt = new Date();
