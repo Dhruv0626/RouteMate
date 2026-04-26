@@ -287,7 +287,7 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState([]);
-  const [activities, setActivities] = useState([]);
+  const [activities, setActivities] = useState(null);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const role = user?.role || "passenger";
 
@@ -768,7 +768,7 @@ const DashboardPage = () => {
             <div className="divide-y divide-(--card-border)">
               {/* Passengers: only show trip history (not live bookings, already shown above) */}
               {role === "passenger" && (
-                activities.filter(a => !a.isLive).length > 0
+                !loading && activities !== null && activities.filter(a => !a.isLive).length > 0
                   ? (
                     <>
                     {activities.filter(a => !a.isLive).slice(0, isHistoryExpanded ? undefined : 3).map((item) => (
@@ -811,16 +811,21 @@ const DashboardPage = () => {
                   )}
                   </>
                   )
-                  : (
+                  : !loading && activities !== null ? (
                     <div className="p-10 text-center opacity-50">
                       <p className="text-xs font-bold uppercase tracking-widest">No Past Trips Found</p>
+                    </div>
+                  ) : (
+                    <div className="p-10 flex flex-col items-center gap-2 opacity-30">
+                       <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                       <p className="text-[10px] font-black uppercase tracking-widest">Synchronizing Trips...</p>
                     </div>
                   )
               )}
 
               {/* Drivers & Admins: show full unified activity list */}
               {role !== "passenger" && (
-                activities.length > 0
+                !loading && activities !== null && activities.length > 0
                   ? (
                     <>
                     {activities.slice(0, isHistoryExpanded ? undefined : 3).map((item) => (
@@ -878,9 +883,14 @@ const DashboardPage = () => {
                   )}
                   </>
                   )
-                  : (
+                  : !loading && activities !== null ? (
                     <div className="p-10 text-center opacity-50">
                       <p className="text-xs font-bold uppercase tracking-widest">No Recent Activity Found</p>
+                    </div>
+                  ) : (
+                    <div className="p-10 flex flex-col items-center gap-2 opacity-30">
+                       <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                       <p className="text-[10px] font-black uppercase tracking-widest">Retrieving Timeline...</p>
                     </div>
                   )
               )}

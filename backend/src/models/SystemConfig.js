@@ -24,7 +24,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.8" }
+                surgeCap: { type: String, default: "1.8" },
+                default: {}
             },
             EVMOTO: {
                 baseFare: { type: String, default: "0" },
@@ -32,7 +33,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.5" }
+                surgeCap: { type: String, default: "1.5" },
+                default: {}
             },
             AUTO: {
                 baseFare: { type: String, default: "0" },
@@ -40,7 +42,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.8" }
+                surgeCap: { type: String, default: "1.8" },
+                default: {}
             },
             EVAUTO: {
                 baseFare: { type: String, default: "0" },
@@ -48,7 +51,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.5" }
+                surgeCap: { type: String, default: "1.5" },
+                default: {}
             },
             GO: {
                 baseFare: { type: String, default: "0" },
@@ -56,7 +60,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.8" }
+                surgeCap: { type: String, default: "1.8" },
+                default: {}
             },
             EVGO: {
                 baseFare: { type: String, default: "0" },
@@ -64,7 +69,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.5" }
+                surgeCap: { type: String, default: "1.5" },
+                default: {}
             },
             PRIME: {
                 baseFare: { type: String, default: "0" },
@@ -72,7 +78,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.8" }
+                surgeCap: { type: String, default: "1.8" },
+                default: {}
             },
             XL: {
                 baseFare: { type: String, default: "0" },
@@ -80,7 +87,8 @@ const SystemConfigSchema = new Schema(
                 perMinRate: { type: String, default: "0" },
                 minFare: { type: String, default: "0" },
                 nightCharge: { type: String, default: "0" },
-                surgeCap: { type: String, default: "1.8" }
+                surgeCap: { type: String, default: "1.8" },
+                default: {}
             }
         },
 

@@ -268,9 +268,8 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const AvailableRidesPage = () => {
   const navigate = useNavigate();
-  const [rides, setRides] = useState([]);
+  const [rides, setRides] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [selectedRide, setSelectedRide] = useState(null);
@@ -279,7 +278,7 @@ const AvailableRidesPage = () => {
 
   const fetchRides = async (e) => {
     if (e) e.preventDefault();
-    setLoading(true); setError(""); setSuccess(""); setSearched(true);
+    setLoading(true); setError(""); setSuccess("");
     
     // Prepare params including coordinates if available
     const params = { ...filters };
@@ -294,9 +293,11 @@ const AvailableRidesPage = () => {
 
     try {
       const res = await api.get("/published-rides/available", { params });
-      if (res.data.success) setRides(res.data.data);
+      if (res.data.success) setRides(res.data.data || []);
+      else setRides([]);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to fetch rides");
+      if (!rides) setRides([]); // Initialize to empty array even on error if it was null
     } finally {
       setLoading(false);
     }
@@ -391,7 +392,7 @@ const AvailableRidesPage = () => {
         )}
 
         {/* Rides list */}
-        {!loading && searched && rides.length === 0 && (
+        {!loading && rides !== null && rides.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-16 text-(--text-dim)">
             <Car size={48} className="opacity-20" />
             <p className="font-bold text-(--text-main)">No rides found</p>
@@ -399,7 +400,7 @@ const AvailableRidesPage = () => {
           </div>
         )}
 
-        {!loading && rides.length > 0 && (
+        {!loading && rides !== null && rides.length > 0 && (
           <div className="space-y-4">
             <p className="text-sm font-bold text-(--text-dim)">{rides.length} ride{rides.length !== 1 ? "s" : ""} available</p>
             {rides.map((ride) => {

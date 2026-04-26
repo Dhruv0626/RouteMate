@@ -6,7 +6,7 @@ import api from "../../services/api";
 
 const PassengerBookingsPage = () => {
   const navigate = useNavigate();
-  const [rides, setRides] = useState([]);
+  const [rides, setRides] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchRides = async () => {
@@ -14,10 +14,13 @@ const PassengerBookingsPage = () => {
     try {
       const res = await api.get("/published-rides/my-booked");
       if (res.data.success) {
-        setRides(res.data.data);
+        setRides(res.data.data || []);
+      } else {
+        setRides([]);
       }
     } catch (err) {
       console.error(err);
+      if (rides === null) setRides([]);
     } finally {
       setLoading(false);
     }
@@ -56,7 +59,7 @@ const PassengerBookingsPage = () => {
           </div>
         )}
 
-        {!loading && rides.length === 0 && (
+        {!loading && rides !== null && rides.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-20 text-(--text-dim)">
             <Car size={48} className="opacity-20" />
             <p className="font-bold text-(--text-main)">No booked rides yet</p>

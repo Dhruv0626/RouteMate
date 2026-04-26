@@ -34,7 +34,7 @@ const HistoryPage = () => {
   const [expandedRide, setExpandedRide] = useState(null);
   const [dateRange, setDateRange] = useState("all");
 
-  const [rideHistory, setRideHistory] = useState([]);
+  const [rideHistory, setRideHistory] = useState(null);
   const [stats, setStats] = useState({
     totalRides: 0,
     totalAmount: 0,
@@ -150,7 +150,7 @@ const HistoryPage = () => {
     { id: "month", label: "This Month" },
   ];
 
-  const filteredRides = rideHistory.filter((ride) => {
+  const filteredRides = (rideHistory || []).filter((ride) => {
     const matchesStatus = activeFilter === "all" || ride.status === activeFilter;
     const matchesSearch =
       ride.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -335,7 +335,12 @@ const HistoryPage = () => {
 
         {/* Rides List */}
         <div className="space-y-3">
-          {filteredRides.length > 0 ? (
+          {loading && rideHistory === null ? (
+            <div className="flex flex-col items-center py-20 gap-4">
+              <RefreshCw size={36} className="text-primary animate-spin" />
+              <p className="text-xs font-black uppercase tracking-widest text-(--text-dim) animate-pulse">Loading History...</p>
+            </div>
+          ) : filteredRides.length > 0 ? (
             filteredRides.map((ride) => (
               <button
                 key={ride.id}
@@ -566,7 +571,7 @@ const HistoryPage = () => {
                 )}
               </button>
             ))
-          ) : (
+          ) : !loading && rideHistory !== null ? (
             <div className="glass-card rounded-2xl p-12 text-center border border-(--card-border)">
               <div className="flex justify-center mb-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -578,7 +583,7 @@ const HistoryPage = () => {
                 {searchQuery ? "Try adjusting your search terms" : "No rides in this category yet"}
               </p>
             </div>
-          )}
+          ) : null}
         </div>
       </main>
     </div>

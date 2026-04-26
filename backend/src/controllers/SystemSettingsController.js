@@ -13,7 +13,7 @@ export const GetSettings = async (req, res) => {
         res.status(200).json({ success: true, settings });
     } catch (error) {
         console.error("Get Settings Error:", error.message);
-        res.status(500).json({ success: false, message: "Failed to retrieve settings." });
+        res.status(500).json({ success: false, message: "Failed to retrieve system settings. " + error.message });
     }
 };
 
@@ -29,99 +29,112 @@ export const UpdateSettings = async (req, res) => {
             settings = new SystemConfig({});
         }
 
-        // Track price changes
-        const isPriceChange = (updateData.pricing !== undefined || updateData.surgeMultiplier !== undefined);
-
         // Function to ensure symbols are present
         const ensureSymbol = (val, prefix = "", suffix = "") => {
             if (val === undefined || val === null) return val;
             let str = String(val).trim();
+            if (!str) return "0" + suffix; // Default if empty
             if (prefix && !str.startsWith(prefix)) str = prefix + str;
             if (suffix && !str.endsWith(suffix)) str = str + suffix;
             return str;
         };
 
-        // Format updateData before application
-        if (updateData.pricing) {
-            Object.keys(updateData.pricing).forEach(vType => {
-                if (updateData.pricing[vType].baseFare)
-                    updateData.pricing[vType].baseFare = ensureSymbol(updateData.pricing[vType].baseFare, "₹");
-                if (updateData.pricing[vType].costPerKm)
-                    updateData.pricing[vType].costPerKm = ensureSymbol(updateData.pricing[vType].costPerKm, "₹");
-            });
-        }
-        if (updateData.commission) updateData.commission = ensureSymbol(updateData.commission, "", "%");
-        if (updateData.surgeMultiplier) updateData.surgeMultiplier = ensureSymbol(updateData.surgeMultiplier, "", "x");
-        if (updateData.maxRadius) updateData.maxRadius = ensureSymbol(updateData.maxRadius, "", "km");
-        if (updateData.taxPercentage !== undefined) updateData.taxPercentage = parseFloat(updateData.taxPercentage || "0");
-
-        // Differentiate actual changes by comparing with current DB settings
         const actualChanges = {};
-        Object.keys(updateData).forEach(key => {
+
+        // 1. Handle Top-level fields
+        const topLevelFields = ['commission', 'surgeMultiplier', 'maxRadius', 'taxPercentage', 'realTimeTracking', 'autoApproveDrivers'];
+        topLevelFields.forEach(key => {
             if (updateData[key] !== undefined) {
-                if (key === 'pricing' && typeof updateData[key] === 'object') {
-                    const pricingDiff = {};
-                    let hasDiff = false;
-                    Object.keys(updateData.pricing).forEach(vType => {
-                        const newV = updateData.pricing[vType];
-                        const oldV = settings.pricing?.[vType] || {};
-                        if (newV.baseFare !== oldV.baseFare || newV.costPerKm !== oldV.costPerKm) {
-                            pricingDiff[vType] = newV;
-                            hasDiff = true;
-                        }
-                    });
-                    if (hasDiff) actualChanges[key] = pricingDiff;
-                } else if (String(settings[key]) !== String(updateData[key])) {
-                    actualChanges[key] = updateData[key];
+                let newVal = updateData[key];
+                
+                // Formatting
+                if (key === 'commission') newVal = ensureSymbol(newVal, "", "%");
+                if (key === 'surgeMultiplier') newVal = ensureSymbol(newVal, "", "x");
+                if (key === 'maxRadius') newVal = ensureSymbol(newVal, "", "km");
+                if (key === 'taxPercentage') newVal = parseFloat(newVal || "0");
+
+                if (String(settings[key]) !== String(newVal)) {
+                    actualChanges[key] = newVal;
+                    settings[key] = newVal;
                 }
             }
         });
 
-        // Apply ONLY actual updates
-        Object.keys(actualChanges).forEach(key => {
-            if (key === 'pricing') {
-                settings.pricing = { ...settings.pricing, ...actualChanges[key] };
-            } else {
-                settings[key] = actualChanges[key];
-            }
-        });
+        // 2. Handle Pricing (Nested)
+        if (updateData.pricing && typeof updateData.pricing === 'object') {
+            Object.keys(updateData.pricing).forEach(vType => {
+                const newCategoryData = updateData.pricing[vType];
+                if (!newCategoryData) return;
+
+                // Ensure the category exists in settings
+                if (!settings.pricing[vType]) {
+                    settings.pricing[vType] = {
+                        baseFare: "0", costPerKm: "0", perMinRate: "0", minFare: "0", nightCharge: "0", surgeCap: "1.8"
+                    };
+                }
+
+                const catDiff = {};
+                let catHasDiff = false;
+
+                Object.keys(newCategoryData).forEach(field => {
+                    let newVal = newCategoryData[field];
+                    
+                    // Formatting for specific pricing fields
+                    if (field === 'baseFare' || field === 'costPerKm') {
+                        newVal = ensureSymbol(newVal, "₹");
+                    } else if (field === 'perMinRate' || field === 'minFare' || field === 'nightCharge') {
+                        newVal = ensureSymbol(newVal, "₹");
+                    }
+
+                    if (String(settings.pricing[vType][field]) !== String(newVal)) {
+                        catDiff[field] = newVal;
+                        catHasDiff = true;
+                        settings.pricing[vType][field] = newVal;
+                    }
+                });
+
+                if (catHasDiff) {
+                    if (!actualChanges.pricing) actualChanges.pricing = {};
+                    actualChanges.pricing[vType] = catDiff;
+                }
+            });
+            // Mark pricing as modified since it's a nested object
+            settings.markModified('pricing');
+        }
+
+        // Handle Support & Social
+        if (updateData.supportEmail) settings.supportEmail = updateData.supportEmail;
+        if (updateData.contactNumber) settings.contactNumber = updateData.contactNumber;
+        if (updateData.socialLinks) {
+            settings.socialLinks = { ...settings.socialLinks, ...updateData.socialLinks };
+            settings.markModified('socialLinks');
+        }
 
         await settings.save();
 
+        // ── Post-Save Notifications ──
         if (Object.keys(actualChanges).length > 0) {
-            // Track price changes
             const isPriceChange = (actualChanges.pricing !== undefined || actualChanges.surgeMultiplier !== undefined);
             
-            // Calculate if price increased or decreased
             let isIncrease = null;
             if (isPriceChange) {
-                if (actualChanges.surgeMultiplier && settings.surgeMultiplier) {
-                    const oldSurge = parseFloat(settings.surgeMultiplier.replace(/[^\d.]/g, ""));
-                    const newSurge = parseFloat(actualChanges.surgeMultiplier.replace(/[^\d.]/g, ""));
-                    if (newSurge > oldSurge) isIncrease = true;
-                    else if (newSurge < oldSurge) isIncrease = false;
+                // Heuristic for price change direction
+                if (actualChanges.surgeMultiplier) {
+                    const oldS = parseFloat(String(settings.surgeMultiplier).replace(/[^\d.]/g, "") || "1");
+                    const newS = parseFloat(String(actualChanges.surgeMultiplier).replace(/[^\d.]/g, "") || "1");
+                    if (newS > oldS) isIncrease = true;
+                    else if (newS < oldS) isIncrease = false;
                 }
-                if (actualChanges.pricing && isIncrease === null) {
-                    const vType = Object.keys(actualChanges.pricing)[0];
-                    if (vType && settings.pricing?.[vType]) {
-                        // Compare the first changed pricing object as a heuristic
-                        const oldBaseStr = settings.pricing[vType].baseFare;
-                        // For the old one, we should ideally fetch what was saved before this update,
-                        // but since `settings.pricing` is already merged with the new data above,
-                        // we'd better parse the new vs what's in the actualChanges (wait, settings is already updated! Let's just assume we check the diff)
-                        // Actually, calculating increase from `actualChanges` is safer if we captured old state. This heuristic is basic.
-                        isIncrease = true; // defaulting to true for simple change logging
-                    }
-                }
+                if (isIncrease === null) isIncrease = true; // Default to true if only pricing fields changed
             }
 
-            // Notify admins that settings were changed
+            // Notify admins
             await notifySettingsUpdated({
                 adminId: req.user.id,
                 updateData: actualChanges
             });
 
-            // If price changed, notify drivers (and admins) 
+            // If price changed, notify drivers
             if (isPriceChange) {
                 await notifyPricingUpdated({
                     adminId: req.user.id,
@@ -135,6 +148,6 @@ export const UpdateSettings = async (req, res) => {
         res.status(200).json({ success: true, message: "Settings updated successfully.", settings });
     } catch (error) {
         console.error("Update Settings Error:", error.message);
-        res.status(500).json({ success: false, message: "Failed to update settings." });
+        res.status(500).json({ success: false, message: "Failed to update settings: " + error.message });
     }
 };
