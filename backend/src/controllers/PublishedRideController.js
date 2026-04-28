@@ -4,7 +4,8 @@ import SystemConfig from "../models/SystemConfig.js";
 import NotificationModel from "../models/Notification.js";
 import TripModel from "../models/Trip.js";
 import UserModel from "../models/User.js";
-import { getIO } from "../utils/SocketManager.js";
+import WalletTransaction from "../models/WalletTransaction.js";
+import { getIO, emitToAdmins } from "../utils/SocketManager.js";
 import { calculateFareDetails } from "../utils/PriceEngine.js";
 
 // ─── Haversine distance (km) ──────────────────────────────────────────────────
@@ -674,6 +675,61 @@ export const UpdateRideStatus = async (req, res) => {
                 await UserModel.findByIdAndUpdate(trip.passenger, {
                     $inc: { "passengerStats.totalTrips": 1 }
                 });
+
+                // ── Financial Breakdown for Notification ──
+                const totalFare = trip.fare?.total || 0;
+                const sysConfig = await SystemConfig.findOne();
+                // Extract number from commission string like "15%" or use default 0.15
+                const commStr = sysConfig?.commission || "15";
+                const commPercent = parseFloat(commStr.replace(/[^0-9.]/g, "")) || 15;
+                const platformEarnings = (totalFare * commPercent) / 100;
+                const driverPayout = totalFare - platformEarnings;
+
+                // ── Emit Real-time Notification to Admins ──
+                emitToAdmins({
+                    title: "Trip Completed! 💰",
+                    message: `Ride ${rideId.slice(-6).toUpperCase()} done. Fare: ₹${totalFare} | App Revenue: ₹${platformEarnings.toFixed(2)} | Driver: ₹${driverPayout.toFixed(2)}`,
+                    type: "trip_completed",
+                    metadata: {
+                        rideId,
+                        totalFare,
+                        platformEarnings,
+                        driverPayout,
+                        category: "finance"
+                    }
+                });
+
+                // ── DATABASE WALLET PERSISTENCE ──
+                try {
+                    // 1. Credit Platform Commission to SuperAdmin (Revenue)
+                    const platformAccountId = process.env.PLATFORM_ACCOUNT_ID;
+                    if (platformAccountId) {
+                        await WalletTransaction.createTransaction({
+                            user: platformAccountId,
+                            type: "credit",
+                            amount: platformEarnings,
+                            description: `Platform commission for ride ${rideId}`,
+                            reference: "trip",
+                            referenceId: rideId
+                        });
+                    }
+
+                    // 2. Credit Driver Payout (Earnings)
+                    await WalletTransaction.createTransaction({
+                        user: ride.driver,
+                        type: "credit",
+                        amount: driverPayout,
+                        description: `Earnings for ride ${rideId}`,
+                        reference: "trip",
+                        referenceId: rideId
+                    });
+
+                    trip.paymentStatus = "paid";
+                } catch (walletError) {
+                    console.error("Wallet Transaction Error:", walletError);
+                    // We continue even if wallet fails so the ride isn't stuck, 
+                    // though in production we'd want a retry mechanism.
+                }
             }
 
             if (status === "in_progress") {

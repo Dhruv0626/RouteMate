@@ -51,7 +51,7 @@ const SecurityPage = () => {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate("/admin/dashboard")}
+              onClick={() => navigate(`/${currentUser?.role}/dashboard`)}
               className="p-2 hover:bg-(--card-bg) rounded-xl border border-(--card-border) text-(--text-dim) hover:text-(--text-main) transition-all"
             >
               <ChevronLeft size={20} />

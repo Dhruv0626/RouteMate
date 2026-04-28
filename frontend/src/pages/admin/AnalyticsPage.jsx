@@ -3,7 +3,7 @@ import {
   TrendingUp, Users, Car, IndianRupee, ChevronLeft,
   Activity, Star, ArrowUpRight, ArrowDownRight, BarChart2,
   Calendar, RefreshCw, Zap, MapPin, Clock, Shield,
-  Download, FileText, X
+  Download, FileText, X, UserCheck
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -15,14 +15,14 @@ import html2canvas from "html2canvas";
 
 // ─── Sparkline Bar component ───────────────────────────────────────────────────
 const SparkBar = ({ values, color = "bg-primary" }) => {
-  const max = Math.max(...values);
+  const max = Math.max(...values, 1);
   return (
-    <div className="flex items-end gap-0.5 h-10">
+    <div className="flex items-end gap-1 h-12 w-full pt-4">
       {values.map((v, i) => (
         <div
           key={i}
-          className={`flex-1 ${color} rounded-sm opacity-70 hover:opacity-100 transition-opacity`}
-          style={{ height: `${(v / max) * 100}%` }}
+          className={`flex-1 ${color} rounded-md opacity-40 hover:opacity-100 transition-all duration-500`}
+          style={{ height: `${(v / max) * 100}%`, minHeight: '2px' }}
         />
       ))}
     </div>
@@ -48,12 +48,16 @@ const StatCard = ({ icon: Icon, label, value, change, changeType = "up", color, 
           <Icon size={22} className={c.text} />
         </div>
         {change && (
-          <span className={`flex items-center gap-1 text-[10px] font-black rounded-full px-2 py-1 ${
-            changeType === "up"
-              ? "bg-emerald-500/10 text-emerald-400"
-              : "bg-rose-500/10 text-rose-400"
+          <span className={`flex items-center gap-1 text-[10px] font-black rounded-xl px-2.5 py-1.5 border shadow-sm ${
+            changeType === "up" || change === "+live"
+              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              : "bg-rose-500/10 text-rose-400 border-rose-500/20"
           }`}>
-            {changeType === "up" ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+            {changeType === "up" || change === "+live" ? (
+              <ArrowUpRight size={12} className="text-emerald-400" />
+            ) : (
+              <ArrowDownRight size={12} className="text-rose-400" />
+            )}
             {change}
           </span>
         )}
@@ -63,7 +67,6 @@ const StatCard = ({ icon: Icon, label, value, change, changeType = "up", color, 
         <p className="text-xs font-bold text-(--text-dim) mt-1 uppercase tracking-widest">{label}</p>
         {note && <p className="text-[10px] text-(--text-dim) mt-0.5 italic">{note}</p>}
       </div>
-      {spark && <SparkBar values={spark} color={c.spark} />}
     </div>
   );
 };
@@ -85,6 +88,12 @@ const ActivityRow = ({ icon: Icon, color, title, sub, time, badge }) => {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-(--text-main) truncate">{title}</p>
         <p className="text-[10px] font-medium text-(--text-dim) truncate">{sub}</p>
+        {badge === "Admin" && color === "amber" && (
+          <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md w-fit mt-1">
+            <UserCheck size={10} />
+            <span className="text-[9px] font-black uppercase tracking-tighter">Super Admin</span>
+          </div>
+        )}
       </div>
       <div className="text-right flex-shrink-0">
         {badge && (
@@ -142,12 +151,36 @@ const AnalyticsPage = () => {
     passengers: 0,
     drivers: 0,
     admins: 0,
+    superAdmins: 0,
     approvedDrivers: 0,
     pendingDrivers: 0,
     revenue: 0,
     totalRides: 0,
+    activeUsers: 0,
   });
   const [activities, setActivities] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  const fetchActivities = async () => {
+    try {
+      setActivityLoading(true);
+      const logsRes = await api.get("/admin/audit-logs?limit=8");
+      if (logsRes.data.success && logsRes.data.logs) {
+        setActivities(logsRes.data.logs.map(log => ({
+          icon: log.category === "security" ? Shield : (log.category === "driver" ? Car : Activity),
+          color: log.category === "security" ? "rose" : (log.actorRole === "superadmin" ? "amber" : (log.category === "driver" ? "emerald" : "primary")),
+          title: log.action,
+          sub: `${log.actor} · ${log.details}`,
+          time: new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          badge: log.actorRole === "superadmin" ? "Admin" : (log.category.charAt(0).toUpperCase() + log.category.slice(1))
+        })));
+      }
+    } catch (err) {
+      console.error("Failed to fetch activities", err);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -160,12 +193,14 @@ const AnalyticsPage = () => {
           const passengers = users.filter(u => u.role === "passenger").length;
           const drivers = users.filter(u => u.role === "driver").length;
           const admins = users.filter(u => u.role === "admin").length;
+          const superAdmins = users.filter(u => u.role === "superadmin").length;
           const approvedDrivers = users.filter(u => u.role === "driver" && u.driverProfile?.isApproved).length;
           const pendingDrivers = drivers - approvedDrivers;
           
           // 2. Fetch Dashboard Stats for Business Metrics
           const statsRes = await api.get("/admin/dashboard-stats");
           let businessStats = {
+            activeUsers: 0,
             revenue: 0,
             totalRides: 0,
             avgRating: "0.0 ★",
@@ -178,6 +213,7 @@ const AnalyticsPage = () => {
           if (statsRes.data.success && statsRes.data.stats) {
             const s = statsRes.data.stats;
             businessStats = {
+                activeUsers: s.counts.activeUsers,
                 revenue: s.business.revenue,
                 totalRides: s.business.totalRides,
                 avgRating: s.business.avgRating,
@@ -189,27 +225,19 @@ const AnalyticsPage = () => {
           }
 
           // 3. Fetch Recent Activity
-          const logsRes = await api.get("/admin/audit-logs?limit=5");
-          if (logsRes.data.success && logsRes.data.logs) {
-            setActivities(logsRes.data.logs.map(log => ({
-              icon: log.category === "security" ? Shield : (log.category === "driver" ? Car : Activity),
-              color: log.category === "security" ? "rose" : (log.category === "driver" ? "emerald" : "primary"),
-              title: log.action,
-              sub: `${log.actor} · ${log.details}`,
-              time: new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              badge: log.category.charAt(0).toUpperCase() + log.category.slice(1)
-            })));
-          }
+          await fetchActivities();
 
           setStats({ 
             totalUsers: users.length, 
             passengers, 
             drivers, 
             admins, 
+            superAdmins, 
             approvedDrivers, 
             pendingDrivers,
             revenue: businessStats.revenue,
             totalRides: businessStats.totalRides,
+            activeUsers: businessStats.activeUsers,
             avgRating: businessStats.avgRating,
             cancellationRate: businessStats.cancellationRate,
             vehicleBreakdown: businessStats.vehicleBreakdown,
@@ -249,72 +277,46 @@ const AnalyticsPage = () => {
     if (!reportRef.current) return;
     setPdfGenerating(true);
     try {
+      // Capture the high-fidelity hidden template
       const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
-        backgroundColor: "#0f0f12",
+        backgroundColor: "#ffffff",
         logging: false,
+        // No complex onclone needed for the simple template
       });
-      const imgData = canvas.toDataURL("image/png");
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.7);
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth - 20;
+      const margin = 10;
+      const imgWidth = pageWidth - (margin * 2);
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Header
-      pdf.setFillColor(15, 15, 18);
+      // Ensure clean start
+      pdf.setFillColor(255, 255, 255);
       pdf.rect(0, 0, pageWidth, pageHeight, "F");
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(18);
-      pdf.setFont(undefined, "bold");
-      pdf.text("RouteMate Analytics Report", 10, 15);
-      pdf.setFontSize(9);
-      pdf.setTextColor(160, 160, 170);
-      pdf.text(`Date Range: ${formattedRange}`, 10, 22);
-      pdf.text(`Generated: ${new Date().toLocaleString("en-IN")}`, 10, 27);
-      pdf.text(`Admin: ${currentUser?.name || "System"}`, 10, 32);
 
-      // Separator line
-      pdf.setDrawColor(100, 100, 110);
-      pdf.line(10, 35, pageWidth - 10, 35);
+      // Single or multi-page based on content
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      // Content – multi-page support
-      let yOffset = 40;
-      let remainingHeight = imgHeight;
-      let sourceY = 0;
+      pdf.addImage(imgData, "JPEG", margin, margin, imgWidth, imgHeight);
+      heightLeft -= (pageHeight - margin * 2);
 
-      while (remainingHeight > 0) {
-        const availableHeight = (yOffset === 40) ? (pageHeight - 50) : (pageHeight - 20);
-        const sliceHeight = Math.min(remainingHeight, availableHeight);
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = canvas.width;
-        const sourcePixelHeight = (sliceHeight / imgHeight) * canvas.height;
-        sliceCanvas.height = sourcePixelHeight;
-        const ctx = sliceCanvas.getContext("2d");
-        ctx.drawImage(canvas, 0, sourceY, canvas.width, sourcePixelHeight, 0, 0, canvas.width, sourcePixelHeight);
-        const sliceData = sliceCanvas.toDataURL("image/png");
-
-        pdf.addImage(sliceData, "PNG", 10, yOffset, imgWidth, sliceHeight);
-        remainingHeight -= sliceHeight;
-        sourceY += sourcePixelHeight;
-
-        if (remainingHeight > 0) {
-          pdf.addPage();
-          yOffset = 10;
-        }
+      while (heightLeft > 0) {
+        pdf.addPage();
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pageWidth, pageHeight, "F");
+        pdf.addImage(imgData, "JPEG", margin, heightLeft - imgHeight + margin, imgWidth, imgHeight);
+        heightLeft -= (pageHeight - margin * 2);
       }
 
-      // Footer on last page
-      pdf.setFontSize(7);
-      pdf.setTextColor(100, 100, 110);
-      pdf.text("Confidential – RouteMate Admin Panel", 10, pageHeight - 5);
-      pdf.text(`Page ${pdf.getNumberOfPages()}`, pageWidth - 20, pageHeight - 5);
-
-      pdf.save(`RouteMate_Analytics_${appliedRange.from}_to_${appliedRange.to}.pdf`);
+      pdf.save(`RouteMate_Analytics_Report.pdf`);
     } catch (err) {
       console.error("PDF generation failed", err);
-      alert("Failed to generate PDF. Please try again.");
+      alert("Export Failed: " + err.message);
     } finally {
       setPdfGenerating(false);
     }
@@ -322,15 +324,18 @@ const AnalyticsPage = () => {
 
   // ── Stats Summary for UI ──
   const UI_STATS = {
-    revenue:       { value: `₹${stats.revenue?.toLocaleString()}`, change: "+live", spark: [1,2,2,3,3,3,stats.revenue||4] },
-    rides:         { value: stats.totalRides?.toLocaleString(),     change: "+live", spark: [1,1,2,2,2,stats.totalRides||1] },
-    avgRating:     { value: stats.avgRating,    change: "0",   spark: [] },
-    cancelRate:    { value: stats.cancellationRate,      change: "0.0%",  changeType: "down" },
+    revenue:       { value: `₹${stats.revenue?.toLocaleString()}`, change: "+live", changeType: "up" },
+    rides:         { value: stats.totalRides?.toLocaleString(),     change: "+live", changeType: "up" },
+    avgRating:     { value: stats.avgRating || "0.0 ★",             change: "0",    changeType: "up" },
+    cancelRate:    { value: stats.cancellationRate || "0.0%",      change: stats.cancellationRate || "0.0%", changeType: "up" },
+    isSuper:       currentUser?.role === "superadmin",
+    totalUsers:    { value: stats.totalUsers?.toLocaleString(),     change: `+${stats.activeUsers || 0} live`, changeType: "up" },
+    drivers:       { value: stats.drivers?.toLocaleString(),        change: "+1 live", changeType: "up" },
     vehicleTypes:  stats.vehicleBreakdown || [],
     areaBreakdown: stats.areaBreakdown || [],
     weekDays: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
     weekRides: stats.weeklyRides || [0, 0, 0, 0, 0, 0, 0],
-    weeklyMax: Math.max(...(stats.weeklyRides || [100])) || 100,
+    weeklyMax: Math.max(...(stats.weeklyRides || [5])) || 5,
   };
 
   if (loading) return <Loader fullPage text="Compiling platform metrics..." />;
@@ -342,7 +347,7 @@ const AnalyticsPage = () => {
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate("/admin/dashboard")}
+              onClick={() => navigate(`/${currentUser?.role}/dashboard`)}
               className="p-2 hover:bg-(--card-bg) rounded-xl border border-(--card-border) text-(--text-dim) hover:text-(--text-main) transition-all"
             >
               <ChevronLeft size={20} />
@@ -372,9 +377,14 @@ const AnalyticsPage = () => {
             </button>
 
             <ThemeToggle />
-            <div className="flex items-center gap-2 border-l border-(--card-border) pl-3">
-              <p className="hidden sm:block text-sm font-semibold text-(--text-main)">{currentUser?.name}</p>
-              <div className="h-8 w-8 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center font-black text-sm">
+            <div className="flex items-center gap-3 border-l border-(--card-border) pl-3">
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] font-black uppercase tracking-widest text-(--text-main)">{currentUser?.name}</span>
+                <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${UI_STATS.isSuper ? 'bg-amber-500/10 text-amber-500' : 'bg-slate-500/10 text-slate-500'}`}>
+                  {UI_STATS.isSuper ? 'Super Admin' : 'Admin'}
+                </span>
+              </div>
+              <div className="h-9 w-9 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center font-black text-sm border border-violet-500/20">
                 {currentUser?.name?.charAt(0)?.toUpperCase()}
               </div>
             </div>
@@ -512,7 +522,7 @@ const AnalyticsPage = () => {
             </span>
             <span className="text-xs text-(--text-dim) font-medium">Real data · Updated now</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             <StatCard
               icon={Users} color="primary" label="Total Users" value={stats.totalUsers}
               change="+live" changeType="up"
@@ -529,9 +539,14 @@ const AnalyticsPage = () => {
               spark={[2,3,3,4,4,5,5,stats.passengers||5]}
             />
             <StatCard
+              icon={Shield} color="amber" label="Super Admins" value={stats.superAdmins}
+              spark={[1,1,1,stats.superAdmins||1]}
+              note="Platform owners"
+            />
+            <StatCard
               icon={Shield} color="rose" label="Admins" value={stats.admins}
               spark={[1,1,1,1,stats.admins||1,stats.admins||1,stats.admins||1]}
-              note="System administrators"
+              note="System staff"
             />
           </div>
         </section>
@@ -545,10 +560,12 @@ const AnalyticsPage = () => {
             <span className="text-xs text-(--text-dim) font-medium italic">Demo data · Connect rides API for live figures</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <StatCard
-              icon={IndianRupee} color="primary" label="Total Revenue" value={UI_STATS.revenue.value}
-              change={UI_STATS.revenue.change} changeType="up" spark={UI_STATS.revenue.spark}
-            />
+            {UI_STATS.isSuper && (
+                <StatCard
+                  icon={IndianRupee} color="primary" label="Total Revenue" value={UI_STATS.revenue.value}
+                  change={UI_STATS.revenue.change} changeType="up" spark={UI_STATS.revenue.spark}
+                />
+            )}
             <StatCard
               icon={MapPin} color="emerald" label="Total Rides" value={UI_STATS.rides.value}
               change={UI_STATS.rides.change} changeType="up" spark={UI_STATS.rides.spark}
@@ -577,21 +594,23 @@ const AnalyticsPage = () => {
                 <ArrowUpRight size={11} /> Active
               </div>
             </div>
-            <div className="flex items-end gap-3 h-40">
-              {UI_STATS.weekDays.map((day, i) => (
-                <div key={day} className="flex-1 flex flex-col items-center gap-1.5">
-                  <span className="text-[10px] font-black text-(--text-dim)">{UI_STATS.weekRides[i]}</span>
-                  <div
-                    className="w-full bg-primary/20 rounded-xl overflow-hidden hover:bg-primary/30 transition-colors cursor-pointer group"
-                    style={{ height: `${(UI_STATS.weekRides[i] / UI_STATS.weeklyMax) * 100}%` }}
-                  >
-                    <div
-                      className="w-full bg-primary rounded-xl transition-all duration-700 group-hover:opacity-80 h-full"
-                    />
+            <div className="flex items-end gap-3 h-48 px-2">
+              {UI_STATS.weekDays.map((day, i) => {
+                const val = UI_STATS.weekRides[i] || 0;
+                const pct = UI_STATS.weeklyMax > 0 ? (val / UI_STATS.weeklyMax) * 100 : 0;
+                return (
+                  <div key={day} className="flex-1 flex flex-col items-center gap-3">
+                    <span className="text-[10px] font-black text-primary">{val > 0 ? val : ""}</span>
+                    <div className="w-full bg-primary/10 rounded-2xl h-full relative group">
+                      <div
+                        className="absolute bottom-0 left-0 w-full bg-primary rounded-xl transition-all duration-1000 group-hover:bg-primary-dark"
+                        style={{ height: `${val > 0 ? Math.max(pct, 12) : 0}%`, minHeight: val > 0 ? '8px' : '0' }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">{day}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-(--text-dim) uppercase">{day}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -621,9 +640,25 @@ const AnalyticsPage = () => {
               <p className="text-xs text-(--text-dim) font-medium">City-wide distribution · Live areas</p>
             </div>
             <div className="space-y-4">
-              {UI_STATS.areaBreakdown.map(area => (
-                <HBar key={area.label} label={area.label} value={area.value} max={stats.totalRides || 1} color={area.color} />
-              ))}
+               {UI_STATS.areaBreakdown.map(area => {
+                 // Extract area name (usually second part after comma) if available
+                 const rawLabel = area.label || "Ahmedabad";
+                 const parts = rawLabel.split(',');
+                 const areaPart = parts.length > 1 ? parts[1].trim() : parts[0].trim();
+                 
+                 const isPincode = /^\d+$/.test(areaPart.replace(/\s/g, ''));
+                 const finalLabel = isPincode ? `Area ${areaPart}` : areaPart;
+                
+                return (
+                  <HBar 
+                    key={area.label} 
+                    label={finalLabel} 
+                    value={area.value} 
+                    max={stats.totalRides || 1} 
+                    color={area.color} 
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -634,8 +669,12 @@ const AnalyticsPage = () => {
                 <h3 className="font-display font-black text-(--text-main) text-lg">Recent Activity</h3>
                 <p className="text-xs text-(--text-dim) font-medium">Live feed · Mixed real & demo events</p>
               </div>
-              <button className="p-2 rounded-xl border border-(--card-border) hover:bg-(--card-bg) text-(--text-dim) hover:text-primary transition-all">
-                <RefreshCw size={14} />
+              <button 
+                onClick={fetchActivities}
+                disabled={activityLoading}
+                className="p-2 rounded-xl border border-(--card-border) hover:bg-(--card-bg) text-(--text-dim) hover:text-primary transition-all disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={activityLoading ? "animate-spin" : ""} />
               </button>
             </div>
             <div className="space-y-1">
@@ -665,6 +704,111 @@ const AnalyticsPage = () => {
         </section>
 
       </main>
+
+      {/* ── Hidden PDF Template ── */}
+      <div style={{ position: 'absolute', left: '-9999px', top: '0' }}>
+        <div ref={reportRef} style={{ width: '800px', padding: '40px', backgroundColor: '#ffffff', color: '#000000', fontFamily: 'Arial, sans-serif' }}>
+          <div style={{ borderBottom: '2px solid #ffcc00', paddingBottom: '20px', marginBottom: '30px' }}>
+             <h1 style={{ fontSize: '28px', margin: '0', color: '#000' }}>RouteMate Analytics</h1>
+             <p style={{ fontSize: '14px', color: '#666', margin: '5px 0' }}>Professional Platform Report · {formattedRange}</p>
+          </div>
+
+          <div style={{ marginBottom: '40px' }}>
+            <h2 style={{ fontSize: '18px', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '15px' }}>Business Metrics</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}><strong>Total Revenue</strong></td>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}>₹{stats.revenue?.toLocaleString()}</td>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}><strong>Total Rides</strong></td>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}>{stats.totalRides?.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}><strong>Avg. Rating</strong></td>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}>{stats.avgRating}</td>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}><strong>Cancel Rate</strong></td>
+                  <td style={{ padding: '12px', border: '1px solid #eee' }}>{stats.cancellationRate}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginBottom: '40px' }}>
+            <h2 style={{ fontSize: '18px', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '15px' }}>User Demographics</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f9fafb' }}>
+                  <th style={{ padding: '10px', border: '1px solid #eee', textAlign: 'left' }}>Role</th>
+                  <th style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>Count</th>
+                  <th style={{ padding: '10px', border: '1px solid #eee', textAlign: 'left' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '10px', border: '1px solid #eee' }}>Passengers</td>
+                  <td style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>{stats.passengers?.toLocaleString()}</td>
+                  <td style={{ padding: '10px', border: '1px solid #eee' }}>Active</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '10px', border: '1px solid #eee' }}>Drivers</td>
+                  <td style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>{stats.drivers?.toLocaleString()}</td>
+                  <td style={{ padding: '10px', border: '1px solid #eee' }}>{stats.approvedDrivers} Approved</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '10px', border: '1px solid #eee' }}>Administrators</td>
+                  <td style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>{(stats.admins + stats.superAdmins)?.toLocaleString()}</td>
+                  <td style={{ padding: '10px', border: '1px solid #eee' }}>System Staff</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginBottom: '40px' }}>
+            <h2 style={{ fontSize: '18px', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '15px' }}>Vehicle Fleet Breakdown</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+               <thead>
+                <tr style={{ backgroundColor: '#f9fafb' }}>
+                  <th style={{ padding: '10px', border: '1px solid #eee', textAlign: 'left' }}>Vehicle Type</th>
+                  <th style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.vehicleBreakdown?.map((item, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: '10px', border: '1px solid #eee' }}>{item.label}</td>
+                    <td style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>{item.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h2 style={{ fontSize: '18px', borderBottom: '1px solid #eee', paddingBottom: '8px', marginBottom: '15px' }}>Geographic Distribution</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+               <thead>
+                <tr style={{ backgroundColor: '#f9fafb' }}>
+                  <th style={{ padding: '10px', border: '1px solid #eee', textAlign: 'left' }}>Region / Area</th>
+                  <th style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>Ride Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.areaBreakdown?.map((area, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: '10px', border: '1px solid #eee' }}>{area.label}</td>
+                    <td style={{ padding: '10px', border: '1px solid #eee', textAlign: 'right' }}>{area.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginTop: '50px', borderTop: '1px solid #eee', paddingTop: '20px', textAlign: 'center' }}>
+            <p style={{ fontSize: '10px', color: '#999', margin: '0' }}>RouteMate Urban Mobility System · Internal Administrator Report</p>
+            <p style={{ fontSize: '10px', color: '#999', margin: '5px 0' }}>Generated on {new Date().toLocaleString()} by {currentUser?.name}</p>
+          </div>
+        </div>
+      </div>
 
       <footer className="mx-auto max-w-7xl py-8 px-6 border-t border-(--card-border) flex justify-between items-center opacity-50">
         <p className="text-[10px] font-bold tracking-widest uppercase">RouteMate Analytics</p>

@@ -40,18 +40,22 @@ export const UpdateSettings = async (req, res) => {
         };
 
         const actualChanges = {};
+        const isSuper = req.user.role === "superadmin";
 
         // 1. Handle Top-level fields
-        const topLevelFields = ['commission', 'surgeMultiplier', 'maxRadius', 'taxPercentage', 'realTimeTracking', 'autoApproveDrivers'];
+        const topLevelFields = ['commission', 'surgeMultiplier', 'maxRadius', 'realTimeTracking', 'autoApproveDrivers'];
         topLevelFields.forEach(key => {
             if (updateData[key] !== undefined) {
+                // Restriction for regular admins: only 'maxRadius', 'realTimeTracking', 'autoApproveDrivers' are operational logic
+                const isOpLogic = ['maxRadius', 'realTimeTracking', 'autoApproveDrivers'].includes(key);
+                if (!isSuper && !isOpLogic) return;
+
                 let newVal = updateData[key];
-                
+
                 // Formatting
                 if (key === 'commission') newVal = ensureSymbol(newVal, "", "%");
                 if (key === 'surgeMultiplier') newVal = ensureSymbol(newVal, "", "x");
                 if (key === 'maxRadius') newVal = ensureSymbol(newVal, "", "km");
-                if (key === 'taxPercentage') newVal = parseFloat(newVal || "0");
 
                 if (String(settings[key]) !== String(newVal)) {
                     actualChanges[key] = newVal;
@@ -61,7 +65,7 @@ export const UpdateSettings = async (req, res) => {
         });
 
         // 2. Handle Pricing (Nested)
-        if (updateData.pricing && typeof updateData.pricing === 'object') {
+        if (isSuper && updateData.pricing && typeof updateData.pricing === 'object') {
             Object.keys(updateData.pricing).forEach(vType => {
                 const newCategoryData = updateData.pricing[vType];
                 if (!newCategoryData) return;
@@ -78,7 +82,7 @@ export const UpdateSettings = async (req, res) => {
 
                 Object.keys(newCategoryData).forEach(field => {
                     let newVal = newCategoryData[field];
-                    
+
                     // Formatting for specific pricing fields
                     if (field === 'baseFare' || field === 'costPerKm') {
                         newVal = ensureSymbol(newVal, "₹");
@@ -102,11 +106,33 @@ export const UpdateSettings = async (req, res) => {
             settings.markModified('pricing');
         }
 
+        // 3. Handle Financial & Wallet Configuration
+        const financialFields = [
+            'platformAccountUserId', 'commissionWalletMinThreshold', 'commissionWalletWarningLevel',
+            'withdrawalMinAmount', 'withdrawalReserveBalance', 'withdrawalDailyMax', 'referralBonusAmount'
+        ];
+
+        financialFields.forEach(key => {
+            if (isSuper && updateData[key] !== undefined) {
+                if (settings[key] !== updateData[key]) {
+                    actualChanges[key] = updateData[key];
+                    settings[key] = updateData[key];
+                }
+            }
+        });
+
         // Handle Support & Social
-        if (updateData.supportEmail) settings.supportEmail = updateData.supportEmail;
-        if (updateData.contactNumber) settings.contactNumber = updateData.contactNumber;
+        if (updateData.supportEmail) {
+            actualChanges.supportEmail = updateData.supportEmail;
+            settings.supportEmail = updateData.supportEmail;
+        }
+        if (updateData.contactNumber) {
+            actualChanges.contactNumber = updateData.contactNumber;
+            settings.contactNumber = updateData.contactNumber;
+        }
         if (updateData.socialLinks) {
             settings.socialLinks = { ...settings.socialLinks, ...updateData.socialLinks };
+            actualChanges.socialLinks = updateData.socialLinks;
             settings.markModified('socialLinks');
         }
 
@@ -115,7 +141,7 @@ export const UpdateSettings = async (req, res) => {
         // ── Post-Save Notifications ──
         if (Object.keys(actualChanges).length > 0) {
             const isPriceChange = (actualChanges.pricing !== undefined || actualChanges.surgeMultiplier !== undefined);
-            
+
             let isIncrease = null;
             if (isPriceChange) {
                 // Heuristic for price change direction

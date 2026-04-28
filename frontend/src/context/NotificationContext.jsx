@@ -18,7 +18,8 @@ const ICONS = {
   success: CheckCircle,
   warning: AlertCircle,
   error: ShieldAlert,
-  system: Settings
+  system: Settings,
+  trip_completed: CheckSquare
 };
 
 const NotificationContext = createContext();
@@ -234,6 +235,11 @@ export const NotificationProvider = ({ children }) => {
       // ─── Instant Signal Path (Socket.IO) ───
       socket.connect();
       socket.emit("join_user", user.id);
+      
+      // If admin/superadmin, join the global admin room for real-time ride alerts
+      if (user.role === "admin" || user.role === "superadmin") {
+        socket.emit("join_admin", user.id);
+      }
 
       const handleFastNotification = (notification) => {
         // Trigger tone and alert immediately (Socket path)

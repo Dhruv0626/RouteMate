@@ -25,14 +25,9 @@ const AdminSignInPage = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [resetOTPTrigger, setResetOTPTrigger] = useState(false);
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (user) {
-      if (user.role === "admin") {
-        navigate("/admin/dashboard", { replace: true });
-      } else {
-        navigate(`/${user.role}/dashboard`, { replace: true });
-      }
+      navigate(`/${user.role}/dashboard`, { replace: true });
     }
   }, [user, navigate]);
 

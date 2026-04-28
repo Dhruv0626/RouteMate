@@ -8,7 +8,7 @@ const UserSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     Mobile_no: { type: String, default: null }, // Removed unique constraint to allow multiple users with same number if needed
     password: { type: String, required: true },            // bcrypt hashed
-    role: { type: String, enum: ["passenger", "driver", "admin"], default: "passenger" },
+    role: { type: String, enum: ["passenger", "driver", "admin", "superadmin"], default: "passenger" },
     profileImage: { type: String, default: "" },               // Cloudinary URL
 
     // ── Account Status ─────────────────────────────────────────────────────

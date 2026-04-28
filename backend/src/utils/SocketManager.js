@@ -35,3 +35,13 @@ export const emitNotification = (userId, notification) => {
     console.warn(`❌ SocketManager: Cannot emit to User ${userId} - IO not initialized`);
   }
 };
+
+/**
+ * Emit a notification to all users in the "admins" room
+ */
+export const emitToAdmins = (notification) => {
+  if (io) {
+    io.to("admins").emit("new_notification", notification);
+    console.log(`🚀 SocketManager: Emitted notification to all Admins`);
+  }
+};

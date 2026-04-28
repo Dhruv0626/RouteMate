@@ -36,6 +36,7 @@ import {
   User,
   Mail,
   IndianRupee,
+  Activity,
 } from "lucide-react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
@@ -171,50 +172,50 @@ const ROLE_CARDS = {
       title: "User Management",
       desc: "Manage passengers and drivers",
       color: "primary",
-      href: "/admin/dashboard/manage-users",
+      href: "/:role/dashboard/manage-users",
     },
     {
       icon: BarChart2,
       title: "Analytics",
       desc: "Platform metrics and reports",
       color: "violet",
-      href: "/admin/dashboard/analytics",
+      href: "/:role/dashboard/analytics",
     },
     {
       icon: Car,
       title: "Fleet Overview",
       desc: "Monitor all active vehicles",
       color: "emerald",
-      href: "/admin/dashboard/fleet",
+      href: "/:role/dashboard/fleet",
     },
     /* {
       icon: Shield,
       title: "Security",
       desc: "Audit logs and access control",
       color: "rose",
-      href: "/admin/dashboard/security",
+      href: "/:role/dashboard/security",
     }, */
     {
       icon: UserCheck,
       title: "Driver Approvals",
       desc: "Review pending applications",
       color: "amber",
-      href: "/admin/dashboard/driver-approvals",
+      href: "/:role/dashboard/driver-approvals",
     },
     {
       icon: Settings,
       title: "System Settings",
       desc: "Configure platform options",
       color: "cyan",
-      href: "/admin/dashboard/settings",
+      href: "/:role/dashboard/settings",
     },
     {
       icon: Shield,
       title: "SOS Management",
       desc: "Monitor & resolve emergency alerts",
       color: "rose",
-      href: "/admin/dashboard/sos",
-    },
+      href: "/:role/dashboard/sos",
+    }
   ],
 };
 
@@ -266,6 +267,25 @@ const COLOR_MAP = {
   },
 };
 
+// Default fallback stats (demo)
+const defaultStats = {
+  passenger: [
+    { label: "Total Trips", value: "0" },
+    { label: "Saved Places", value: "0" },
+    { label: "Wallet", value: "₹0" },
+  ],
+  driver: [
+    { label: "Today's Trips", value: "0" },
+    { label: "Earnings", value: "₹0" },
+    { label: "Rating", value: "0.0" },
+  ],
+  admin: [
+    { label: "Users", value: "0" },
+    { label: "Active", value: "0" },
+    { label: "Revenue", value: "₹0" },
+  ],
+};
+
 const ROLE_LABELS = {
   passenger: {
     label: "Passenger",
@@ -279,6 +299,10 @@ const ROLE_LABELS = {
     label: "Admin",
     badge: "bg-violet-500/20 text-violet-400 border border-violet-500/30",
   },
+  superadmin: {
+    label: "Super Admin",
+    badge: "bg-amber-500/20 text-amber-500 border border-amber-500/30",
+  },
 };
 
 const DashboardPage = () => {
@@ -286,10 +310,14 @@ const DashboardPage = () => {
   const { unreadCount } = useNotifications();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState([]);
+  const role = user?.role || "passenger";
+  const configRole = (role === "superadmin") ? "admin" : role;
+  const isSuper = role === "superadmin";
+  const pathRole = role;
+
+  const [stats, setStats] = useState(defaultStats[configRole] || defaultStats.passenger);
   const [activities, setActivities] = useState(null);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
-  const role = user?.role || "passenger";
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [modalSettings, setModalSettings] = useState({
@@ -312,37 +340,28 @@ const DashboardPage = () => {
     setShowSettingsModal(false);
   };
 
-  // Default fallback stats (demo)
-  const defaultStats = {
-    passenger: [
-      { label: "Total Trips", value: "0" },
-      { label: "Saved Places", value: "0" },
-      { label: "Wallet", value: "₹0" },
-    ],
-    driver: [
-      { label: "Today's Trips", value: "0" },
-      { label: "Earnings", value: "₹0" },
-      { label: "Rating", value: "0.0" },
-    ],
-    admin: [
-      { label: "Users", value: "0" },
-      { label: "Active", value: "0" },
-      { label: "Revenue", value: "₹0" },
-    ],
-  };
+
 
   useEffect(() => {
     const fetchDashboardStats = async () => {
       try {
-        if (user?.role === "admin") {
+        if (user?.role === "admin" || user?.role === "superadmin") {
           const statsRes = await api.get("/admin/dashboard-stats");
           if (statsRes.data.success && statsRes.data.stats) {
             const adminStats = statsRes.data.stats;
-            setStats([
+            const isSuper = user.role === "superadmin";
+            const newStats = [
               { label: "Users", value: adminStats.counts.total.toLocaleString() },
               { label: "Active", value: adminStats.counts.activeUsers.toLocaleString() },
-              { label: "Revenue", value: `₹${Math.round(adminStats.business.revenue / 1000)}K` },
-            ]);
+            ];
+            
+            if (isSuper) {
+              newStats.push({ label: "Revenue", value: `₹${Math.round(adminStats.business.revenue / 1000)}K` });
+            } else {
+              newStats.push({ label: "Drivers", value: adminStats.counts.drivers.toLocaleString() });
+            }
+            
+            setStats(newStats);
           }
 
           // Fetch Recent Activity for Admin
@@ -352,6 +371,7 @@ const DashboardPage = () => {
                 id: log.id,
                 action: log.action,
                 user: log.actor,
+                role: log.actorRole,
                 date: new Date(log.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
                 status: "Success",
                 icon: log.category === 'driver' ? FileCheck : (log.category === 'security' ? Shield : Settings)
@@ -412,8 +432,8 @@ const DashboardPage = () => {
                   id: ride._id,
                   type: ride.vehicleType?.toUpperCase() || "RIDE",
                   subType: passengerName ? `Passenger: ${passengerName}` : confirmedBooking ? "1 booking" : "No booking yet",
-                  from: ride.source?.address?.split(',')[0] || "Unknown",
-                  to: ride.destination?.address?.split(',')[0] || "Unknown",
+                  from: ride.source?.address?.split(',').slice(0, 2).join(',') || "Unknown",
+                  to: ride.destination?.address?.split(',').slice(0, 2).join(',') || "Unknown",
                   date: isToday
                     ? dep.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
                     : dep.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
@@ -431,8 +451,8 @@ const DashboardPage = () => {
                 id: ride._id,
                 type: "Trip",
                 subType: ride.phase === 'completed' ? 'Completed' : ride.phase === 'cancelled' ? 'Cancelled' : ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
-                from: ride.source?.address?.split(',')[0] || "Unknown",
-                to: ride.destination?.address?.split(',')[0] || "Unknown",
+                from: ride.source?.address?.split(',').slice(0, 2).join(',') || "Unknown",
+                to: ride.destination?.address?.split(',').slice(0, 2).join(',') || "Unknown",
                 date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
                 rawDate: new Date(ride.createdAt),
                 status: ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
@@ -457,10 +477,10 @@ const DashboardPage = () => {
                   const myBooking = ride.myBookings?.[0];
                   const displayStatus = myBooking?.status === 'cancelled' ? 'REJECTED' : ride.status.toUpperCase();
                   // Use passenger's own pickup/dropoff — NOT the driver's published route endpoints
-                  const from = myBooking?.passengerSource?.address?.split(',')[0]
-                    || ride.source?.address?.split(',')[0] || 'Unknown';
-                  const to = myBooking?.passengerDestination?.address?.split(',')[0]
-                    || ride.destination?.address?.split(',')[0] || 'Unknown';
+                  const from = myBooking?.passengerSource?.address?.split(',').slice(0, 2).join(',')
+                    || ride.source?.address?.split(',').slice(0, 2).join(',') || 'Unknown';
+                  const to = myBooking?.passengerDestination?.address?.split(',').slice(0, 2).join(',')
+                    || ride.destination?.address?.split(',').slice(0, 2).join(',') || 'Unknown';
                   return {
                     id: ride._id,
                     type: (ride.vehicleType || 'RIDE').toUpperCase(),
@@ -471,30 +491,43 @@ const DashboardPage = () => {
                     status: displayStatus,
                     amount: myBooking?.amountPaid ? `₹${myBooking.amountPaid}` : (ride.vehicleType || 'PRIME').toUpperCase(),
                     icon: Car,
-                    isLive: true,
+                    isLive: ride.status !== 'cancelled' && myBooking?.status !== 'cancelled', // Exclude if ride OR booking is cancelled
                     bookingStatus: myBooking?.status
                   };
                 });
 
               const activityHistory = rides.map(ride => ({
                 id: ride._id,
+                publishedRideId: ride.publishedRide?._id || ride.publishedRide, // Link back to the original ride
                 type: "Trip",
-                from: ride.source?.address?.split(',')[0] || "Unknown",
-                to: ride.destination?.address?.split(',')[0] || "Unknown",
+                from: ride.source?.address?.split(',').slice(0, 2).join(',') || "Unknown",
+                to: ride.destination?.address?.split(',').slice(0, 2).join(',') || "Unknown",
                 date: new Date(ride.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
                 rawDate: new Date(ride.createdAt),
                 status: ride.phase.charAt(0).toUpperCase() + ride.phase.slice(1),
                 amount: `₹${ride.fare?.total || 0}`,
-                icon: Navigation
+                icon: Navigation,
+                isLive: false
               }));
 
-              setActivities([...activeActivities, ...activityHistory].slice(0, 8));
+              // Deduplicate: If a ride is in both active and history, keep the active (live) one
+              const seenRideIds = new Set();
+              const merged = [...activeActivities, ...activityHistory]
+                .filter(a => {
+                  const rid = a.publishedRideId || a.id;
+                  if (seenRideIds.has(rid)) return false;
+                  seenRideIds.add(rid);
+                  return true;
+                })
+                .slice(0, 10);
+
+              setActivities(merged);
             }
           }
         }
       } catch (err) {
         console.error("Dashboard Data Fetch Error:", err);
-        setStats(defaultStats[role]);
+        setStats(defaultStats[configRole]);
       } finally {
         setLoading(false);
       }
@@ -508,7 +541,13 @@ const DashboardPage = () => {
     navigate("/signin");
   };
 
-  const cards = ROLE_CARDS[role] || ROLE_CARDS.passenger;
+  let cards = ROLE_CARDS[configRole] || ROLE_CARDS.passenger;
+
+  // Filter sensitive links for regular admins
+  if (role === "admin" && !isSuper) {
+    cards = cards.filter(card => card.title !== "Analytics");
+  }
+
   const roleInfo = ROLE_LABELS[role] || ROLE_LABELS.passenger;
   const firstName = user?.name?.split(" ")[0] || "there";
 
@@ -532,7 +571,7 @@ const DashboardPage = () => {
                 Dashboard
               </span>
               <Link
-                to={`/${user?.role}/dashboard/history`}
+                to={`/${pathRole}/dashboard/history`}
                 className="text-xs font-medium text-(--text-dim) transition-colors hover:text-(--text-main)"
               >
                 History
@@ -543,7 +582,7 @@ const DashboardPage = () => {
           <div className="flex items-center gap-3">
             <div className="relative">
               <button 
-                onClick={() => navigate(`/${role}/dashboard/notifications`)}
+                onClick={() => navigate(`/${pathRole}/dashboard/notifications`)}
                 className="relative rounded-xl border border-(--card-border) bg-(--card-bg) p-2.5 text-(--text-dim) transition-all duration-300 hover:text-(--text-main) hover:bg-(--total-border)"
               >
                 <Bell size={20} />
@@ -555,12 +594,12 @@ const DashboardPage = () => {
             </div>
 
             <div 
-              onClick={() => navigate(`/${user?.role}/dashboard/profile`)}
+              onClick={() => navigate(`/${pathRole}/dashboard/profile`)}
               className="group flex cursor-pointer items-center gap-3 border-l border-(--card-border) pl-4 hover:opacity-80 transition-all"
             >
               <div className="hidden text-right sm:block">
-                <p className="text-primary mb-0.5 text-[9px] font-bold tracking-[0.2em] uppercase opacity-80">
-                  {role}
+                <p className={`mb-0.5 text-[9px] font-bold tracking-[0.2em] uppercase opacity-80 ${user?.role === 'superadmin' ? 'text-amber-500' : 'text-primary'}`}>
+                  {user?.role === 'superadmin' ? 'Super Admin' : 'Admin'}
                 </p>
                 <p className="group-hover:text-primary text-sm leading-none font-semibold text-(--text-main) transition-all">
                   {user?.name || "User"}
@@ -578,7 +617,7 @@ const DashboardPage = () => {
             </div>
 
             <button
-              onClick={() => navigate(`/${role}/dashboard/settings`)}
+              onClick={() => navigate(`/${pathRole}/dashboard/settings`)}
               className="ml-1 rounded-xl border border-(--card-border) bg-(--card-bg) p-2 text-(--text-dim) transition-all hover:text-(--text-main) hover:bg-(--total-border)"
             >
               <Settings size={18} />
@@ -610,7 +649,7 @@ const DashboardPage = () => {
                   Active
                 </span>
                 <button 
-                  onClick={() => navigate(`/${role}/dashboard/notifications`)}
+                  onClick={() => navigate(`/${pathRole}/dashboard/notifications`)}
                   className="group/notify flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[9px] font-bold tracking-widest text-primary uppercase cursor-pointer hover:bg-primary hover:text-black transition-all duration-300"
                 >
                   <Bell size={10} className="group-hover/notify:animate-bounce" /> 
@@ -667,7 +706,7 @@ const DashboardPage = () => {
               return (
                 <button
                   key={i}
-                  onClick={() => card.href !== "#" && navigate(card.href)}
+                  onClick={() => card.href !== "#" && navigate(card.href.replace(":role", pathRole))}
                   className={`group glass-card relative cursor-pointer rounded-3xl p-6 text-left transition-all duration-300 hover:-translate-y-1 ${c.hover} border-(--card-border) shadow-sm`}
                 >
                   <div
@@ -696,7 +735,7 @@ const DashboardPage = () => {
         </section>
 
         {/* Live Bookings Section (FOR PASSENGERS) */}
-        {role === "passenger" && activities.filter(a => a.isLive).length > 0 && (
+        {role === "passenger" && activities?.filter(a => a.isLive).length > 0 && (
           <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex items-center justify-between px-1">
               <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
@@ -704,10 +743,10 @@ const DashboardPage = () => {
               </h2>
             </div>
             <div className="grid grid-cols-1 gap-4">
-               {activities.filter(a => a.isLive).map((item) => (
+               {activities?.filter(a => a.isLive).map((item) => (
                  <div 
                    key={item.id} 
-                 onClick={() => navigate(`/pickup-map/${item.id}`)}
+                   onClick={() => navigate(`/${pathRole}/pickup-map/${item.id}`)}
                    className={`glass-card group relative overflow-hidden rounded-3xl p-5 border cursor-pointer hover:scale-[1.01] transition-all ${item.bookingStatus === 'cancelled' ? 'border-red-500/30 bg-red-500/5' : 'border-primary/30 bg-primary/5'}`}
                  >
                     <div className="flex items-center justify-between mb-3">
@@ -768,10 +807,10 @@ const DashboardPage = () => {
             <div className="divide-y divide-(--card-border)">
               {/* Passengers: only show trip history (not live bookings, already shown above) */}
               {role === "passenger" && (
-                !loading && activities !== null && activities.filter(a => !a.isLive).length > 0
+                !loading && activities !== null && activities?.filter(a => !a.isLive).length > 0
                   ? (
                     <>
-                    {activities.filter(a => !a.isLive).slice(0, isHistoryExpanded ? undefined : 3).map((item) => (
+                    {activities?.filter(a => !a.isLive).slice(0, isHistoryExpanded ? undefined : 3).map((item) => (
                     <div
                       key={item.id}
                       className="group flex items-start justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
@@ -781,7 +820,9 @@ const DashboardPage = () => {
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center gap-2">
                              <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
-                             <p className="text-[17px] leading-none font-bold text-(--text-main) line-clamp-1">{item.from}</p>
+                             <p className="text-[17px] leading-none font-bold text-(--text-main) line-clamp-1">
+                               {item.from}
+                             </p>
                           </div>
                           <div className="flex items-center gap-2">
                              <MapPin size={14} className="text-red-500 flex-shrink-0" />
@@ -794,7 +835,10 @@ const DashboardPage = () => {
                       </div>
                       <div className="text-right flex flex-col justify-between h-full min-h-[60px] pl-4">
                         <p className="text-lg leading-none font-black text-(--text-main)">{item.amount || item.status}</p>
-                        <span className="inline-flex items-center justify-end gap-1.5 text-[11px] font-bold text-emerald-500 pt-2">
+                        <span className={`inline-flex items-center justify-end gap-1.5 text-[11px] font-bold pt-2 ${
+                          (item.status === 'Completed' || item.status === 'COMPLETED') ? 'text-emerald-500' : 
+                          (item.status === 'REJECTED' || item.status === 'CANCELLED') ? 'text-red-500' : 'text-primary'
+                        }`}>
                           <Circle size={5} fill="currentColor" /> {item.status || "Completed"}
                         </span>
                       </div>
@@ -838,36 +882,42 @@ const DashboardPage = () => {
                     >
                       <div className="flex items-start gap-4 flex-1 min-w-0">
                         {/* Live indicator dot */}
-                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-6 ${
-                          item.isLive ? "bg-emerald-500 animate-pulse" : "bg-white/10 dark:bg-white/20"
+                        <div className={`w-1 h-1 rounded-full flex-shrink-0 mt-6 ${
+                          item.isLive ? "bg-emerald-500 animate-pulse" : "bg-white/20"
                         }`} />
                         <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                             <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
-                             <p className="text-[17px] leading-none font-bold text-(--text-main) line-clamp-1">
-                               {role === "admin" ? item.action : item.from}
+                          <div className="flex items-center gap-3">
+                             <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                               <Activity size={16} className="flex-shrink-0" />
+                             </div>
+                             <p className="text-base leading-none font-bold text-(--text-main) line-clamp-1">
+                               {configRole === "admin" ? item.action : (
+                                 <span className="flex items-center gap-2">
+                                   {item.from} <ChevronRight size={12} className="opacity-40" /> {item.to}
+                                 </span>
+                               )}
                              </p>
                           </div>
-                          {role !== "admin" && (
-                             <div className="flex items-center gap-2">
-                               <MapPin size={14} className="text-red-500 flex-shrink-0" />
-                               <p className="text-sm font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
-                             </div>
-                          )}
-                          <p className="text-[11px] font-bold text-(--text-dim) uppercase tracking-wider pl-6 pt-1">
-                            {item.date} • {role === "admin" ? item.user : item.type}
-                            {item.subType && <span className="ml-1 uppercase">• {item.subType}</span>}
-                          </p>
+                          <div className="flex flex-col gap-1 pl-10">
+                            <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">
+                              {item.date} • {configRole === "admin" ? item.user : item.type}
+                              {item.subType && <span className="ml-1 opacity-60">• {item.subType}</span>}
+                            </p>
+                            {configRole === "admin" && item.role === "superadmin" && (
+                              <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md w-fit">
+                                <UserCheck size={10} />
+                                <span className="text-[9px] font-black uppercase tracking-tighter">Super Admin</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right flex flex-col justify-between h-full min-h-[60px] flex-shrink-0 pl-4">
-                        <p className="text-lg leading-none font-black text-(--text-main)">{item.amount || "—"}</p>
-                        <span className={`inline-flex items-center justify-end gap-1.5 text-[11px] font-bold pt-2 ${
-                          item.isLive ? "text-emerald-500" 
-                          : (item.status === "Completed" || item.status === "COMPLETED") ? "text-emerald-500"
-                          : "text-white/40"
+                      <div className="text-right flex flex-col justify-between h-full min-h-[50px] flex-shrink-0">
+                        <div className="text-sm font-black text-(--text-main) ml-auto">{item.amount || "—"}</div>
+                        <span className={`inline-flex items-center justify-end gap-1 text-[10px] font-black uppercase tracking-widest pt-2 ${
+                          (item.status === "Completed" || item.status === "COMPLETED" || !item.status) ? "text-emerald-500/60" : "text-white/40"
                         }`}>
-                          <Circle size={5} fill="currentColor" /> {item.status || "Completed"}
+                          <Circle size={4} fill="currentColor" className="opacity-50" /> {item.status || "Success"}
                         </span>
                       </div>
                     </div>

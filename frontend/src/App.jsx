@@ -118,7 +118,7 @@ function AdminProtectedRoute({ children }) {
   
   if (!user) return <Navigate to="/signin" replace />;
   
-  if (user.role !== "admin") {
+  if (user.role !== "admin" && user.role !== "superadmin") {
     return <Navigate to={`/${user.role}/dashboard`} replace />;
   }
   
@@ -326,7 +326,7 @@ function AppContent() {
 
         {/* Admin Secret Routes */}
         <Route
-          path="/admin/dashboard/manage-users"
+          path="/:role/dashboard/manage-users"
           element={
             <AdminProtectedRoute>
               <ManageUsersPage />
@@ -336,7 +336,7 @@ function AppContent() {
 
         {/* Admin Analytics & Driver Approvals */}
         <Route
-          path="/admin/dashboard/analytics"
+          path="/:role/dashboard/analytics"
           element={
             <AdminProtectedRoute>
               <AnalyticsPage />
@@ -344,7 +344,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/driver-approvals"
+          path="/:role/dashboard/driver-approvals"
           element={
             <AdminProtectedRoute>
               <DriverApprovalsPage />
@@ -352,7 +352,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/fleet"
+          path="/:role/dashboard/fleet"
           element={
             <AdminProtectedRoute>
               <FleetOverviewPage />
@@ -360,7 +360,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/settings"
+          path="/:role/dashboard/settings"
           element={
             <AdminProtectedRoute>
               <SystemSettingsPage />
@@ -368,7 +368,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/security"
+          path="/:role/dashboard/security"
           element={
             <AdminProtectedRoute>
               <SecurityPage />
@@ -376,7 +376,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/profile"
+          path="/:role/dashboard/profile"
           element={
             <AdminProtectedRoute>
               <AdminProfile />
@@ -384,7 +384,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/history"
+          path="/:role/dashboard/history"
           element={
             <AdminProtectedRoute>
               <AdminHistoryPage />
@@ -392,7 +392,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/sos"
+          path="/:role/dashboard/sos"
           element={
             <AdminProtectedRoute>
               <AdminSOSPage />
@@ -400,7 +400,7 @@ function AppContent() {
           }
         />
         <Route
-          path="/admin/dashboard/notifications"
+          path="/:role/dashboard/notifications"
           element={
             <AdminProtectedRoute>
               <NotificationsPage />

@@ -5,6 +5,7 @@ import {
   Clock, MapPin, User, RefreshCw, FileText, Loader2,
   Phone, Mail, ChevronDown, ChevronUp, ExternalLink,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import { getActiveSOSList, getSOSHistory, resolveSOSIncident } from "../../services/sosService";
 
@@ -200,6 +201,7 @@ function ResolvedCard({ incident }) {
 
 export default function AdminSOSPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab]   = useState("active");
   const [active,    setActive]      = useState([]);
   const [history,   setHistory]     = useState([]);
@@ -253,7 +255,7 @@ export default function AdminSOSPage() {
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate("/admin/dashboard")}
+              onClick={() => navigate(`/${user?.role || "admin"}/dashboard`)}
               className="rounded-xl border border-(--card-border) p-2 text-(--text-dim) hover:bg-(--card-bg) transition-all"
             >
               <ArrowLeft size={20} />

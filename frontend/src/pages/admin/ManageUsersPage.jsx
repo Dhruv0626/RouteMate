@@ -23,14 +23,15 @@ import { useDialog } from "../../context/DialogContext";
 
 const RoleBadge = ({ role }) => {
   const configs = {
+    superadmin: "bg-amber-500/10 text-amber-500 border-amber-500/40 font-black",
     admin: "bg-violet-500/20 text-violet-400 border-violet-500/30",
     driver: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     passenger: "bg-primary/20 text-primary border-primary/30"
   };
   
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-widest uppercase border ${configs[role] || configs.passenger}`}>
-      {role}
+    <span className={`px-3 py-1 rounded-full text-[9px] tracking-[0.1em] uppercase border ${configs[role] || configs.passenger}`}>
+      {role === "superadmin" ? "SUPERADMIN" : role}
     </span>
   );
 };
@@ -111,7 +112,7 @@ const ManageUsersPage = () => {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-6">
             <button 
-              onClick={() => navigate("/admin/dashboard")}
+              onClick={() => navigate(`/${currentUser?.role}/dashboard`)}
               className="p-2 hover:bg-(--card-bg) rounded-xl border border-(--card-border) text-(--text-dim) hover:text-(--text-main) transition-all"
             >
               <ChevronLeft size={20} />
@@ -186,6 +187,7 @@ const ManageUsersPage = () => {
               className="bg-(--bg-main) border border-(--card-border) rounded-2xl px-4 py-3.5 outline-none text-sm font-semibold min-w-40 cursor-pointer hover:border-primary/30 transition-all focus:ring-2 focus:ring-primary/20"
             >
               <option value="all">All Roles</option>
+              <option value="superadmin">Super Admins</option>
               <option value="admin">Administrators</option>
               <option value="passenger">Passengers</option>
               <option value="driver">Drivers</option>
@@ -209,14 +211,16 @@ const ManageUsersPage = () => {
               </thead>
               <tbody className="divide-y divide-(--card-border)">
                 {filteredUsers.length > 0 ? filteredUsers.map((u) => (
-                  <tr key={u._id} className="group hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-500">
+                    <tr key={u._id} className={`group transition-colors duration-500 ${u.role === 'superadmin' ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-black/5 dark:hover:bg-white/5'}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-xl bg-linear-to-br from-primary/10 to-primary/30 border border-primary/20 flex items-center justify-center font-bold text-primary group-hover:scale-110 transition-transform">
+                        <div className={`h-10 w-10 rounded-xl border flex items-center justify-center font-bold group-hover:scale-110 transition-transform ${
+                          u.role === 'superadmin' ? 'bg-amber-500/20 text-amber-500 border-amber-500/30' : 'bg-linear-to-br from-primary/10 to-primary/30 border border-primary/20 text-primary'
+                        }`}>
                           {u.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-(--text-main) text-sm leading-none mb-1">{u.name}</p>
+                          <p className={`font-bold text-sm leading-none mb-1 ${u.role === 'superadmin' ? 'text-amber-500' : 'text-(--text-main)'}`}>{u.name}</p>
                           <p className="text-xs text-(--text-dim) font-medium">{u.email}</p>
                         </div>
                       </div>

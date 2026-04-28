@@ -45,6 +45,7 @@ const AdminSignupPage = () => {
   const [resending, setResending] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [resetOTPTrigger, setResetOTPTrigger] = useState(false);
+  const [registrationToken, setRegistrationToken] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -82,6 +83,7 @@ const AdminSignupPage = () => {
       if (response.data.success) {
         if (response.data.needsVerification) {
           setNeedsVerification(true);
+          setRegistrationToken(response.data.registrationToken);
         } else {
           setUser(response.data.user);
           navigate(`/${response.data.user.role}/dashboard`);
@@ -102,12 +104,21 @@ const AdminSignupPage = () => {
     }
   };
 
-  const handleVerifyOTP = async (otpValue) => {
-    // If otpValue is passed, use it, otherwise use current state (though with OTPInput we use callback)
-    const codeToVerify = typeof otpValue === "string" ? otpValue : otp;
+  const handleVerifyOTP = async (eOrCode) => {
+    if (eOrCode && typeof eOrCode === "object" && eOrCode.preventDefault) {
+      eOrCode.preventDefault();
+    }
+    
+    // If eOrCode is passed as a string (from direct call), use it, otherwise use current state
+    const codeToVerify = typeof eOrCode === "string" ? eOrCode : otp;
     
     if (!codeToVerify || codeToVerify.length !== 6) {
       setError("Please enter a complete 6-digit OTP.");
+      return;
+    }
+
+    if (!registrationToken) {
+      setError("Registration session lost. Please try signing up again.");
       return;
     }
 
@@ -115,7 +126,7 @@ const AdminSignupPage = () => {
     setError("");
     try {
       const response = await api.post("/users/verify-otp", {
-        email: formData.email,
+        registrationToken: registrationToken,
         otp: codeToVerify
       });
       if (response.data.success) {
@@ -130,7 +141,7 @@ const AdminSignupPage = () => {
   };
 
   const startTimer = useCallback(() => {
-    setTimeLeft(60);
+    setTimeLeft(300); // 5 minutes to match backend
   }, []);
 
   useEffect(() => {
@@ -154,10 +165,13 @@ const AdminSignupPage = () => {
     setResending(true);
     try {
       const response = await api.post("/users/resend-otp", {
-        email: formData.email
+        registrationToken: registrationToken
       });
       if (response.data.success) {
         setError("New OTP sent successfully.");
+        if (response.data.registrationToken) {
+           setRegistrationToken(response.data.registrationToken);
+        }
         startTimer();
         setResetOTPTrigger((prev) => !prev); // Reset the 6 boxes
       }
@@ -190,8 +204,8 @@ const AdminSignupPage = () => {
           </h1>
           <p className="mt-1 text-[10px] font-medium tracking-widest text-[var(--text-dim)] uppercase opacity-70">
             {needsVerification 
-              ? `Enter OTP sent to ${formData.email}` 
-              : "Initialize a new administrator account"}
+              ? `Enter OTP sent to ${formData.email} [v2]` 
+              : "Initialize a new administrator account [v2]"}
           </p>
         </div>
 

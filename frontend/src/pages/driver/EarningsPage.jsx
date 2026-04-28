@@ -65,6 +65,7 @@ const EarningsPage = () => {
             monthRides: s.monthRides || 0,
             completedRides: s.completedRides || 0,
             cancelledRides: s.cancelledRides || 0,
+            totalRides: (s.completedRides || 0) + (s.cancelledRides || 0),
             averageRating: s.avgRating || 0,
             acceptanceRate: s.acceptanceRate || 0,
             cancellationRate: s.cancellationRate || 0,
@@ -79,6 +80,7 @@ const EarningsPage = () => {
             from: r.source.address.split(',').slice(0, 2).join(','),
             to: r.destination.address.split(',').slice(0, 2).join(','),
             amount: r.fare.totalWithTax || r.fare.total || 0,
+            status: r.phase,
             date: new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
             distance: `${r.distanceActual || r.distanceEstimate || 0} km`,
             rating: 0.0 // Default to 0.0 before review
@@ -101,8 +103,10 @@ const EarningsPage = () => {
             const rDate = new Date(r.createdAt).toDateString();
             const daySlot = last7Days.find(d => d.dateStr === rDate);
             if (daySlot) {
-              daySlot.amount += parseFloat(r.fare.totalWithTax || r.fare.total || 0);
-              daySlot.trips += 1;
+              if (r.phase === 'completed') {
+                daySlot.amount += parseFloat(r.fare.totalWithTax || r.fare.total || 0);
+              }
+              daySlot.trips += 1; // Count all status trips
             }
           });
 
@@ -118,6 +122,7 @@ const EarningsPage = () => {
     fetchData();
   }, []);
 
+  const maxTrips = Math.max(...dailyEarnings.map((d) => d.trips), 1);
   const maxDailyEarning = Math.max(...dailyEarnings.map((d) => d.amount), 1);
 
   const handleExport = () => {
@@ -339,44 +344,46 @@ const EarningsPage = () => {
           <div className="glass-card rounded-3xl border border-(--card-border) p-8 shadow-sm">
             <div className="mb-8 space-y-4">
               <p className="text-sm font-medium text-(--text-dim)">
-                Daily earnings breakdown
+                Daily activity breakdown
               </p>
             </div>
 
             {/* Bar Chart */}
             <div className="space-y-6">
               <div className="flex items-end justify-between gap-3 h-64">
-                {dailyEarnings.map((day, idx) => (
+                {dailyEarnings.map((day, idx) => {
+                   const pct = maxDailyEarning > 0 ? (day.amount / maxDailyEarning) * 100 : 0;
+                   return (
                   <div
                     key={idx}
-                    className="group relative flex flex-1 flex-col items-center gap-2"
+                    className="group relative flex flex-1 flex-col items-center gap-3"
                   >
-                    <div className="relative h-full w-full flex items-end justify-center">
-                      <div
-                        className="w-3/5 rounded-t-xl transition-all duration-300 group-hover:opacity-80 shadow-lg"
-                        style={{
-                          height: `${day.amount > 0 ? Math.max((day.amount / maxDailyEarning) * 100, 8) : 2}%`,
-                          backgroundColor: '#ffcc00',
-                          minHeight: '2px'
-                        }}
-                      >
-                        {day.amount > 0 && (
-                          <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-black/90 dark:bg-white text-white dark:text-black px-3 py-1.5 rounded-lg text-xs font-black whitespace-nowrap transition-opacity z-20 shadow-xl border border-(--card-border)">
-                            ₹{day.amount.toLocaleString()}
-                          </div>
-                        )}
-                      </div>
+                    {day.amount > 0 && (
+                      <span className="text-sm font-black text-primary transition-transform group-hover:scale-110 mb-1">
+                        {day.trips}
+                      </span>
+                    )}
+                    <div className="w-full bg-primary/5 rounded-full h-full relative group/pillar overflow-hidden border border-(--card-border)/20">
+                       <div
+                          className="absolute bottom-0 left-0 w-full bg-primary rounded-full transition-all duration-700 ease-out group-hover/pillar:brightness-110 shadow-[0_0_15px_rgba(255,204,0,0.3)]"
+                          style={{
+                            height: `${day.trips > 0 ? Math.max((day.trips / maxTrips) * 100, 15) : 0}%`,
+                            minHeight: day.trips > 0 ? '16px' : '0'
+                          }}
+                        >
+                          <div className="absolute top-0 left-0 w-full h-1/2 bg-white/20 rounded-full blur-[2px]" />
+                        </div>
                     </div>
                     <div className="text-center">
-                      <p className="text-xs font-black text-(--text-main)">
+                      <p className="text-[10px] font-black text-(--text-main) uppercase tracking-tighter">
                         {day.day}
                       </p>
-                      <p className="text-[10px] text-(--text-dim)">
+                      <p className="text-[8px] font-bold text-(--text-dim) uppercase tracking-widest">
                         {day.trips} trips
                       </p>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </div>
@@ -484,11 +491,13 @@ const EarningsPage = () => {
                   </div>
 
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <p className="text-lg font-black text-emerald-500">
-                      +₹{tx.amount}
+                    <p className={`text-lg font-black ${tx.status === 'completed' ? 'text-emerald-500' : 'text-(--text-dim)'}`}>
+                      {tx.status === 'completed' ? `+₹${tx.amount}` : `₹${tx.amount}`}
                     </p>
-                    <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
-                      Earned
+                    <span className={`rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                      tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+                    }`}>
+                      {tx.status === 'completed' ? 'Earned' : 'Cancelled'}
                     </span>
                   </div>
                 </div>
@@ -533,10 +542,10 @@ const EarningsPage = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm font-medium text-(--text-dim)">
-                      Trips Completed
+                      Total Trips
                     </span>
                     <span className="font-bold text-(--text-main)">
-                      {earningsStats.completedRides || 0}
+                      {earningsStats.totalRides || 0}
                     </span>
                   </div>
                 </div>
@@ -607,7 +616,7 @@ const EarningsPage = () => {
                 Total Trips
               </p>
               <p className="mb-1 text-2xl font-black text-(--text-main)">
-                {earningsStats.completedRides || 0}
+                {earningsStats.totalRides || 0}
               </p>
               <p className="text-xs text-emerald-500 font-bold">
                 Lifetime trips

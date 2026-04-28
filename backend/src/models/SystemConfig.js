@@ -9,7 +9,6 @@ const SystemConfigSchema = new Schema(
     {
         // ── Platform Settings ──────────────────────────────────────────────────
         commission: { type: String, default: "0" },     // Platform fee percentage
-        taxPercentage: { type: Number, default: 5 },    // Global flat tax rate
         maxRadius: { type: String, default: "3.0" },      // Max booking distance
         surgeMultiplier: { type: String, default: "1.2x" }, // Hard multiplier for high demand
         realTimeTracking: { type: Boolean, default: true },
@@ -95,7 +94,6 @@ const SystemConfigSchema = new Schema(
         // ── Contact & Support ──────────────────────────────────────────────────
         supportEmail: { type: String, default: "support@routemate.com" },
         contactNumber: { type: String, default: "" },
-        googleMapsKey: { type: String, default: "" },
 
         // ── Social & Links ──────────────────────────────────────────────────────
         socialLinks: {
@@ -105,17 +103,41 @@ const SystemConfigSchema = new Schema(
             linkedin: { type: String, default: "" }
         },
 
+        // ── Financial & Wallet Configuration ──────────────────────────────────
+        platformAccountUserId: { type: Schema.Types.ObjectId, ref: "User" },
+        commissionWalletMinThreshold: { type: Number, default: -150 },
+        commissionWalletWarningLevel: { type: Number, default: -50 },
+        withdrawalMinAmount: { type: Number, default: 100 },
+        withdrawalReserveBalance: { type: Number, default: 50 },
+        withdrawalDailyMax: { type: Number, default: 50000 },
+        referralBonusAmount: { type: Number, default: 0 },
+
         // ── Audit ──────────────────────────────────────────────────────────────
-        version: { type: Number, default: 1 },
         updatedAt: { type: Date },
         updatedBy: { type: Schema.Types.ObjectId, ref: "User" }
     },
     { timestamps: true }
 );
 
+/**
+ * Seed function to initialize the system configuration if it doesn't exist.
+ */
+export const seedSystemConfig = async () => {
+    try {
+        const config = await mongoose.model("SystemConfig").findOneAndUpdate(
+            {},
+            { $set: { updatedAt: new Date() } },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        console.log("System configuration seeded/verified.");
+        return config;
+    } catch (error) {
+        console.error("Error seeding system configuration:", error);
+    }
+};
+
 SystemConfigSchema.pre("save", function () {
     if (this.isModified()) {
-        this.version = (this.version || 1) + 1;
         this.updatedAt = new Date();
     }
 });

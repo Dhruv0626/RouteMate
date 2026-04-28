@@ -80,13 +80,13 @@ export const GetDashboardStats = async (req, res) => {
 
             // Geographic Breakdown (Top 5 pickup areas based on source address)
             TripModel.aggregate([
-                { $limit: 1000 }, // Optimization: sample recent 1000 trips
+                { $limit: 2000 }, 
                 { $group: { 
-                    _id: { $arrayElemAt: [{ $split: ["$source.address", ","] }, -2] }, // Grab city/area part
+                    _id: { $arrayElemAt: [{ $split: ["$source.address", ","] }, 0] },
                     count: { $sum: 1 } 
                 }},
                 { $sort: { count: -1 } },
-                { $limit: 5 }
+                { $limit: 6 }
             ]),
 
             // Weekly Rides Breakdown (Last 7 Days)

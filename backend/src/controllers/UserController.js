@@ -158,7 +158,10 @@ export const SignInUser = async (req, res) => {
         }
 
         // ROLE CHECK: Ensure user is logging in from the correct panel
-        if (user.role !== role) {
+        // Admin portal allows both "admin" and "superadmin" roles
+        const isAuthorized = user.role === role || (role === "admin" && user.role === "superadmin");
+
+        if (!isAuthorized) {
             return res.status(403).json({
                 success: false,
                 message: "Authentication failed. Please check your credentials and portal type."

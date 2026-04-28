@@ -95,7 +95,7 @@ const AdminProfile = () => {
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => navigate("/admin/dashboard")}
+              onClick={() => navigate(`/${user?.role}/dashboard`)}
               className="rounded-xl border border-(--card-border) p-2 text-(--text-dim) hover:bg-(--card-bg) hover:text-(--text-main) transition-all"
             >
               <ArrowLeft size={20} />
@@ -157,7 +157,7 @@ const AdminProfile = () => {
                <button className="bg-primary text-black px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:opacity-90 transition-all">
                  System Audit
                </button>
-               <button onClick={() => navigate("/admin/dashboard/settings")} className="bg-black/10 dark:bg-white/5 border border-(--card-border) text-(--text-main) px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black/20 transition-all">
+               <button onClick={() => navigate(`/${user?.role}/dashboard/settings`)} className="bg-black/10 dark:bg-white/5 border border-(--card-border) text-(--text-main) px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black/20 transition-all">
                  Settings
                </button>
             </div>

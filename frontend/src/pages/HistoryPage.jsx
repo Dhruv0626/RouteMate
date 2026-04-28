@@ -351,23 +351,12 @@ const HistoryPage = () => {
                   <div className="flex items-start gap-4 flex-1">
                     <div className="text-4xl flex-shrink-0">{ride.photo}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-display font-bold text-(--text-main)">{ride.name}</h3>
-                        {ride.co2Saved > 0 && (
-                          <div className="flex items-center gap-1 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                            <Zap size={10} className="text-emerald-500 fill-emerald-500" />
-                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-tight">Green Ride</span>
-                          </div>
-                        )}
-                        {ride.rating > 0 && (
-                          <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full">
-                            <Star size={14} className="text-amber-500 fill-amber-500" />
-                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-300">
-                              {role === "driver" ? ride.rating : ride.rating}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                        <div className="flex flex-col gap-1 mb-1">
+                          <h3 className="font-display font-bold text-(--text-main)">{ride.name}</h3>
+                          <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1">
+                            {ride.pickup.split(',').slice(0, 2).join(',')} <ChevronRight size={10} className="opacity-40" /> {ride.dropoff.split(',').slice(0, 2).join(',')}
+                          </p>
+                        </div>
                       <div className="flex gap-4 mb-4 relative">
                         <div className="flex flex-col items-center flex-shrink-0 py-1">
                           <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
