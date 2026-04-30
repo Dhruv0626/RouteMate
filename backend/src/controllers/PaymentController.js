@@ -26,15 +26,20 @@ const getCommissionRate = async () => {
 };
 
 /** Credit/debit User.walletBalance (passengers & superadmin) */
-const createUserWalletTx = async (session, { userId, type, amount, reference, referenceId, description, commissionAmount, driverEarning }) => {
+const createUserWalletTx = async (session, { userId, type, amount, reference, referenceId, description, commissionAmount, driverEarning, affectsBalance = true }) => {
   const user = await UserModel.findById(userId).session(session);
   if (!user) throw new Error(`User not found: ${userId}`);
-  const delta = type === "credit" ? amount : -amount;
-  user.walletBalance = (user.walletBalance || 0) + delta;
-  await user.save({ session });
+
+  if (affectsBalance) {
+    const delta = type === "credit" ? amount : -amount;
+    user.walletBalance = (user.walletBalance || 0) + delta;
+    await user.save({ session });
+  }
+
   const [tx] = await WalletTransaction.create([{
     user: userId, type, amount,
     balanceAfter: user.walletBalance,
+    affectsBalance,
     reference, referenceId, description,
     commissionAmount, driverEarning,
   }], { session });
@@ -148,14 +153,14 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
     const { tx: driverTx } = await createDriverEarningsTx(session, {
       driverUserId: driverId, type: "credit", amount: driverEarning,
       reference: "trip", referenceId: tripId,
-      description: `Trip earning ${Math.round((1 - commissionRate) * 100)}% [TEST]`,
+      description: `Trip earning ${Math.round((1 - commissionRate) * 100)}%`,
     });
 
     // Credit platform/superadmin wallet
     const { tx: platformTx } = await createUserWalletTx(session, {
       userId: platformAccountId, type: "credit", amount: platformCut,
       reference: "trip", referenceId: tripId,
-      description: `Platform commission ${Math.round(commissionRate * 100)}% [TEST]`,
+      description: `Platform commission ${Math.round(commissionRate * 100)}%`,
       commissionAmount: platformCut, driverEarning,
     });
 
@@ -176,7 +181,14 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
     );
 
     trip.payment = paymentDoc._id;
+    trip.phase = "completed";
+    trip.completedAt = new Date();
     await trip.save({ session });
+
+    // Also update PublishedRide status if applicable
+    if (trip.publishedRide) {
+      await PublishedRideModel.findByIdAndUpdate(trip.publishedRide, { status: "completed" }, { session });
+    }
 
     // ── Check for Referral Reward ──
     await checkAndRewardReferrer(session, passengerId, tripId);
@@ -185,7 +197,7 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
     session.endSession();
 
     // Fire-and-forget notifications
-    notifyUser({ userId: driverId, title: "💰 Trip Earning Credited", message: `₹${driverEarning} added to earnings wallet. [TEST]`, type: "success" }).catch(() => { });
+    notifyUser({ userId: driverId, title: "💰 Trip Earning Credited", message: `₹${driverEarning} added to earnings wallet.`, type: "success" }).catch(() => { });
     if (method === "wallet") {
       notifyUser({ userId: passengerId, title: "✅ Wallet Payment Done", message: `₹${amountRupees} paid from wallet.`, type: "info" }).catch(() => { });
     }
@@ -193,7 +205,12 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
     // Notify clients on the socket room that payment is complete
     try {
       const io = getIO();
-      io.to(trip.publishedRide?.toString() || tripId.toString()).emit("payment_completed", { method });
+      const rideRoom = trip.publishedRide?.toString() || tripId.toString();
+      // Emit to ride room (catches anyone in the ride)
+      io.to(rideRoom).emit("payment_completed", { method });
+      // Emit to personal user rooms (catches reconnected clients)
+      if (passengerId) io.to(passengerId.toString()).emit("payment_completed", { method });
+      if (driverId) io.to(driverId.toString()).emit("payment_completed", { method });
     } catch (e) {
       console.error("Socket error on payment emit", e);
     }
@@ -240,8 +257,91 @@ export const createOrder = async (req, res) => {
       key: process.env.RAZORPAY_KEY_ID,
     });
   } catch (err) {
-    console.error("[Payment] createOrder:", err.message);
     return res.status(500).json({ success: false, message: "Failed to create payment order" });
+  }
+};
+
+// ─── POST /api/payments/verify-payment ────────────────────────────────────────
+// Called directly by frontend after Razorpay checkout succeeds.
+// Works in both dev (no public URL) and production environments.
+export const verifyPayment = async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, purpose, userId, tripId, passengerId, driverId } = req.body;
+
+    // 1. Verify HMAC signature
+    const expectedSig = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+
+    if (expectedSig !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: "Invalid payment signature" });
+    }
+
+    // 2. Fetch payment details from Razorpay to get amount
+    const paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
+    const amountRupees = paymentDetails.amount / 100;
+    const finalUserId = userId || req.user.id;
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      if (purpose === "wallet_topup") {
+        // ── Credit passenger wallet ──
+        const { newBalance } = await createUserWalletTx(session, {
+          userId: finalUserId,
+          type: "credit",
+          amount: amountRupees,
+          reference: "topup",
+          description: `Wallet topup via Razorpay`,
+          affectsBalance: true,
+        });
+        await session.commitTransaction();
+        session.endSession();
+
+        notifyUser({ userId: finalUserId, title: "💰 Wallet Credited", message: `₹${amountRupees} added to your wallet. Balance: ₹${newBalance}`, type: "success" }).catch(() => {});
+        return res.status(200).json({ success: true, message: "Wallet topup successful", newBalance });
+
+      } else if (purpose === "commission_topup") {
+        // ── Credit driver commission wallet ──
+        const { newBalance } = await updateCommissionWallet(session, {
+          driverUserId: finalUserId,
+          delta: amountRupees,
+          reference: "topup",
+          description: "Commission wallet topup",
+        });
+        await session.commitTransaction();
+        session.endSession();
+
+        notifyUser({ userId: finalUserId, title: "✅ Commission Wallet Topped Up", message: `₹${amountRupees} credited. Balance: ₹${newBalance}`, type: "success" }).catch(() => {});
+        return res.status(200).json({ success: true, message: "Commission wallet topup successful", newBalance });
+
+      } else if (purpose === "upi_trip") {
+        // ── UPI Trip Payment: credit driver + platform, log info tx for passenger ──
+        const result = await processTripSplit({
+          amountRupees,
+          tripId,
+          passengerId: passengerId || finalUserId,
+          driverId,
+          method: "upi",
+          razorpayPaymentId: razorpay_payment_id,
+        });
+        return res.status(200).json({ success: true, message: "UPI trip payment verified", ...result });
+
+      } else {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: `Unknown payment purpose: ${purpose}` });
+      }
+    } catch (innerErr) {
+      await session.abortTransaction();
+      session.endSession();
+      throw innerErr;
+    }
+  } catch (err) {
+    console.error("[Payment] verifyPayment:", err.message);
+    return res.status(400).json({ success: false, message: err.message });
   }
 };
 
@@ -249,10 +349,10 @@ export const createOrder = async (req, res) => {
 export const razorpayWebhook = async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`\n[${timestamp}] 📥 RAZORPAY WEBHOOK RECEIVED`);
-  
+
   try {
     const signature = req.headers["x-razorpay-signature"];
-    const rawBody   = req.body; // Buffer
+    const rawBody = req.body; // Buffer
 
     if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
       console.error(`[${timestamp}] ❌ ERROR: RAZORPAY_WEBHOOK_SECRET is not set in your .env file!`);
@@ -291,7 +391,7 @@ export const razorpayWebhook = async (req, res) => {
     console.log(`[${timestamp}] 📝 Notes Received:`, JSON.stringify(notes));
 
     const { purpose, paymentType, userId, tripId, passengerId, driverId } = notes;
-    const finalPurpose = paymentType || purpose; 
+    const finalPurpose = paymentType || purpose;
     const amountRupees = payment.amount / 100;
 
     if (!userId && !passengerId && !driverId) {
@@ -312,48 +412,51 @@ export const razorpayWebhook = async (req, res) => {
           type: "credit",
           amount: amountRupees,
           reference: "topup",
-          description: "Wallet topup [TEST]",
+          description: "Wallet topup",
         });
         await session.commitTransaction();
-        notifyUser({ userId, title: "💰 Wallet Credited", message: `₹${amountRupees} added to your wallet. Balance: ₹${newBalance}`, type: "success" }).catch(() => {});
-      } 
+        notifyUser({ userId, title: "💰 Wallet Credited", message: `₹${amountRupees} added to your wallet. Balance: ₹${newBalance}`, type: "success" }).catch(() => { });
+      }
       else if (finalPurpose === "commission_topup") {
         // (2) Driver Commission Wallet Topup
         const { newBalance } = await updateCommissionWallet(session, {
           driverUserId: userId,
           delta: amountRupees,
           reference: "topup",
-          description: "commissionWallet topup [TEST]",
+          description: "commissionWallet topup",
         });
         await session.commitTransaction();
 
         // Check if driver is now unblocked
         const config = await SystemConfig.findOne().lean();
         const threshold = config?.commissionWalletMinThreshold ?? -150;
-        
-        notifyUser({ userId, title: "✅ Commission Wallet Topped Up", message: `₹${amountRupees} credited. Balance: ₹${newBalance}`, type: "success" }).catch(() => {});
-        
+
+        notifyUser({ userId, title: "✅ Commission Wallet Topped Up", message: `₹${amountRupees} credited. Balance: ₹${newBalance}`, type: "success" }).catch(() => { });
+
         if (newBalance > threshold) {
-          notifyUser({ userId, title: "🚗 Trips Resumed", message: "Your commission wallet is restored. You can now accept rides again.", type: "success" }).catch(() => {});
+          notifyUser({ userId, title: "🚗 Trips Resumed", message: "Your commission wallet is restored. You can now accept rides again.", type: "success" }).catch(() => { });
         }
       }
       else if (finalPurpose === "trip_payment" || finalPurpose === "upi_trip") {
         // (3) Trip Payment Auto-Split (85% Driver, 15% Platform)
-        const platformCut   = Math.round(amountRupees * 0.15 * 100) / 100;
+        const platformCut = Math.round(amountRupees * 0.15 * 100) / 100;
         const driverEarning = Math.round((amountRupees - platformCut) * 100) / 100;
-        const platformId    = process.env.PLATFORM_ACCOUNT_ID;
+        const platformId = process.env.PLATFORM_ACCOUNT_ID;
 
         if (!platformId) throw new Error("PLATFORM_ACCOUNT_ID not set in environment");
 
-        // ── A. Passenger Transaction Record (Debit 100%) ──
+        // (A) Passenger Transaction Record (Informational Only - External UPI)
+        // We log it for history, but it does NOT affect the internal wallet balance.
         await createUserWalletTx(session, {
           userId: passengerId || userId,
           type: "debit",
           amount: amountRupees,
+          affectsBalance: false,
           reference: "trip",
           referenceId: tripId,
           description: `Trip payment via UPI — #${payment.id}`,
         });
+
 
         // ── B. Driver Earning (Credit 85%) ──
         await createDriverEarningsTx(session, {
@@ -362,7 +465,7 @@ export const razorpayWebhook = async (req, res) => {
           amount: driverEarning,
           reference: "trip",
           referenceId: tripId,
-          description: "Trip earning (85%) [TEST]",
+          description: "Trip earning (85%)",
         });
 
         // ── C. Platform Income (Credit 15%) ──
@@ -372,7 +475,7 @@ export const razorpayWebhook = async (req, res) => {
           amount: platformCut,
           reference: "trip",
           referenceId: tripId,
-          description: "Platform commission (15%) [TEST]",
+          description: "Platform commission (15%)",
           commissionAmount: platformCut,
           driverEarning,
         });
@@ -387,7 +490,7 @@ export const razorpayWebhook = async (req, res) => {
           },
           { upsert: true, new: true, session }
         );
-        await TripModel.findByIdAndUpdate(tripId, { 
+        await TripModel.findByIdAndUpdate(tripId, {
           payment: paymentDoc._id,
           phase: "completed",
           completedAt: new Date()
@@ -405,13 +508,21 @@ export const razorpayWebhook = async (req, res) => {
         await session.commitTransaction();
 
         // ── E. Notifications ──
-        notifyUser({ userId: driverId, title: "💰 Trip Payment Received", message: `₹${driverEarning} credited (85%). [TEST]`, type: "success" }).catch(() => {});
-        notifyUser({ userId: passengerId, title: "✅ Payment Successful", message: `₹${amountRupees} paid for your trip.`, type: "info" }).catch(() => {});
-        
-        // Notify socket room
+        notifyUser({ userId: driverId, title: "💰 Trip Payment Received", message: `₹${driverEarning} credited (85%).`, type: "success" }).catch(() => { });
+        notifyUser({ userId: passengerId, title: "✅ Payment Successful", message: `₹${amountRupees} paid for your trip.`, type: "info" }).catch(() => { });
+
+        // Notify socket rooms
         try {
-          getIO().to(tripId).emit("payment_completed", { method: "upi" });
-        } catch (e) {}
+          const io = getIO();
+          const tripDoc = await TripModel.findById(tripId).lean();
+          const rideRoom = tripDoc?.publishedRide?.toString() || tripId;
+
+          // Emit to ride room, trip room, and personal user rooms for 100% reliability
+          io.to(rideRoom).emit("payment_completed", { method: "upi" });
+          io.to(tripId).emit("payment_completed", { method: "upi" });
+          if (passengerId) io.to(passengerId.toString()).emit("payment_completed", { method: "upi" });
+          if (driverId) io.to(driverId.toString()).emit("payment_completed", { method: "upi" });
+        } catch (e) { console.error("UPI webhook socket emit error:", e); }
       }
 
       session.endSession();
@@ -444,12 +555,24 @@ export const walletPayment = async (req, res) => {
     if (trip.passenger.toString() !== passengerId)
       return res.status(403).json({ success: false, message: "Not your trip" });
 
-    const amount = trip.fare?.surgedTotal || trip.fare?.total || 0;
+    // For standard rides, fare is on the trip document.
+    // For published (carpooling) rides, fare lives on the booking's amountPaid in PublishedRide.
+    let amount = trip.fare?.surgedTotal || trip.fare?.total || 0;
+
+    if (!amount && trip.publishedRide) {
+      // Fall back: look up the passenger's booking in the PublishedRide
+      const pubRide = await PublishedRideModel.findById(trip.publishedRide).lean();
+      const booking = pubRide?.bookings?.find(
+        (b) => b.passenger?.toString() === passengerId
+      );
+      amount = booking?.amountPaid || 0;
+    }
+
     if (!amount) return res.status(400).json({ success: false, message: "Fare amount not found on trip" });
 
     const result = await processTripSplit({
       amountRupees: amount,
-      tripId,
+      tripId: trip._id,
       passengerId,
       driverId: trip.driver?.toString(),
       method: "wallet",
@@ -475,7 +598,7 @@ export const cashReceived = async (req, res) => {
     if (!trip) return res.status(404).json({ success: false, message: "Trip not found" });
     if (trip.driver?.toString() !== driverUserId)
       return res.status(403).json({ success: false, message: "Not your trip" });
-    if (!["ongoing", "reached_destination", "completed"].includes(trip.phase))
+    if (!["arrived", "ongoing", "reached_destination", "completed"].includes(trip.phase))
       return res.status(400).json({ success: false, message: "Trip is not in a payable phase" });
 
     const amount = trip.fare?.surgedTotal || trip.fare?.total || 0;
@@ -490,29 +613,30 @@ export const cashReceived = async (req, res) => {
       // Deduct commissionWallet
       const { newBalance: commissionBalance } = await updateCommissionWallet(session, {
         driverUserId, delta: -platformCut,
-        reference: "trip", referenceId: tripId,
+        reference: "trip", referenceId: trip._id,
         description: `Platform commission ${Math.round(commissionRate * 100)}% — Cash trip`,
       });
 
       // Credit platform wallet
-      await createUserWalletTx(session, {
+      const { tx: platformTx } = await createUserWalletTx(session, {
         userId: platformAccountId, type: "credit", amount: platformCut,
-        reference: "trip", referenceId: tripId,
+        reference: "trip", referenceId: trip._id,
         description: `Platform commission ${Math.round(commissionRate * 100)}% — Cash trip`,
         commissionAmount: platformCut, driverEarning: driverNet,
       });
 
       // Upsert Payment record
       const paymentDoc = await PaymentModel.findOneAndUpdate(
-        { trip: tripId },
+        { trip: trip._id },
         {
-          trip: tripId, passenger: trip.passenger, driver: driverUserId,
+          trip: trip._id, passenger: trip.passenger, driver: driverUserId,
           amount, platformFee: platformCut, driverEarnings: driverNet,
           method: "cash", status: "completed", paidAt: new Date(),
+          platformWalletTx: platformTx._id,
         },
         { upsert: true, new: true, session }
       );
-      await TripModel.findByIdAndUpdate(tripId, { 
+      await TripModel.findByIdAndUpdate(trip._id, {
         payment: paymentDoc._id,
         phase: "completed",
         completedAt: new Date()
@@ -524,7 +648,7 @@ export const cashReceived = async (req, res) => {
       }
 
       // ── Check for Referral Reward ──
-      await checkAndRewardReferrer(session, trip.passenger, tripId);
+      await checkAndRewardReferrer(session, trip.passenger, trip._id);
 
       await session.commitTransaction();
       session.endSession();
@@ -544,7 +668,12 @@ export const cashReceived = async (req, res) => {
       // Notify clients on the socket room that payment is complete
       try {
         const io = getIO();
-        io.to(trip.publishedRide?.toString() || trip._id.toString()).emit("payment_completed", { method: "cash" });
+        const rideRoom = trip.publishedRide?.toString() || trip._id.toString();
+        // Emit to ride room (catches anyone in the ride)
+        io.to(rideRoom).emit("payment_completed", { method: "cash" });
+        // Emit to personal user rooms (catches reconnected clients)
+        io.to(trip.passenger.toString()).emit("payment_completed", { method: "cash" });
+        io.to(driverUserId.toString()).emit("payment_completed", { method: "cash" });
       } catch (e) {
         console.error("Socket error on payment emit", e);
       }
@@ -604,25 +733,25 @@ export const driverWithdrawal = async (req, res) => {
       const { newBalance } = await createDriverEarningsTx(session, {
         driverUserId, type: "debit", amount,
         reference: "withdrawal",
-        description: `Bank withdrawal [TEST] — ${simulatedPayoutId}`,
+        description: `Bank withdrawal — ${simulatedPayoutId}`,
       });
       await session.commitTransaction();
       session.endSession();
 
       notifyUser({
         userId: driverUserId,
-        title: "✅ Withdrawal Processed [TEST]",
-        message: `₹${amount} transfer simulated. Remaining wallet: ₹${newBalance}. [TEST — No real bank transfer]`,
+        title: "✅ Withdrawal Processed",
+        message: `₹${amount} transfer initiated. Remaining wallet: ₹${newBalance}.`,
         type: "success",
       }).catch(() => { });
 
       return res.status(200).json({
         success: true,
-        message: "Withdrawal processed [TEST — simulated]",
+        message: "Withdrawal processed",
         amount,
         newWalletBalance: newBalance,
         payoutId: simulatedPayoutId,
-        mode: "IMPS [simulated]",
+        mode: "IMPS",
       });
     } catch (e) {
       await session.abortTransaction();

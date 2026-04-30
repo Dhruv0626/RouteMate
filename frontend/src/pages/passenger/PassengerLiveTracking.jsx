@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Loader2, User as UserIcon, IndianRupee, Phone, RefreshCw, Navigation, ChevronDown, ChevronUp, MapPin
@@ -11,7 +11,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useDialog } from "../../context/DialogContext";
 import { makeVehicleIcon, makePin } from "../../utils/mapIcons";
 import SOSButton from "../../components/passenger/SOSButton";
-import { loadRazorpay } from "../../services/paymentService";
+import { loadRazorpay, openRazorpayCheckout, getMyWallet } from "../../services/paymentService";
 
 const distanceMetres = (lat1, lng1, lat2, lng2) => {
   const R = 6371000;
@@ -47,6 +47,22 @@ const PassengerLiveTracking = () => {
   const [heading, setHeading] = useState(0);
   const [liveEtaMins, setLiveEtaMins] = useState(null);
   const [destEtaMins, setDestEtaMins] = useState(null);
+
+  // Live wallet balance (fetched fresh from server when payment panel shows)
+  const [liveWalletBalance, setLiveWalletBalance] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+
+  const fetchLiveWallet = useCallback(async () => {
+    setWalletLoading(true);
+    try {
+      const { data } = await getMyWallet();
+      if (data.success) setLiveWalletBalance(data.wallet.walletBalance ?? 0);
+    } catch {
+      setLiveWalletBalance(user?.walletBalance ?? 0);
+    } finally {
+      setWalletLoading(false);
+    }
+  }, [user?.walletBalance]);
 
   const vehicleIcon = useMemo(() => {
     if (!ride) return null;
@@ -85,20 +101,34 @@ const PassengerLiveTracking = () => {
   }, [rideId]);
 
   useEffect(() => {
-    if (!ride) return;
-    socket.emit("join_ride", ride._id);
+    if (!rideId) return;
+    
+    const joinRooms = () => {
+      socket.emit("join_ride", rideId);
+      if (user?._id || user?.id) {
+        socket.emit("join_user", user._id || user.id);
+      }
+    };
+
+    // Initial join
+    joinRooms();
+
+    // Re-join on reconnection
+    socket.on("connect", joinRooms);
 
     const onStatusUpdate = (data) => {
-      if (data.rideId === ride._id) {
-        setRide(prev => ({ ...prev, status: data.status }));
+      console.log("Ride status update received:", data);
+      if (data.rideId === rideId) {
+        setRide(prev => prev ? { ...prev, status: data.status } : prev);
         if (data.status === "reached" || data.status === "completed") {
           setIsMinimized(false);
         }
+        // Small delay to ensure backend has finished processing before fetching
+        setTimeout(() => fetchRide(), 800);
       }
     };
 
     const onLocationUpdate = (data) => {
-      // Sometimes backend sends data.lat/data.lng directly, sometimes it wraps it
       setDriverLocation({ 
         lat: data.lat || data.location?.lat, 
         lng: data.lng || data.location?.lng,
@@ -127,16 +157,19 @@ const PassengerLiveTracking = () => {
     socket.on("sos_warning", onSosWarning);
 
     return () => {
+      socket.off("connect", joinRooms);
       socket.off("ride_status_update", onStatusUpdate);
       socket.off("location_update", onLocationUpdate);
       socket.off("payment_completed", onPaymentCompleted);
       socket.off("sos_warning", onSosWarning);
     };
-  }, [ride, rideId, user.role]);
+  }, [rideId, user?.id, user?.role]);
 
   useEffect(() => {
     if (ride?.status === "reached" || ride?.status === "completed") {
       setIsMinimized(false);
+      // Fetch fresh wallet balance whenever payment panel becomes visible
+      fetchLiveWallet();
     }
   }, [ride?.status]);
 
@@ -604,65 +637,109 @@ const PassengerLiveTracking = () => {
                 )}
 
                 {/* PAYMENT SECTION — only when reached */}
-                {(ride.status === "reached" || ride.status === "completed") && (
-                  <div className="space-y-3 pt-2 border-t border-white/10 mt-1">
-                    <div className="grid grid-cols-2 gap-3">
-                      <button 
-                        onClick={async () => {
-                          try {
-                            const res = await api.post("/payments/wallet-pay", { rideId: ride._id });
-                            if (res.data.success) showAlert("Wallet payment successful!", "Done", "success");
-                          } catch (err) {
-                            showAlert(err.response?.data?.message || "Wallet payment failed", "Error", "error");
-                          }
-                        }}
-                        className="bg-primary text-black py-4 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-primary/20"
-                      >
-                        Pay via Wallet
-                      </button>
-                      <button 
-                        onClick={async () => {
-                          try {
-                            const res = await api.post("/payments/create-order", { 
-                              amount: amountPaid || 0,
-                              purpose: "upi_trip",
-                              rideId: ride._id
-                            });
-                            if (res.data.success) {
-                              const loaded = await loadRazorpay();
-                              if (!loaded) throw new Error("Razorpay SDK failed to load");
-                              const options = {
-                                key: res.data.key,
-                                amount: res.data.order.amount,
-                                currency: "INR",
-                                order_id: res.data.order.id,
-                                name: "RouteMate",
-                                description: "Trip Payment",
-                                handler: function (response) {
-                                  showAlert("Payment successful! Synchronizing with server...", "Success", "success");
-                                  // Navigation will be handled by socket event
-                                },
-                              };
-                              const rzp = new window.Razorpay(options);
-                              rzp.open();
+                {(ride.status === "reached" || ride.status === "completed") && (() => {
+                  // Use live wallet balance if fetched, otherwise fall back to cached user data
+                  const currentWalletBalance = liveWalletBalance !== null ? liveWalletBalance : (user?.walletBalance ?? 0);
+                  const hasSufficientBalance = currentWalletBalance >= amountPaid;
+
+                  return (
+                    <div className="space-y-3 pt-2 border-t border-white/10 mt-1">
+                      {/* Fare + Wallet Summary */}
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">Total Fare</p>
+                          <p className="text-xl font-black text-emerald-400 flex items-center gap-1">
+                            <IndianRupee size={16} /> {amountPaid}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">Wallet Balance</p>
+                          {walletLoading ? (
+                            <div className="flex items-center gap-1 justify-end">
+                              <Loader2 size={12} className="animate-spin text-white/40" />
+                              <span className="text-xs text-white/40">Fetching…</span>
+                            </div>
+                          ) : (
+                            <p className={`text-sm font-black flex items-center gap-1 justify-end ${hasSufficientBalance ? "text-emerald-400" : "text-red-400"}`}>
+                              <IndianRupee size={12} /> {currentWalletBalance.toFixed(2)}
+                              {hasSufficientBalance
+                                ? <span className="text-[9px] text-emerald-400/60 ml-1">✓ Sufficient</span>
+                                : <span className="text-[9px] text-red-400/60 ml-1">✗ Low</span>
+                              }
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* UPI note — clarify UPI does NOT deduct from wallet */}
+                      <div className="flex items-start gap-2 bg-sky-500/8 border border-sky-500/20 rounded-xl px-3 py-2">
+                        <span className="text-sky-400 text-[10px] mt-px">ℹ️</span>
+                        <p className="text-[10px] text-sky-300/80 leading-relaxed">
+                          <span className="font-black text-sky-300">UPI payments</span> are charged directly via Razorpay and will <span className="font-black">not deduct</span> from your RouteMate wallet. They appear in your history as <span className="italic">"UPI – Settled"</span>.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const fare = amountPaid || 0;
+                              if (!hasSufficientBalance) {
+                                showAlert(
+                                  `Insufficient wallet balance. You need ₹${fare}, but your balance is ₹${currentWalletBalance.toFixed(2)}. Please use UPI or Cash.`,
+                                  "Low Balance",
+                                  "warning"
+                                );
+                                return;
+                              }
+                              const res = await api.post("/payments/wallet-pay", { rideId: ride._id });
+                              if (res.data.success) {
+                                showAlert("Wallet payment successful! Redirecting to dashboard…", "Done", "success");
+                                setTimeout(() => navigate("/passenger/dashboard"), 2500);
+                              }
+                            } catch (err) {
+                              showAlert(err.response?.data?.message || "Wallet payment failed", "Error", "error");
                             }
-                          } catch (err) {
-                            showAlert(err.response?.data?.message || "Razorpay initiation failed", "Error", "error");
-                          }
-                        }}
-                        className="bg-white/10 border border-white/10 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+                          }}
+                          disabled={!hasSufficientBalance || walletLoading}
+                          className="bg-primary text-black py-4 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Pay via Wallet
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const result = await openRazorpayCheckout({
+                                amount: amountPaid || 0,
+                                purpose: "upi_trip",
+                                rideId: ride._id,
+                                description: "Trip Payment via UPI",
+                              });
+                              if (result?.success) {
+                                showAlert("Payment successful! Redirecting to dashboard…", "Success", "success");
+                                setTimeout(() => navigate("/passenger/dashboard"), 2500);
+                              } else if (result === null) {
+                                showAlert("Payment cancelled.", "Cancelled", "info");
+                              }
+                            } catch (err) {
+                              showAlert(err.message || "Payment failed", "Error", "error");
+                            }
+                          }}
+                          className="bg-white/10 border border-white/10 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-xl"
+                        >
+                          Pay via UPI
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => showAlert("Please pay the driver in cash. Once the driver confirms, your ride will be closed.", "Cash Selected", "info")}
+                        className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 py-3 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
                       >
-                        Pay By Razorpay
+                        💵 I will pay Cash
                       </button>
+                      <p className="text-[10px] text-center text-white/30">All payments are encrypted and secure</p>
                     </div>
-                    <button 
-                      onClick={() => showAlert("Please pay the driver in cash.", "Cash Selected", "info")}
-                      className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 py-4 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
-                    >
-                      I will pay Cash
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
               </>
             )}
           </div>

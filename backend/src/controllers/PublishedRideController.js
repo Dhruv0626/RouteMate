@@ -416,11 +416,8 @@ export const BookRide = async (req, res) => {
             status: "pending",
         });
 
-        // ── KEEP RIDE OPEN UNTIL CONFIRMED ──
-        // Logic changed: We no longer set status to "booked" or availableSeats to 0 here.
-        // The ride remains "open" so other passengers can still see/request it until 
-        // the driver explicitly confirms one of them.
-
+        // ── MARK RIDE AS BOOKED ──
+        ride.status = "booked";
         await ride.save();
 
         // ── Notify the driver ─────────────────────────────────────────────────
@@ -594,7 +591,29 @@ export const UpdateRideStatus = async (req, res) => {
         const ride = await PublishedRideModel.findOne({ _id: rideId, driver: req.user.id });
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found or unauthorized" });
 
-        // ── VERIFY OTP IF STARTING RIDE ──
+        // ── STRICT STATUS PROGRESSION GUARD ──
+        // Defines the only allowed forward transitions. No backward moves ever allowed.
+        const allowedTransitions = {
+            open:        ["full", "booked", "active", "arrived", "cancelled"],
+            full:        ["booked", "active", "arrived", "cancelled"],
+            booked:      ["active", "arrived", "cancelled"],
+            active:      ["arrived", "in_progress", "cancelled"],
+            arrived:     ["in_progress", "reached", "cancelled"], // Allow direct jump to reached if needed
+            in_progress: ["reached", "cancelled"],
+            reached:     ["completed", "cancelled"],
+            completed:   [],
+            cancelled:   [],
+        };
+
+        const currentAllowed = allowedTransitions[ride.status] || [];
+        if (!currentAllowed.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot change ride status from '${ride.status}' to '${status}'. Invalid transition.`
+            });
+        }
+
+
         if (status === "in_progress") {
             if (!otp) return res.status(400).json({ success: false, message: "OTP is required to start the ride" });
 
@@ -658,8 +677,8 @@ export const UpdateRideStatus = async (req, res) => {
         const eligiblePhases = {
             arrived: { $in: ["matched"] },
             in_progress: { $in: ["matched", "arrived"] },
-            reached: "ongoing",
-            completed: "reached_destination",
+            reached: { $in: ["arrived", "ongoing"] },
+            completed: { $in: ["ongoing", "reached_destination"] },
             cancelled: { $in: ["matched", "arrived", "ongoing", "reached_destination"] },
         };
 

@@ -147,6 +147,13 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} (Admin ${userId}) joined admins room`);
   });
 
+  socket.on("join_user", (userId) => {
+    if (userId) {
+      socket.join(userId.toString());
+      console.log(`Socket ${socket.id} joined user room ${userId}`);
+    }
+  });
+
   socket.on("driver_location_update", async (data) => {
     // 1. Broadcast driver location to all passengers in the ride room
     socket.to(data.rideId).emit("location_update", data);

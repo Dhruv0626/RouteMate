@@ -12,29 +12,33 @@ export const loadRazorpay = () =>
   });
 
 /**
- * Open Razorpay checkout.
- * @param {{ amount, purpose, tripId, name, email, contact, description }} opts
- * @returns {Promise<{ razorpay_payment_id, razorpay_order_id, razorpay_signature } | null>}
+ * Open Razorpay checkout and immediately verify + process payment on our backend.
+ * This approach works in both development (no webhook needed) and production.
+ *
+ * @param {{ amount, purpose, tripId, rideId, passengerId, driverId, name, email, contact, description }} opts
+ * @returns {Promise<{ success, newBalance?, ... } | null>} — backend verify response, or null if dismissed
  */
 export const openRazorpayCheckout = async (opts) => {
   const loaded = await loadRazorpay();
   if (!loaded) throw new Error("Razorpay SDK failed to load");
 
-  // Create order on backend
+  // 1. Create order on backend
   const { data } = await api.post("/payments/create-order", {
-    amount: opts.amount,
+    amount:  opts.amount,
     purpose: opts.purpose,
-    tripId: opts.tripId,
+    tripId:  opts.tripId,
+    rideId:  opts.rideId,
   });
   if (!data.success) throw new Error(data.message || "Order creation failed");
 
+  // 2. Open Razorpay — on success, immediately verify & process payment server-side
   return new Promise((resolve, reject) => {
     const rzp = new window.Razorpay({
-      key: data.key,
-      amount: data.order.amount,
-      currency: data.order.currency,
-      order_id: data.order.id,
-      name: "RouteMate",
+      key:       data.key,
+      amount:    data.order.amount,
+      currency:  data.order.currency,
+      order_id:  data.order.id,
+      name:      "RouteMate",
       description: opts.description || "Payment",
       prefill: {
         name:    opts.name    || "",
@@ -45,7 +49,23 @@ export const openRazorpayCheckout = async (opts) => {
       modal: {
         ondismiss: () => resolve(null),
       },
-      handler: (response) => resolve(response),
+      handler: async (response) => {
+        try {
+          // Verify and process payment directly — no webhook required
+          const verifyRes = await api.post("/payments/verify-payment", {
+            razorpay_order_id:   response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature:  response.razorpay_signature,
+            purpose:     opts.purpose,
+            tripId:      opts.tripId      || data.order.notes?.tripId,
+            passengerId: opts.passengerId || data.order.notes?.passengerId,
+            driverId:    opts.driverId    || data.order.notes?.driverId,
+          });
+          resolve(verifyRes.data);
+        } catch (err) {
+          reject(new Error(err.response?.data?.message || "Payment verification failed"));
+        }
+      },
     });
     rzp.on("payment.failed", (resp) => reject(new Error(resp.error.description)));
     rzp.open();

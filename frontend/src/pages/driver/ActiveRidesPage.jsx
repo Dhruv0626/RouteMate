@@ -194,18 +194,6 @@ const ActiveRidesPage = () => {
               Avg Rating
             </p>
           </div>
-
-          <div className="bg-(--card-bg) rounded-xl p-6 border border-(--card-border) transition-all duration-500">
-            <div className="flex items-center justify-between mb-4">
-              <Clock className="w-5 h-5 text-orange-500" />
-              <span className="text-2xl font-bold text-(--text-main)">
-                {rideStats.onlineHours}h
-              </span>
-            </div>
-            <p className="text-sm text-(--text-dim)">
-              Online Hours
-            </p>
-          </div>
         </div>
         {/* Active Rides List or Empty State */}
         {loading ? (

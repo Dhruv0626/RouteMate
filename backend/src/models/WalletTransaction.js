@@ -7,6 +7,7 @@ const WalletTransactionSchema = new Schema(
     type:         { type: String, enum: ["credit", "debit"], required: true },
     amount:       { type: Number, required: true },
     balanceAfter: { type: Number, required: true },            // snapshot AFTER this transaction
+    affectsBalance: { type: Boolean, default: true },          // If false, balanceAfter is just a snapshot, no delta applied
     description:  { type: String, default: "" },
     reference: {
       type: String,

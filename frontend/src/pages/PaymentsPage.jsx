@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Wallet, ChevronLeft, Plus, ArrowUpRight, ArrowDownLeft,
   Clock, RefreshCw, CheckCircle2, AlertCircle, Loader2,
-  IndianRupee, ShieldCheck, Zap,
+  IndianRupee, ShieldCheck, Zap, Smartphone,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ui/ThemeToggle";
@@ -20,6 +20,9 @@ const refColor = {
   promo:      "bg-amber-500/10 text-amber-400 border-amber-500/20",
   withdrawal: "bg-rose-500/10 text-rose-400 border-rose-500/20",
 };
+
+/** Returns true if this transaction is a UPI-paid trip (external, does not affect wallet) */
+const isUpiTrip = (tx) => tx.affectsBalance === false && tx.reference === "trip";
 
 const fmt = (n) => `₹${parseFloat(n || 0).toFixed(2)}`;
 const dtFmt = (d) =>
@@ -78,12 +81,15 @@ const PaymentsPage = () => {
         email:   user?.email || "",
         description: `Wallet topup ₹${amount}`,
       });
-      if (response) {
-        showToast(`₹${amount} topup initiated! Balance will update shortly. [TEST]`);
+      if (response?.success) {
+        showToast(`₹${amount} added to your wallet!`, "success");
         setShowTopup(false);
         setSelectedAmt(null);
         setCustomAmt("");
-        setTimeout(() => fetchWallet(true), 3000);
+        // Refresh wallet immediately with new balance
+        fetchWallet(true);
+      } else if (response === null) {
+        showToast("Payment cancelled", "info");
       }
     } catch (err) {
       showToast(err.message || "Payment failed", "error");
@@ -173,13 +179,13 @@ const PaymentsPage = () => {
           {[
             {
               label: "Total Credited",
-              value: fmt(txns.filter(t => t.type === "credit").reduce((s, t) => s + t.amount, 0)),
+              value: fmt(txns.filter(t => t.type === "credit" && t.affectsBalance !== false).reduce((s, t) => s + t.amount, 0)),
               icon: <ArrowDownLeft size={20} className="text-emerald-400"/>,
               color: "bg-emerald-500/10",
             },
             {
               label: "Total Debited",
-              value: fmt(txns.filter(t => t.type === "debit").reduce((s, t) => s + t.amount, 0)),
+              value: fmt(txns.filter(t => t.type === "debit" && t.affectsBalance !== false).reduce((s, t) => s + t.amount, 0)),
               icon: <ArrowUpRight size={20} className="text-rose-400"/>,
               color: "bg-rose-500/10",
             },
@@ -211,32 +217,59 @@ const PaymentsPage = () => {
           ) : (
             <div className="glass-card overflow-hidden rounded-3xl border border-(--card-border)">
               <div className="divide-y divide-(--card-border)">
-                {txns.map((tx) => (
-                  <div key={tx._id} className="flex items-center justify-between p-5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${
-                        tx.type === "debit" ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
-                      }`}>
-                        {tx.type === "debit" ? <ArrowUpRight size={20}/> : <ArrowDownLeft size={20}/>}
-                      </div>
-                      <div>
-                        <p className="text-sm font-black text-(--text-main)">{tx.description || tx.reference}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${refColor[tx.reference] || "bg-white/5 text-(--text-dim) border-white/10"}`}>
-                            {tx.reference}
-                          </span>
-                          <span className="text-[10px] text-(--text-dim)">{dtFmt(tx.createdAt)}</span>
+                {txns.map((tx) => {
+                  const upiTrip = isUpiTrip(tx);
+                  return (
+                    <div key={tx._id} className="flex items-center justify-between p-5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-4">
+                        {/* Icon */}
+                        <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${
+                          upiTrip
+                            ? "bg-sky-500/10 text-sky-400"
+                            : tx.type === "debit" ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
+                        }`}>
+                          {upiTrip ? <Smartphone size={20}/> : tx.type === "debit" ? <ArrowUpRight size={20}/> : <ArrowDownLeft size={20}/>}
+                        </div>
+                        <div>
+                          {/* Description */}
+                          <p className="text-sm font-black text-(--text-main)">
+                            {upiTrip ? "Trip Payment via UPI" : (tx.description || tx.reference)}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {/* Reference badge */}
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${refColor[tx.reference] || "bg-white/5 text-(--text-dim) border-white/10"}`}>
+                              {tx.reference}
+                            </span>
+                            {/* UPI Settled badge — replaces generic 'External' */}
+                            {upiTrip ? (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-sky-500/30 bg-sky-500/15 text-sky-300">
+                                ✓ UPI — Currently Settled
+                              </span>
+                            ) : tx.affectsBalance === false && (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-sky-500/20 bg-sky-500/10 text-sky-400">
+                                External
+                              </span>
+                            )}
+                            <span className="text-[10px] text-(--text-dim)">{dtFmt(tx.createdAt)}</span>
+                          </div>
                         </div>
                       </div>
+                      {/* Amount */}
+                      <div className="text-right shrink-0 ml-4">
+                        <p className={`text-base font-black ${
+                          upiTrip ? "text-sky-400" : tx.type === "debit" ? "text-rose-400" : "text-emerald-400"
+                        }`}>
+                          {upiTrip ? "" : tx.type === "debit" ? "-" : "+"}{fmt(tx.amount)}
+                        </p>
+                        {upiTrip ? (
+                          <p className="text-[10px] text-sky-400/60">Wallet unchanged</p>
+                        ) : (
+                          <p className="text-[10px] text-(--text-dim)">Bal: {fmt(tx.balanceAfter)}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 ml-4">
-                      <p className={`text-base font-black ${tx.type === "debit" ? "text-rose-400" : "text-emerald-400"}`}>
-                        {tx.type === "debit" ? "-" : "+"}{fmt(tx.amount)}
-                      </p>
-                      <p className="text-[10px] text-(--text-dim)">Bal: {fmt(tx.balanceAfter)}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

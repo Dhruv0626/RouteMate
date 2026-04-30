@@ -64,7 +64,7 @@ export const GetDashboardStats = async (req, res) => {
             
             // Revenue (Total platform fees from completed payments)
             PaymentModel.aggregate([
-                { $match: { status: "completed", platformWalletTx: { $exists: true } } },
+                { $match: { status: "completed" } },
                 { $group: { _id: null, total: { $sum: "$platformFee" } } }
             ]),
 
@@ -272,7 +272,7 @@ export const GetAuditLogs = async (req, res) => {
 export const GetRevenueStats = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
-        let query = { status: "completed", platformWalletTx: { $exists: true } };
+        let query = { status: "completed" };
 
         if (startDate && endDate) {
             query.createdAt = { 

@@ -234,11 +234,11 @@ export const NotificationProvider = ({ children }) => {
 
       // ─── Instant Signal Path (Socket.IO) ───
       socket.connect();
-      socket.emit("join_user", user.id);
+      socket.emit("join_user", user._id || user.id);
       
       // If admin/superadmin, join the global admin room for real-time ride alerts
       if (user.role === "admin" || user.role === "superadmin") {
-        socket.emit("join_admin", user.id);
+        socket.emit("join_admin", user._id || user.id);
       }
 
       const handleFastNotification = (notification) => {

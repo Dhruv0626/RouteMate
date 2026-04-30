@@ -225,6 +225,13 @@ const ROLE_CARDS = {
       color: "cyan",
       href: "/:role/dashboard/settings",
     },
+    {
+      icon: Wallet,
+      title: "Owner Wallet",
+      desc: "Manage platform funds & txns",
+      color: "rose",
+      href: "/passenger/dashboard/payments", // Re-using passenger wallet UI for superadmin
+    },
   ],
 };
 
@@ -356,19 +363,18 @@ const DashboardPage = () => {
       try {
         if (user?.role === "admin" || user?.role === "superadmin") {
           const statsRes = await api.get("/admin/dashboard-stats");
+          const walletRes = (user.role === "superadmin") ? await api.get("/payments/my-wallet").catch(() => null) : null;
+          
           if (statsRes.data.success && statsRes.data.stats) {
             const adminStats = statsRes.data.stats;
             const isSuper = user.role === "superadmin";
+            const liveWalletBalance = walletRes?.data?.success ? walletRes.data.wallet.walletBalance : (user.walletBalance || 0);
+
             const newStats = [
               { label: "Users", value: adminStats.counts.total.toLocaleString() },
               { label: "Active", value: adminStats.counts.activeUsers.toLocaleString() },
+              { label: "Revenue", value: `₹${adminStats.business.revenue.toLocaleString()}` },
             ];
-            
-            if (isSuper) {
-              newStats.push({ label: "Revenue", value: `₹${Math.round(adminStats.business.revenue / 1000)}K` });
-            } else {
-              newStats.push({ label: "Drivers", value: adminStats.counts.drivers.toLocaleString() });
-            }
             
             setStats(newStats);
           }

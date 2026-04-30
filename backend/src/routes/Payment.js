@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createOrder,
+  verifyPayment,
   razorpayWebhook,
   walletPayment,
   cashReceived,
@@ -17,6 +18,9 @@ const router = express.Router();
 
 // Create Razorpay order (passenger topup / driver commission topup / UPI trip)
 router.post("/create-order", authMiddleware, createOrder);
+
+// Verify payment directly (works without webhook — required for local dev)
+router.post("/verify-payment", authMiddleware, verifyPayment);
 
 // Passenger pays trip with wallet balance
 router.post("/wallet-pay", authMiddleware, authorizeRoles("passenger"), walletPayment);

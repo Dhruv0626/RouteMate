@@ -94,7 +94,7 @@ const StartRide = () => {
   const [driverLocation, setDriverLocation] = useState(null);
   const [isDriver, setIsDriver]             = useState(false);
   const [loading, setLoading]               = useState(true);
-  const [showOtpBox, setShowOtpBox]         = useState(true);
+  const [showOtpBox, setShowOtpBox]         = useState(true); // Default to true so it shows during pickup phase
   const [otpSlots, setOtpSlots]             = useState(["", "", "", ""]);
   const [isStartingRequest, setIsStartingRequest] = useState(false);
   const [route, setRoute]                   = useState([]);
@@ -146,6 +146,7 @@ const StartRide = () => {
   useEffect(() => {
     socket.connect();
     socket.emit("join_ride", rideId);
+    if (user?.id) socket.emit("join_user", user.id);
     socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
     socket.on("ride_status_update", (data) => {
       setRide(prev => { if (!prev) return null; return { ...prev, status: data.status }; });
@@ -174,11 +175,20 @@ const StartRide = () => {
       }, 2500);
     });
 
+    // ── CRITICAL: Prevent Accidental Page Reload/Leave ──
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "You have an active ride mission. Are you sure you want to leave?";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
       socket.off("location_update");
       socket.off("ride_status_update");
       socket.off("sos_warning");
       socket.off("payment_completed");
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       socket.disconnect();
     };
   }, [rideId]);
@@ -204,8 +214,8 @@ const StartRide = () => {
           setRide(found);
           setIsDriver(user.role === "driver" || found.driver?._id === user.id);
           
-          // CRITICAL FIX: Hide OTP box if ride already started
-          if (found.status === "in_progress") {
+          // CRITICAL FIX: Hide OTP box if ride is beyond the initial state
+          if (["in_progress", "reached", "completed"].includes(found.status)) {
             setShowOtpBox(false);
           }
         }
@@ -223,7 +233,7 @@ const StartRide = () => {
   useEffect(() => {
     if (!ride || !isDriver || !rideId) return;
     if (!showOtpBox) return;
-    if (["arrived", "in_progress", "completed"].includes(ride.status)) return;
+    if (["arrived", "in_progress", "reached", "completed"].includes(ride.status)) return;
     api.patch(`/published-rides/${rideId}/status`, { status: "arrived" })
       .then(() => setRide(prev => ({ ...prev, status: "arrived" })))
       .catch(err => console.error("Auto-arrived error:", err));
@@ -839,8 +849,9 @@ const StartRide = () => {
                         try {
                           const res = await api.post("/payments/cash-received", { rideId: ride._id });
                           if (res.data.success) {
-                            showAlert("Cash payment recorded!", "Success", "success");
-                            // Navigation will be handled by socket event
+                            showAlert("Cash payment recorded! Redirecting to dashboard…", "Success", "success");
+                            // Navigate directly — socket event will also redirect passenger
+                            setTimeout(() => navigate("/driver/dashboard"), 2000);
                           }
                         } catch (err) {
                           showAlert(err.response?.data?.message || "Failed to process cash payment", "Error", "error");
