@@ -606,6 +606,16 @@ export const UpdateRideStatus = async (req, res) => {
         };
 
         const currentAllowed = allowedTransitions[ride.status] || [];
+
+        // ── IDEMPOTENCY CHECK ──
+        if (ride.status === status) {
+            return res.status(200).json({
+                success: true,
+                message: `Ride is already in '${status}' status.`,
+                data: ride
+            });
+        }
+
         if (!currentAllowed.includes(status)) {
             return res.status(400).json({
                 success: false,
@@ -719,11 +729,10 @@ export const UpdateRideStatus = async (req, res) => {
                 // ── Financial Breakdown for Notification ──
                 const totalFare = trip.fare?.total || 0;
                 const sysConfig = await SystemConfig.findOne();
-                // Extract number from commission string like "15%" or use default 0.15
                 const commStr = sysConfig?.commission || "15";
                 const commPercent = parseFloat(commStr.replace(/[^0-9.]/g, "")) || 15;
-                const platformEarnings = (totalFare * commPercent) / 100;
-                const driverPayout = totalFare - platformEarnings;
+                const platformEarnings = Math.round((totalFare * commPercent) / 100 * 100) / 100;
+                const driverPayout = Math.round((totalFare - platformEarnings) * 100) / 100;
 
                 // ── Emit Real-time Notification to Admins ──
                 emitToAdmins({
@@ -847,6 +856,7 @@ export const GetSingleRide = async (req, res) => {
         const trip = await TripModel.findOne({ publishedRide: rideId, passenger: req.user.id });
         if (trip) {
             rideObj.otp = trip.otp;
+            rideObj.tripId = trip._id;
         }
 
         res.status(200).json({ success: true, data: rideObj });

@@ -43,7 +43,8 @@ const DriverWalletPage = () => {
   const { user }  = useAuth();
 
   const [wallet, setWallet]     = useState(null);
-  const [txns, setTxns]         = useState([]);
+  const [txns, setTxns] = useState([]);
+  const [stats, setStats] = useState({ totalEarned: 0, totalWithdrawn: 0, totalCommissionPaid: 0 });
   const [config, setConfig]     = useState({});
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -59,6 +60,7 @@ const DriverWalletPage = () => {
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
+    
     setTimeout(() => setToast(null), 3500);
   };
 
@@ -69,8 +71,9 @@ const DriverWalletPage = () => {
       const { data } = await getMyWallet();
       if (data.success) {
         setWallet(data.wallet);
-        setTxns(data.transactions || []);
-        setConfig(data.config || {});
+        setConfig(data.config);
+        setTxns(data.transactions);
+        if (data.stats) setStats(data.stats);
       }
     } catch {
       showToast("Failed to load wallet", "error");
@@ -261,9 +264,9 @@ const DriverWalletPage = () => {
         {/* ── Quick Stats ── */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: "Total Earned", value: fmt(txns.filter(t => t.type === "credit" && t.reference === "trip").reduce((s, t) => s + t.amount, 0)) },
-            { label: "Withdrawn",    value: fmt(txns.filter(t => t.reference === "withdrawal").reduce((s, t) => s + t.amount, 0)) },
-            { label: "Commission Paid", value: fmt(txns.filter(t => t.type === "debit" && t.reference === "trip").reduce((s, t) => s + t.amount, 0)) },
+            { label: "Total Earned(All methods earnings)", value: fmt(stats.totalEarned) },
+            { label: "Withdrawn",    value: fmt(stats.totalWithdrawn) },
+            { label: "Commission Paid(Only cash trips)", value: fmt(stats.totalCommissionPaid) },
           ].map(s => (
             <div key={s.label} className="glass-card rounded-2xl border border-(--card-border) p-4 text-center">
               <p className="text-[9px] font-black text-(--text-dim) uppercase tracking-widest">{s.label}</p>

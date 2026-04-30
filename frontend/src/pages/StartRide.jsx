@@ -716,9 +716,12 @@ const StartRide = () => {
                   </div>
                 ) : isNearDestination ? (
                   <div className="flex justify-end w-full">
-                    <button onClick={() => handleUpdateStatus("reached")}
-                      className="px-4 py-2.5 bg-primary text-black rounded-2xl font-black text-sm active:scale-95 transition animate-pulse shadow-lg shadow-primary/30">
-                      Reached
+                    <button 
+                      onClick={() => handleUpdateStatus("reached")}
+                      disabled={isStartingRequest}
+                      className="px-6 py-2.5 bg-primary text-black rounded-2xl font-black text-sm active:scale-95 transition shadow-lg shadow-primary/30 flex items-center gap-2"
+                    >
+                      {isStartingRequest ? <Loader2 size={16} className="animate-spin" /> : "Reached"}
                     </button>
                   </div>
                 ) : ride.status === "reached" ? (

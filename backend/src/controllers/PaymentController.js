@@ -133,9 +133,22 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
     const trip = await TripModel.findById(tripId).session(session);
     if (!trip) throw new Error("Trip not found");
 
+    if (trip.phase === "completed" && trip.payment) {
+      // Idempotency: Already processed
+      const existingPayment = await PaymentModel.findById(trip.payment).lean();
+      await session.abortTransaction();
+      session.endSession();
+      return { 
+        platformCut: existingPayment?.platformFee || platformCut, 
+        driverEarning: existingPayment?.driverEarnings || driverEarning, 
+        paymentId: trip.payment 
+      };
+    }
+
     let passengerTx = null;
-    // Wallet payment: debit passenger
+    
     if (method === "wallet") {
+      // Wallet payment: debit passenger
       const pax = await UserModel.findById(passengerId).session(session);
       if (!pax) throw new Error("Passenger not found");
       if ((pax.walletBalance || 0) < amountRupees)
@@ -145,6 +158,15 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
         reference: "trip", referenceId: tripId,
         description: "Wallet trip payment",
         commissionAmount: platformCut, driverEarning,
+      });
+      passengerTx = tx;
+    } else if (method === "upi") {
+      // UPI payment: informational record for passenger history
+      const { tx } = await createUserWalletTx(session, {
+        userId: passengerId, type: "debit", amount: amountRupees,
+        reference: "trip", referenceId: tripId,
+        description: `Trip payment via UPI — #${razorpayPaymentId}`,
+        affectsBalance: false,
       });
       passengerTx = tx;
     }
@@ -253,7 +275,7 @@ export const createOrder = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      order: { id: order.id, amount: order.amount, currency: order.currency },
+      order: { id: order.id, amount: order.amount, currency: order.currency, notes: order.notes },
       key: process.env.RAZORPAY_KEY_ID,
     });
   } catch (err) {
@@ -278,52 +300,74 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid payment signature" });
     }
 
-    // 2. Fetch payment details from Razorpay to get amount
+    // 2. Fetch payment details from Razorpay to get amount and notes
     const paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
     const amountRupees = paymentDetails.amount / 100;
-    const finalUserId = userId || req.user.id;
+    const notes = paymentDetails.notes || {};
+    
+    // Robust extraction of IDs, falling back to Razorpay notes if frontend missed them
+    const finalUserId = userId || req.user?._id?.toString() || req.user?.id || notes.userId;
+    const actualTripId = tripId || notes.tripId;
+    const actualPassengerId = passengerId || notes.passengerId || finalUserId;
+    const actualDriverId = driverId || notes.driverId;
 
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
       if (purpose === "wallet_topup") {
+        const desc = `Wallet topup via Razorpay #${razorpay_payment_id}`;
+        const existingTx = await WalletTransaction.findOne({ description: desc });
+        if (existingTx) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({ success: true, message: "Already processed" });
+        }
+
         // ── Credit passenger wallet ──
         const { newBalance } = await createUserWalletTx(session, {
           userId: finalUserId,
           type: "credit",
           amount: amountRupees,
           reference: "topup",
-          description: `Wallet topup via Razorpay`,
+          description: desc,
           affectsBalance: true,
         });
         await session.commitTransaction();
         session.endSession();
 
-        notifyUser({ userId: finalUserId, title: "💰 Wallet Credited", message: `₹${amountRupees} added to your wallet. Balance: ₹${newBalance}`, type: "success" }).catch(() => {});
+        notifyUser({ userId: finalUserId, title: "💰 Wallet Credited", message: `₹${amountRupees} added to your wallet. Balance: ₹${newBalance}`, type: "success" }).catch(() => { });
         return res.status(200).json({ success: true, message: "Wallet topup successful", newBalance });
 
       } else if (purpose === "commission_topup") {
+        const desc = `Commission wallet topup #${razorpay_payment_id}`;
+        const existingTx = await WalletTransaction.findOne({ description: desc });
+        if (existingTx) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({ success: true, message: "Already processed" });
+        }
+
         // ── Credit driver commission wallet ──
         const { newBalance } = await updateCommissionWallet(session, {
           driverUserId: finalUserId,
           delta: amountRupees,
           reference: "topup",
-          description: "Commission wallet topup",
+          description: desc,
         });
         await session.commitTransaction();
         session.endSession();
 
-        notifyUser({ userId: finalUserId, title: "✅ Commission Wallet Topped Up", message: `₹${amountRupees} credited. Balance: ₹${newBalance}`, type: "success" }).catch(() => {});
+        notifyUser({ userId: finalUserId, title: "✅ Commission Wallet Topped Up", message: `₹${amountRupees} credited. Balance: ₹${newBalance}`, type: "success" }).catch(() => { });
         return res.status(200).json({ success: true, message: "Commission wallet topup successful", newBalance });
 
       } else if (purpose === "upi_trip") {
         // ── UPI Trip Payment: credit driver + platform, log info tx for passenger ──
         const result = await processTripSplit({
           amountRupees,
-          tripId,
-          passengerId: passengerId || finalUserId,
-          driverId,
+          tripId: actualTripId,
+          passengerId: actualPassengerId,
+          driverId: actualDriverId,
           method: "upi",
           razorpayPaymentId: razorpay_payment_id,
         });
@@ -406,24 +450,40 @@ export const razorpayWebhook = async (req, res) => {
 
     try {
       if (finalPurpose === "wallet_topup") {
+        const desc = `Wallet topup via Razorpay #${payment.id}`;
+        const existingTx = await WalletTransaction.findOne({ description: desc });
+        if (existingTx) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({ received: true });
+        }
+
         // (1) Passenger Wallet Topup
         const { newBalance } = await createUserWalletTx(session, {
           userId,
           type: "credit",
           amount: amountRupees,
           reference: "topup",
-          description: "Wallet topup",
+          description: desc,
         });
         await session.commitTransaction();
         notifyUser({ userId, title: "💰 Wallet Credited", message: `₹${amountRupees} added to your wallet. Balance: ₹${newBalance}`, type: "success" }).catch(() => { });
       }
       else if (finalPurpose === "commission_topup") {
+        const desc = `Commission wallet topup #${payment.id}`;
+        const existingTx = await WalletTransaction.findOne({ description: desc });
+        if (existingTx) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({ received: true });
+        }
+
         // (2) Driver Commission Wallet Topup
         const { newBalance } = await updateCommissionWallet(session, {
           driverUserId: userId,
           delta: amountRupees,
           reference: "topup",
-          description: "commissionWallet topup",
+          description: desc,
         });
         await session.commitTransaction();
 
@@ -438,8 +498,16 @@ export const razorpayWebhook = async (req, res) => {
         }
       }
       else if (finalPurpose === "trip_payment" || finalPurpose === "upi_trip") {
-        // (3) Trip Payment Auto-Split (85% Driver, 15% Platform)
-        const platformCut = Math.round(amountRupees * 0.15 * 100) / 100;
+        const tripDocCheck = await TripModel.findById(tripId).session(session);
+        if (tripDocCheck && tripDocCheck.phase === "completed" && tripDocCheck.payment) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({ received: true, message: "Already processed" });
+        }
+
+        // (3) Trip Payment Auto-Split (Dynamic Platform %, Remaining to Driver)
+        const commissionRate = await getCommissionRate();
+        const platformCut = Math.round(amountRupees * commissionRate * 100) / 100;
         const driverEarning = Math.round((amountRupees - platformCut) * 100) / 100;
         const platformId = process.env.PLATFORM_ACCOUNT_ID;
 
@@ -458,24 +526,24 @@ export const razorpayWebhook = async (req, res) => {
         });
 
 
-        // ── B. Driver Earning (Credit 85%) ──
+        // ── B. Driver Earning (Dynamic) ──
         await createDriverEarningsTx(session, {
           driverUserId: driverId,
           type: "credit",
           amount: driverEarning,
           reference: "trip",
           referenceId: tripId,
-          description: "Trip earning (85%)",
+          description: `Trip earning (${Math.round((1 - commissionRate) * 100)}%)`,
         });
 
-        // ── C. Platform Income (Credit 15%) ──
+        // ── C. Platform Income (Dynamic) ──
         await createUserWalletTx(session, {
           userId: platformId,
           type: "credit",
           amount: platformCut,
           reference: "trip",
           referenceId: tripId,
-          description: "Platform commission (15%)",
+          description: `Platform commission (${Math.round(commissionRate * 100)}%)`,
           commissionAmount: platformCut,
           driverEarning,
         });
@@ -508,7 +576,7 @@ export const razorpayWebhook = async (req, res) => {
         await session.commitTransaction();
 
         // ── E. Notifications ──
-        notifyUser({ userId: driverId, title: "💰 Trip Payment Received", message: `₹${driverEarning} credited (85%).`, type: "success" }).catch(() => { });
+        notifyUser({ userId: driverId, title: "💰 Trip Payment Received", message: `₹${driverEarning} credited (${Math.round((1 - commissionRate) * 100)}%).`, type: "success" }).catch(() => { });
         notifyUser({ userId: passengerId, title: "✅ Payment Successful", message: `₹${amountRupees} paid for your trip.`, type: "info" }).catch(() => { });
 
         // Notify socket rooms
@@ -600,6 +668,10 @@ export const cashReceived = async (req, res) => {
       return res.status(403).json({ success: false, message: "Not your trip" });
     if (!["arrived", "ongoing", "reached_destination", "completed"].includes(trip.phase))
       return res.status(400).json({ success: false, message: "Trip is not in a payable phase" });
+
+    if (trip.payment) {
+      return res.status(400).json({ success: false, message: "Payment already recorded for this trip" });
+    }
 
     const amount = trip.fare?.surgedTotal || trip.fare?.total || 0;
     const commissionRate = await getCommissionRate();
@@ -778,13 +850,53 @@ export const getMyWallet = async (req, res) => {
       .limit(50)
       .lean();
 
+    const aggregates = await WalletTransaction.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(userId) } },
+      { $group: {
+          _id: null,
+          totalEarned: { $sum: { $cond: [{ $and: [{ $eq: ["$type", "credit"] }, { $eq: ["$reference", "trip"] }] }, "$amount", 0] } },
+          totalWithdrawn: { $sum: { $cond: [{ $eq: ["$reference", "withdrawal"] }, "$amount", 0] } },
+          totalCommissionPaid: { $sum: { $cond: [{ $and: [{ $eq: ["$type", "debit"] }, { $eq: ["$reference", "trip"] }] }, "$amount", 0] } },
+          totalTopups: { $sum: { $cond: [{ $and: [{ $eq: ["$type", "credit"] }, { $eq: ["$reference", "topup"] }] }, "$amount", 0] } },
+        }
+      }
+    ]);
+    let stats = aggregates[0] || { totalEarned: 0, totalWithdrawn: 0, totalCommissionPaid: 0 };
+    let cashCommissionDebt = stats.totalCommissionPaid; // This is specifically the cash commission paid from the wallet
+
     let driverWallets = null;
     if (role === "driver") {
-      const profile = await DriverProfileModel.findOne({ user: userId })
+      // Get the absolute true lifetime totals for the driver from the Payment records directly
+      const paymentAggregates = await PaymentModel.aggregate([
+        { $match: { driver: new mongoose.Types.ObjectId(userId), status: "completed" } },
+        { $group: {
+            _id: null,
+            trueTotalEarned: { $sum: "$driverEarnings" },
+            trueTotalCommissionPaid: { $sum: "$platformFee" }
+          }
+        }
+      ]);
+      
+      if (paymentAggregates.length > 0) {
+        stats.totalEarned = paymentAggregates[0].trueTotalEarned || 0;
+        // NOT overriding stats.totalCommissionPaid, because the driver ONLY wants to see cash commission debt
+      }
+      let profile = await DriverProfileModel.findOne({ user: userId })
         .select("walletBalance commissionWallet").lean();
+
+      // PERFECT SYNC: 100 Rs starting bonus + total topups - ONLY the commission paid via cash deductions
+      const dynamicCommissionWallet = 100 + (stats.totalTopups || 0) - (cashCommissionDebt || 0);
+
+      if (profile && profile.commissionWallet !== dynamicCommissionWallet) {
+        await DriverProfileModel.updateOne(
+          { user: userId },
+          { $set: { commissionWallet: dynamicCommissionWallet } }
+        );
+      }
+
       driverWallets = {
         walletBalance: profile?.walletBalance ?? 0,
-        commissionWallet: profile?.commissionWallet ?? 0,
+        commissionWallet: dynamicCommissionWallet,
       };
     }
 
@@ -800,6 +912,7 @@ export const getMyWallet = async (req, res) => {
         tripsBlocked: role === "driver" ? (driverWallets?.commissionWallet ?? 0) < threshold : false,
         commissionWarning: role === "driver" ? (driverWallets?.commissionWallet ?? 0) < warning : false,
       },
+      stats,
       transactions,
       config: {
         commissionWalletMinThreshold: threshold,

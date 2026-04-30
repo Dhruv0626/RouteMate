@@ -713,6 +713,7 @@ const PassengerLiveTracking = () => {
                                 amount: amountPaid || 0,
                                 purpose: "upi_trip",
                                 rideId: ride._id,
+                                tripId: ride.tripId,
                                 description: "Trip Payment via UPI",
                               });
                               if (result?.success) {
