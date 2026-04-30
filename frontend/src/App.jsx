@@ -22,6 +22,7 @@ import DriverApprovalsPage from "./pages/admin/DriverApprovalsPage";
 import FleetOverviewPage from "./pages/admin/FleetOverviewPage";
 import SystemSettingsPage from "./pages/admin/SystemSettingsPage";
 import SecurityPage from "./pages/admin/SecurityPage";
+import RevenueAnalyticsPage from "./pages/admin/RevenueAnalyticsPage";
 import DashboardPage from "./pages/DashboardPage";
 import HomePage from "./pages/HomePage";
 import SplashPage from "./pages/SplashPage";
@@ -38,9 +39,11 @@ import DriverBookingsPage from "./pages/driver/DriverBookingsPage";
 import RideRequestDetailsPage from "./pages/driver/RideRequestDetailsPage";
 import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
 import RateCardPage from "./pages/driver/RateCardPage";
+import DriverWalletPage from "./pages/driver/DriverWalletPage";
 import AvailableRidesPage from "./pages/passenger/AvailableRidesPage";
 import PassengerBookingsPage from "./pages/passenger/PassengerBookingsPage";
 import PickupMap from './pages/PickupMap';
+import PassengerLiveTracking from './pages/passenger/PassengerLiveTracking';
 import StartRide from './pages/StartRide';
 import HistoryPage from "./pages/HistoryPage";
 import AdminHistoryPage from "./pages/admin/AdminHistoryPage";
@@ -344,6 +347,14 @@ function AppContent() {
           }
         />
         <Route
+          path="/:role/dashboard/revenue"
+          element={
+            <AdminProtectedRoute>
+              <RevenueAnalyticsPage />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
           path="/:role/dashboard/driver-approvals"
           element={
             <AdminProtectedRoute>
@@ -359,6 +370,7 @@ function AppContent() {
             </AdminProtectedRoute>
           }
         />
+
         <Route
           path="/:role/dashboard/settings"
           element={
@@ -431,6 +443,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <StartRide />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/live-tracking/:rideId"
+          element={
+            <ProtectedRoute>
+              <PassengerLiveTracking />
             </ProtectedRoute>
           }
         />
@@ -637,6 +657,14 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <SettingsPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/wallet"
+          element={
+            <DriverProtectedRoute>
+              <DriverWalletPage />
             </DriverProtectedRoute>
           }
         />

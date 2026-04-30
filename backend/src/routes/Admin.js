@@ -1,5 +1,5 @@
 import express from "express";
-import { GetDashboardStats, GetSystemHealth, GetAuditLogs } from "../controllers/AdminController.js";
+import { GetDashboardStats, GetSystemHealth, GetAuditLogs, GetRevenueStats } from "../controllers/AdminController.js";
 import { GetSettings, UpdateSettings } from "../controllers/SystemSettingsController.js";
 import authMiddleware from "../middlewares/AuthMid.js";
 import { isAdmin, isSuperAdmin } from "../middlewares/RoleMid.js";
@@ -17,6 +17,7 @@ router.get("/dashboard-stats", authMiddleware, isAdmin, GetDashboardStats);
 // System health and Audit logs
 router.get("/system-health", authMiddleware, isAdmin, GetSystemHealth);
 router.get("/audit-logs", authMiddleware, isAdmin, GetAuditLogs);
+router.get("/revenue-stats", authMiddleware, isSuperAdmin, GetRevenueStats);
 
 // System configuration management
 router.get("/system-settings", authMiddleware, isAdmin, GetSettings);

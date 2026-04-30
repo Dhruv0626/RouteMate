@@ -135,6 +135,13 @@ const StartRide = () => {
     isNearDestination = distanceMetres(driverLocation.lat, driverLocation.lng, destCoords[1], destCoords[0]) <= 2000;
   }
 
+  // ─── Auto-expand HUD when reached destination (for payment visibility) ───
+  useEffect(() => {
+    if (!isDriver && (ride?.status === "reached" || ride?.status === "completed")) {
+      setIsMinimized(false);
+    }
+  }, [ride?.status, isDriver]);
+
   // ─── Socket ───────────────────────────────────────────────────────────────
   useEffect(() => {
     socket.connect();
@@ -142,10 +149,6 @@ const StartRide = () => {
     socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
     socket.on("ride_status_update", (data) => {
       setRide(prev => { if (!prev) return null; return { ...prev, status: data.status }; });
-      if (data.status === "completed" && user.role !== "driver") {
-        showAlert("Your ride has been completed successfully! Thank you for choosing RouteMate.", "Ride Completed", "success");
-        setTimeout(() => navigate("/passenger/dashboard"), 3500);
-      }
       if (data.status === "cancelled" && user.role !== "driver") {
         showAlert("The driver has cancelled this ride.", "Ride Cancelled", "error");
         setTimeout(() => navigate("/passenger/dashboard"), 3000);
@@ -158,10 +161,24 @@ const StartRide = () => {
         setSosWarningActive(true);
       }
     });
+    
+    // Payment Completion Event — Automatically exits map for both parties
+    socket.on("payment_completed", (data) => {
+      const methodLabel = data.method === "wallet" ? "Wallet" : data.method === "cash" ? "Cash" : "UPI";
+      showAlert(`Payment successful via ${methodLabel}! Redirecting…`, "Trip Finished", "success");
+      
+      // Delay slightly to let the user see the success message
+      setTimeout(() => {
+        const dashboardPath = user.role === "driver" ? "/driver/dashboard" : "/passenger/dashboard";
+        navigate(dashboardPath);
+      }, 2500);
+    });
+
     return () => {
       socket.off("location_update");
       socket.off("ride_status_update");
       socket.off("sos_warning");
+      socket.off("payment_completed");
       socket.disconnect();
     };
   }, [rideId]);
@@ -177,6 +194,13 @@ const StartRide = () => {
         const res = await api.get(`/published-rides/${rideId}`);
         if (res.data.success) {
           const found = res.data.data;
+          
+          // Redirect passenger to dedicated live tracking page
+          if (user.role === "passenger") {
+             navigate(`/passenger/live-tracking/${rideId}`, { replace: true });
+             return;
+          }
+
           setRide(found);
           setIsDriver(user.role === "driver" || found.driver?._id === user.id);
           
@@ -224,6 +248,7 @@ const StartRide = () => {
           lat: coords.lat,
           lng: coords.lng,
           speed: p.coords.speed != null ? p.coords.speed * 3.6 : undefined, // m/s → km/h
+          heading: p.coords.heading ?? 0
         });
       },
       (e) => console.warn("GPS initial fix failed:", e.message),
@@ -239,6 +264,7 @@ const StartRide = () => {
           lat: coords.lat,
           lng: coords.lng,
           speed: p.coords.speed != null ? p.coords.speed * 3.6 : undefined, // m/s → km/h
+          heading: p.coords.heading ?? 0
         });
       },
       (e) => console.warn("GPS watch error:", e.message),
@@ -440,8 +466,7 @@ const StartRide = () => {
       await api.patch(`/published-rides/${rideId}/status`, payload);
       setRide(prev => ({ ...prev, status }));
       if (status === "completed") {
-        showAlert("Ride Completed successfully!", "Trip Finished", "success");
-        navigate("/driver/dashboard");
+        showAlert("Ride marked as completed. Please collect payment.", "Trip Finished", "success");
       }
       if (status === "in_progress") setShowOtpBox(false);
     } catch (e) {
@@ -561,7 +586,11 @@ const StartRide = () => {
           }}
         >
           <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" maxZoom={19} />
+          <TileLayer 
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' 
+            maxZoom={19} 
+          />
 
           {ride.status !== "in_progress" && pickupMarkerCoords && (
             <Marker position={pickupMarkerCoords} icon={greenPin}>
@@ -676,17 +705,19 @@ const StartRide = () => {
                     </button>
                   </div>
                 ) : isNearDestination ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleCancelRide}
-                      className="px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl font-black text-sm active:scale-95 transition shadow-lg"
-                      title="Cancel Ride"
-                    >
-                      Cancel
-                    </button>
-                    <button onClick={() => handleUpdateStatus("completed")}
+                  <div className="flex justify-end w-full">
+                    <button onClick={() => handleUpdateStatus("reached")}
                       className="px-4 py-2.5 bg-primary text-black rounded-2xl font-black text-sm active:scale-95 transition animate-pulse shadow-lg shadow-primary/30">
-                      End Ride
+                      Reached
+                    </button>
+                  </div>
+                ) : ride.status === "reached" ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] font-black uppercase text-amber-400 animate-pulse">Waiting for Payment</span>
+                    <button onClick={() => {
+                        showAlert("Please ask the passenger to pay via UPI or Wallet. If they pay in cash, use the 'Collect Cash' button in the menu.", "Payment Pending", "info");
+                    }} className="px-4 py-2.5 bg-amber-500/20 border border-amber-500/30 text-amber-500 rounded-2xl font-black text-xs">
+                      Verify
                     </button>
                   </div>
                 ) : (
@@ -713,16 +744,16 @@ const StartRide = () => {
       {!isNavMode && !showOtpBox && (
         <div className="absolute bottom-4 left-4 right-4 z-50 pointer-events-none">
         <div className={`bg-black/85 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex flex-col gap-3 pointer-events-auto shadow-2xl relative overflow-hidden transition-all duration-500 ease-in-out ${isMinimized && !isDriver ? "max-h-[85px]" : "max-h-[600px]"}`}>
-          {/* Minimize toggle for passengers */}
-          {!isDriver && (
-            <button
-              onClick={() => setIsMinimized(!isMinimized)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all z-50 active:scale-90"
-              title={isMinimized ? "Expand" : "Minimize"}
-            >
-              {isMinimized ? <ChevronUp size={16} className="text-white/60" /> : <ChevronDown size={16} className="text-white/60" />}
-            </button>
-          )}
+            {/* Minimize toggle for passengers */}
+            {!isDriver && ride.status !== "reached" && ride.status !== "completed" && (
+              <button
+                onClick={() => setIsMinimized(!isMinimized)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all z-50 active:scale-90"
+                title={isMinimized ? "Expand" : "Minimize"}
+              >
+                {isMinimized ? <ChevronUp size={16} className="text-white/60" /> : <ChevronDown size={16} className="text-white/60" />}
+              </button>
+            )}
             {isDriver ? (
               <div className="flex flex-col gap-3">
                 {(isHeadingToPickup || ride.status === "in_progress") && (
@@ -737,7 +768,7 @@ const StartRide = () => {
                     </div>
                   </div>
                 )}
-                {ride.status !== "in_progress" && (
+                {isHeadingToPickup && (
                   <>
                     <div className="flex gap-2">
                       <button onClick={handleCancelRide}
@@ -775,9 +806,9 @@ const StartRide = () => {
                         <X size={20} />
                       </button>
                       {isNearDestination ? (
-                        <button onClick={() => handleUpdateStatus("completed")}
+                        <button onClick={() => handleUpdateStatus("reached")}
                           className="flex-1 bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 transition-all animate-pulse active:scale-95">
-                          <Square size={20} /> Complete Ride
+                          <Square size={20} /> Reached
                         </button>
                       ) : (
                         <div className="flex-1 bg-white/5 border border-white/10 text-white/50 font-black py-4 rounded-xl flex justify-center items-center gap-2">
@@ -787,10 +818,75 @@ const StartRide = () => {
                     </div>
                   </>
                 )}
+                {ride.status === "reached" && (
+                  <>
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Waiting for Payment</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                        <span className="text-[9px] font-black text-emerald-500/60 uppercase">Final Fare</span>
+                        <span className="text-sm font-black text-emerald-500 flex items-center gap-0.5">
+                          <IndianRupee size={12} /> {firstPassenger?.amountPaid || 0}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={async () => {
+                        const confirmed = await showConfirm("Did you receive cash from the passenger?", "Confirm Cash", "success", "Yes, Received");
+                        if (!confirmed) return;
+                        try {
+                          const res = await api.post("/payments/cash-received", { rideId: ride._id });
+                          if (res.data.success) {
+                            showAlert("Cash payment recorded!", "Success", "success");
+                            // Navigation will be handled by socket event
+                          }
+                        } catch (err) {
+                          showAlert(err.response?.data?.message || "Failed to process cash payment", "Error", "error");
+                        }
+                      }}
+                        className="flex-1 bg-emerald-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
+                        <IndianRupee size={20} /> Collect Cash
+                      </button>
+                    </div>
+                  </>
+                )}
+                {ride.status === "completed" && (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Payment Pending</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                        <span className="text-sm font-black text-emerald-500 flex items-center gap-0.5">
+                          <IndianRupee size={12} /> {firstPassenger?.amountPaid || 0}
+                        </span>
+                      </div>
+                    </div>
+                    <button onClick={async () => {
+                      try {
+                        const res = await api.post("/payments/cash-received", { rideId: ride._id });
+                        if (res.data.success) {
+                          showAlert("Cash payment recorded!", "Success", "success");
+                          navigate("/driver/dashboard");
+                        }
+                      } catch (err) {
+                        showAlert(err.response?.data?.message || "Failed to process cash payment", "Error", "error");
+                      }
+                    }}
+                      className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
+                      <IndianRupee size={20} /> Collect Cash
+                    </button>
+                    <p className="text-[10px] text-center text-white/50">Wait for the passenger if they are paying via App/Wallet.</p>
+                  </div>
+                )}
               </div>
             ) : (
               // Passenger HUD
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col w-full">
+                <div className="flex items-center gap-3">
                   {!isMinimized && (
                     <div className="w-12 h-12 bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
                       <UserIcon size={24} className="text-primary" />
@@ -809,7 +905,7 @@ const StartRide = () => {
                       </div>
                     )}
                     <div className={`flex items-center gap-2 ${!isMinimized ? "mt-1" : ""}`}>
-                      {ride.status !== "in_progress" ? (
+                      {ride.status !== "in_progress" && ride.status !== "reached" && ride.status !== "completed" ? (
                         <div className="flex flex-col gap-1">
                           <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">
                             {ride.status === "arrived" ? "Driver has arrived!" : "Driver is heading to your pickup"}
@@ -822,11 +918,15 @@ const StartRide = () => {
                             </p>
                           )}
                         </div>
-                      ) : (
+                      ) : ride.status === "in_progress" || ride.status === "reached" ? (
                         <>
                           <span className="px-2 border rounded-full text-[10px] uppercase font-bold border-emerald-500/30 text-emerald-500">Live</span>
-                          <span className="text-xs text-white/50 truncate">{(ride.vehicleType || "PRIME").toUpperCase()} • En route</span>
+                          <span className="text-xs text-white/50 truncate">
+                            {(ride.vehicleType || "PRIME").toUpperCase()} • {ride.status === "reached" ? "Reached Destination" : "En route"}
+                          </span>
                         </>
+                      ) : (
+                        <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">Ride Completed. Payment Successful.</span>
                       )}
                     </div>
                   </div>
@@ -836,14 +936,73 @@ const StartRide = () => {
                       tripId={rideId}
                       warningActive={sosWarningActive}
                       warningReason={sosWarningReason}
-                    onWarningClose={() => setSosWarningActive(false)}
-                  />
+                      onWarningClose={() => setSosWarningActive(false)}
+                    />
                   )}
                 </div>
-              )}
-            </div>
+                
+                {/* Passenger Payment UI */}
+                {(ride.status === "completed" || ride.status === "reached") && (
+                  <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                    <p className="text-xs font-bold text-white/80">
+                      {ride.status === "reached" ? "📍 Destination Reached! Complete Payment:" : "Select Payment Method:"}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={async () => {
+                        try {
+                          const res = await api.post("/payments/wallet-pay", { rideId: ride._id });
+                          if (res.data.success) {
+                            showAlert("Wallet payment initiated!", "Success", "success");
+                            // Navigation will be handled by socket event
+                          }
+                        } catch (err) {
+                          showAlert(err.response?.data?.message || "Wallet payment failed", "Error", "error");
+                        }
+                      }} className="bg-primary/20 border border-primary/30 text-primary py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                        Pay via Wallet
+                      </button>
+                      <button onClick={async () => {
+                        try {
+                          const res = await api.post("/payments/create-order", { 
+                            amount: firstPassenger?.amountPaid || 0,
+                            purpose: "upi_trip",
+                            rideId: ride._id
+                          });
+                          if (res.data.success) {
+                            const options = {
+                              key: res.data.key,
+                              amount: res.data.order.amount,
+                              currency: "INR",
+                              order_id: res.data.order.id,
+                              name: "RouteMate",
+                              description: "Trip Payment",
+                              handler: function (response) {
+                                showAlert("Payment successful! Synchronizing with server...", "Success", "success");
+                                // Navigation will be handled by socket event
+                              },
+                            };
+                            const rzp = new window.Razorpay(options);
+                            rzp.open();
+                          }
+                        } catch (err) {
+                          showAlert(err.response?.data?.message || "Razorpay initiation failed", "Error", "error");
+                        }
+                      }} className="bg-blue-500/20 border border-blue-500/30 text-blue-500 py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                        Pay via UPI
+                      </button>
+                    </div>
+                    <button onClick={() => {
+                        showAlert("Please pay the driver in cash. Once the driver confirms, your ride will be closed.", "Cash Selected", "info");
+                    }} className="w-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform">
+                      I will pay Cash
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
       {/* ── OTP Overlay ── */}
       {showOtpBox && (

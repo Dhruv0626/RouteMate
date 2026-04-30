@@ -10,9 +10,13 @@ const WalletTransactionSchema = new Schema(
     description:  { type: String, default: "" },
     reference: {
       type: String,
-      enum: ["trip", "topup", "refund", "promo", "withdrawal"],
+      enum: ["trip", "topup", "refund", "promo", "withdrawal", "referral"],
     },
-    referenceId:  { type: Schema.Types.ObjectId },             // e.g. tripId
+    referenceId:     { type: Schema.Types.ObjectId },             // e.g. tripId
+    commissionAmount:{ type: Number },    // platform's cut (trip transactions)
+    driverEarning:   { type: Number },    // driver's share  (trip transactions)
+    expiresAt:       { type: Date },      // For promo credits
+    isExpired:       { type: Boolean, default: false }
   },
   { timestamps: true }
 );

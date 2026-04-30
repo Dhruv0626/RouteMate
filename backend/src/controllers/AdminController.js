@@ -4,6 +4,7 @@ import TripModel from "../models/Trip.js";
 import ReviewModel from "../models/Review.js";
 import cacheService from "../utils/redis.js";
 import NotificationModel from "../models/Notification.js";
+import PaymentModel from "../models/Payment.js";
 
 import { getActiveConnectionCount } from "../utils/SocketManager.js";
 
@@ -61,10 +62,10 @@ export const GetDashboardStats = async (req, res) => {
                 { $group: { _id: "$phase", count: { $sum: 1 } } }
             ]),
             
-            // Revenue (Total of completed trips)
-            TripModel.aggregate([
-                { $match: { phase: "completed" } },
-                { $group: { _id: null, total: { $sum: "$fare.total" } } }
+            // Revenue (Total platform fees from completed payments)
+            PaymentModel.aggregate([
+                { $match: { status: "completed", platformWalletTx: { $exists: true } } },
+                { $group: { _id: null, total: { $sum: "$platformFee" } } }
             ]),
 
             // Avg Rating
@@ -82,7 +83,21 @@ export const GetDashboardStats = async (req, res) => {
             TripModel.aggregate([
                 { $limit: 2000 }, 
                 { $group: { 
-                    _id: { $arrayElemAt: [{ $split: ["$source.address", ","] }, 0] },
+                    _id: {
+                        $let: {
+                            vars: { parts: { $split: ["$source.address", ","] } },
+                            in: {
+                                $concat: [
+                                    { $ifNull: [{ $arrayElemAt: ["$$parts", 0] }, "Unknown"] },
+                                    { $cond: [
+                                        { $gt: [{ $size: "$$parts" }, 1] },
+                                        { $concat: [", ", { $trim: { input: { $arrayElemAt: ["$$parts", 1] } } }] },
+                                        ""
+                                    ]}
+                                ]
+                            }
+                        }
+                    },
                     count: { $sum: 1 } 
                 }},
                 { $sort: { count: -1 } },
@@ -247,5 +262,66 @@ export const GetAuditLogs = async (req, res) => {
     } catch (error) {
         console.error("Audit Logs Error:", error.message);
         res.status(500).json({ success: false, message: "Failed to fetch audit logs." });
+    }
+};
+
+/**
+ * Get detailed revenue analytics day, time, and trip wise
+ * Strictly counts platform fees from completed payments
+ */
+export const GetRevenueStats = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        let query = { status: "completed", platformWalletTx: { $exists: true } };
+
+        if (startDate && endDate) {
+            query.createdAt = { 
+                $gte: new Date(startDate), 
+                $lte: new Date(endDate) 
+            };
+        }
+
+        const [dailyIncome, tripWiseIncome] = await Promise.all([
+            // Day-wise grouping
+            PaymentModel.aggregate([
+                { $match: query },
+                { $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    totalRevenue: { $sum: "$platformFee" },
+                    tripCount: { $sum: 1 }
+                }},
+                { $sort: { _id: -1 } },
+                { $limit: 30 }
+            ]),
+            // Detailed trip-wise list
+            PaymentModel.find(query)
+                .sort({ createdAt: -1 })
+                .limit(100)
+                .populate("driver", "name email")
+                .populate("passenger", "name")
+                .populate("trip", "source destination fare")
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                dailyIncome,
+                trips: tripWiseIncome.map(p => ({
+                    id: p._id,
+                    tripId: p.trip?._id,
+                    date: p.createdAt,
+                    passenger: p.passenger?.name || "Deleted User",
+                    driver: p.driver?.name || "Deleted Driver",
+                    totalFare: p.amount,
+                    platformIncome: p.platformFee,
+                    source: p.trip?.source?.address,
+                    destination: p.trip?.destination?.address
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error("Revenue Stats Error:", error.message);
+        res.status(500).json({ success: false, message: "Failed to fetch revenue analytics." });
     }
 };

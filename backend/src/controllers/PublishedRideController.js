@@ -133,6 +133,15 @@ export const PublishRide = async (req, res) => {
             return res.status(403).json({ success: false, message: "Only approved drivers can publish rides" });
         }
 
+        const sys = await SystemConfig.findOne().lean();
+        const threshold = sys?.commissionWalletMinThreshold ?? -150;
+        if ((driverProfile.commissionWallet || 0) < threshold) {
+            return res.status(403).json({
+                success: false,
+                message: `Commission wallet is below threshold (₹${threshold}). Please topup to accept rides.`
+            });
+        }
+
         // Optimization: Sample coordinates to reduce DB size (keep every 5th point)
         const rawCoords = req.body.routeCoords || [];
         const sampledCoords = rawCoords.filter((_, idx) => idx % 5 === 0);
@@ -626,20 +635,32 @@ export const UpdateRideStatus = async (req, res) => {
         const io = getIO();
         if (io) {
             io.to(rideId).emit("ride_status_update", { rideId, status });
-            console.log(`🚀 PublishedRideController: Emitted status [${status}] to Ride ${rideId}`);
+            
+            // Emit to each confirmed passenger's personal room for global redirect
+            if (ride.bookings && ride.bookings.length > 0) {
+                ride.bookings.forEach(b => {
+                    if (b.status === "confirmed") {
+                        io.to(b.passenger.toString()).emit("ride_status_update", { rideId, status });
+                    }
+                });
+            }
+            console.log(`🚀 PublishedRideController: Emitted status [${status}] to Ride ${rideId} and Passengers`);
         }
 
         const tripPhase = status === "in_progress" ? "ongoing"
-            : status === "completed" ? "completed"
-                : status === "arrived" ? "arrived"
-                    : status === "cancelled" ? "cancelled"
-                        : "matched";
+            : status === "reached" ? "reached_destination"
+                : status === "completed" ? "completed"
+                
+                    : status === "arrived" ? "arrived"
+                        : status === "cancelled" ? "cancelled"
+                            : "matched";
 
         const eligiblePhases = {
             arrived: { $in: ["matched"] },
             in_progress: { $in: ["matched", "arrived"] },
-            completed: "ongoing",
-            cancelled: { $in: ["matched", "arrived", "ongoing"] },
+            reached: "ongoing",
+            completed: "reached_destination",
+            cancelled: { $in: ["matched", "arrived", "ongoing", "reached_destination"] },
         };
 
         const query = { publishedRide: rideId, phase: eligiblePhases[status] || { $ne: "cancelled" } };
@@ -699,37 +720,59 @@ export const UpdateRideStatus = async (req, res) => {
                     }
                 });
 
-                // ── DATABASE WALLET PERSISTENCE ──
-                try {
-                    // 1. Credit Platform Commission to SuperAdmin (Revenue)
-                    const platformAccountId = process.env.PLATFORM_ACCOUNT_ID;
-                    if (platformAccountId) {
+
+                // ── Referral Bonus Logic ──
+                const passenger = await UserModel.findById(trip.passenger);
+                if (passenger && passenger.referredBy && (passenger.passengerStats?.totalTrips || 0) === 1) {
+                    const { default: WalletTransaction } = await import("../models/WalletTransaction.js");
+                    const bonus = sysConfig?.referralBonusAmount || 0;
+                    
+                    if (bonus > 0) {
+                        const expiryDays = sysConfig?.referralBonusExpiryDays || 0;
+                        const expiresAt = expiryDays > 0 ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000) : null;
+
                         await WalletTransaction.createTransaction({
-                            user: platformAccountId,
+                            user: passenger.referredBy,
                             type: "credit",
-                            amount: platformEarnings,
-                            description: `Platform commission for ride ${rideId}`,
-                            reference: "trip",
-                            referenceId: rideId
+                            amount: bonus,
+                            reference: "referral",
+                            description: `Referral bonus for ${passenger.name}'s first trip completion.`,
+                            expiresAt
+                        });
+
+                        // ── Send Notification to Referrer ──
+                        await NotificationModel.create({
+                            recipient: passenger.referredBy,
+                            title: "Referral Bonus Credited! 🎁",
+                            message: `₹${bonus} credited to your wallet for referring ${passenger.name}. This amount is usable for ${expiryDays > 0 ? expiryDays : 'unlimited'} days.`,
+                            type: "promo",
+                            metadata: {
+                                bonusAmount: bonus,
+                                refereeName: passenger.name,
+                                expiryDays
+                            }
                         });
                     }
-
-                    // 2. Credit Driver Payout (Earnings)
-                    await WalletTransaction.createTransaction({
-                        user: ride.driver,
-                        type: "credit",
-                        amount: driverPayout,
-                        description: `Earnings for ride ${rideId}`,
-                        reference: "trip",
-                        referenceId: rideId
-                    });
-
-                    trip.paymentStatus = "paid";
-                } catch (walletError) {
-                    console.error("Wallet Transaction Error:", walletError);
-                    // We continue even if wallet fails so the ride isn't stuck, 
-                    // though in production we'd want a retry mechanism.
                 }
+            }
+
+            if (status === "reached") {
+                trip.reachedAt = new Date();
+                // Notify passenger to pay
+                await NotificationModel.create({
+                    recipient: trip.passenger,
+                    sender: req.user.id,
+                    title: "Destination Reached! 📍",
+                    message: "You have reached your destination. Please complete the payment to finish the trip.",
+                    type: "payment_request",
+                    link: `/passenger/dashboard/my-rides`,
+                    metadata: {
+                        rideId,
+                        tripId: trip._id,
+                        amount: trip.fare?.total,
+                        motive: "payment_request"
+                    }
+                });
             }
 
             if (status === "in_progress") {
@@ -778,8 +821,18 @@ export const GetSingleRide = async (req, res) => {
 
         if (!ride) return res.status(404).json({ success: false, message: "Ride not found" });
 
-        res.status(200).json({ success: true, data: ride });
+        const rideObj = ride.toObject();
+        
+        // Find associated trip to get OTP if user is the passenger
+        const TripModel = (await import("../models/Trip.js")).default;
+        const trip = await TripModel.findOne({ publishedRide: rideId, passenger: req.user.id });
+        if (trip) {
+            rideObj.otp = trip.otp;
+        }
+
+        res.status(200).json({ success: true, data: rideObj });
     } catch (error) {
+        console.error("GetSingleRide Error:", error);
         res.status(500).json({ success: false, message: "Error fetching ride details" });
     }
 };

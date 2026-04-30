@@ -6,6 +6,7 @@ import {
   RefreshCw, Lock, Share2, Loader2,
 } from "lucide-react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { useDialog } from "../../context/DialogContext";
 import api from "../../services/api";
 
 const statusColors = {
@@ -16,6 +17,7 @@ const statusColors = {
 
 const DriverBookingsPage = () => {
   const navigate = useNavigate();
+  const { showAlert } = useDialog();
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,7 +43,7 @@ const DriverBookingsPage = () => {
       await api.patch(`/published-rides/${rideId}/bookings/${bookingId}/respond`, { action });
       fetchRides(); // refresh
     } catch (err) {
-      alert(err.response?.data?.message || "Action failed. Please try again.");
+      showAlert(err.response?.data?.message || "Action failed. Please try again.", "Request Error", "error");
     } finally {
       setResponding((prev) => ({ ...prev, [bookingId]: false }));
     }

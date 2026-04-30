@@ -12,6 +12,7 @@ const getImageUrl = (url) => {
   return `${baseUrl}${path}`;
 };
 import api from "../services/api";
+import socket from "../services/socket";
 import { getPassengerHistory, getDriverHistory } from "../services/rideService";
 import {
   MapPin,
@@ -37,6 +38,7 @@ import {
   Mail,
   IndianRupee,
   Activity,
+  ShieldAlert,
 } from "lucide-react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
@@ -85,13 +87,13 @@ const ROLE_CARDS = {
       color: "rose",
       href: "/passenger/dashboard/payments",
     },
-    /* {
+    {
       icon: Users,
       title: "Refer a Friend",
       desc: "Earn credits for every referral",
       color: "cyan",
       href: "/passenger/dashboard/referral",
-    }, */
+    },
     {
       icon: User,
       title: "My Profile",
@@ -137,13 +139,13 @@ const ROLE_CARDS = {
       color: "rose",
       href: "/driver/dashboard/rating",
     },
-    /* {
+    {
       icon: Wallet,
-      title: "Payouts",
-      desc: "Withdraw your earnings",
+      title: "Driver Wallet",
+      desc: "Manage earnings & commission",
       color: "cyan",
-      href: "/driver/dashboard/payouts",
-    }, */
+      href: "/driver/dashboard/wallet",
+    },
     {
       icon: Clock,
       title: "My Rides",
@@ -203,19 +205,26 @@ const ROLE_CARDS = {
       href: "/:role/dashboard/driver-approvals",
     },
     {
+      icon: ShieldAlert,
+      title: "SOS Management",
+      desc: "Emergency alerts and safety",
+      color: "rose",
+      href: "/:role/dashboard/sos",
+    },
+    {
+      icon: IndianRupee,
+      title: "Revenue Entries",
+      desc: "Trip and date wise income",
+      color: "emerald",
+      href: "/:role/dashboard/revenue",
+    },
+    {
       icon: Settings,
       title: "System Settings",
       desc: "Configure platform options",
       color: "cyan",
       href: "/:role/dashboard/settings",
     },
-    {
-      icon: Shield,
-      title: "SOS Management",
-      desc: "Monitor & resolve emergency alerts",
-      color: "rose",
-      href: "/:role/dashboard/sos",
-    }
   ],
 };
 
@@ -541,11 +550,27 @@ const DashboardPage = () => {
     navigate("/signin");
   };
 
+  // Listen for background ride status updates
+  useEffect(() => {
+    if (role === "passenger") {
+      const handleStatusUpdate = (data) => {
+        if (data.status === "reached") {
+           // Redirect passenger immediately to payment UI
+           navigate(`/passenger/live-tracking/${data.rideId}`);
+        }
+      };
+      socket.on("ride_status_update", handleStatusUpdate);
+      return () => {
+        socket.off("ride_status_update", handleStatusUpdate);
+      };
+    }
+  }, [role, navigate]);
+
   let cards = ROLE_CARDS[configRole] || ROLE_CARDS.passenger;
 
   // Filter sensitive links for regular admins
   if (role === "admin" && !isSuper) {
-    cards = cards.filter(card => card.title !== "Analytics");
+    cards = cards.filter(card => card.title !== "Analytics" && card.title !== "Revenue Entries");
   }
 
   const roleInfo = ROLE_LABELS[role] || ROLE_LABELS.passenger;
@@ -599,7 +624,7 @@ const DashboardPage = () => {
             >
               <div className="hidden text-right sm:block">
                 <p className={`mb-0.5 text-[9px] font-bold tracking-[0.2em] uppercase opacity-80 ${user?.role === 'superadmin' ? 'text-amber-500' : 'text-primary'}`}>
-                  {user?.role === 'superadmin' ? 'Super Admin' : 'Admin'}
+                  {user?.role === 'superadmin' ? 'Super Admin' : user?.role === 'admin' ? 'Admin' : user?.role === 'driver' ? 'Driver' : 'Passenger'}
                 </p>
                 <p className="group-hover:text-primary text-sm leading-none font-semibold text-(--text-main) transition-all">
                   {user?.name || "User"}
@@ -746,7 +771,13 @@ const DashboardPage = () => {
                {activities?.filter(a => a.isLive).map((item) => (
                  <div 
                    key={item.id} 
-                   onClick={() => navigate(`/${pathRole}/pickup-map/${item.id}`)}
+                   onClick={() => {
+                      const isOngoing = ["IN_PROGRESS", "REACHED", "COMPLETED"].includes(item.status?.toUpperCase());
+                      const targetPath = role === "passenger"
+                        ? `/passenger/live-tracking/${item.id}`
+                        : (isOngoing ? `/start-ride/${item.id}` : `/pickup-map/${item.id}`);
+                      navigate(targetPath);
+                    }}
                    className={`glass-card group relative overflow-hidden rounded-3xl p-5 border cursor-pointer hover:scale-[1.01] transition-all ${item.bookingStatus === 'cancelled' ? 'border-red-500/30 bg-red-500/5' : 'border-primary/30 bg-primary/5'}`}
                  >
                     <div className="flex items-center justify-between mb-3">

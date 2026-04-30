@@ -113,6 +113,9 @@ const RideMap = ({
   selectedRouteIdx = 0,          // which is highlighted
   onRouteSelect   = null,        // (idx) => void — called when polyline clicked
   isDark          = false,       // dark/light tile switching
+  showUnselected  = false,       // whether to show non-selected routes as dashed
+  primaryColor    = "#6366f1",    // fallback primary color
+  secondaryColor  = "#94a3b8",    // fallback secondary color
 
   // Navigation
   isNavigating    = false,
@@ -170,70 +173,55 @@ const RideMap = ({
         {/* Navigation follower */}
         {isNavigating && currentPos && <NavigationFollower currentPos={currentPos} />}
 
-        {/* ── All route polylines — rendered pre-navigation ─────────────────
-            RENDER ORDER: non-selected first (underneath), selected last (on top)
-            KEY includes selection state to force react-leaflet to remount and
-            correctly apply new pathOptions whenever selection changes.          */}
-        {(!isNavigating || !showSplit) && (() => {
-          // Split: draw unselected below, selected on top
-          const unselected = allRoutes.filter((_, i) => i !== selectedRouteIdx);
-          const selected   = allRoutes.filter((_, i) => i === selectedRouteIdx);
-          return (
-            <>
-              {/* Unselected routes — visible but thinner */}
-              {unselected.map((route) => (
+        {/* ── Route Rendering ───────────────── */}
+        {(!isNavigating || !showSplit) && (
+          <>
+            {/* 1. Render all UNSELECTED routes as dashed */}
+            {showUnselected && allRoutes.map((route, i) => {
+              if (i === selectedRouteIdx) return null;
+              return (
                 <Polyline
-                  key={`unsel-${route.id}`}
+                  key={`unsel-${route.id || i}`}
                   positions={route.coords}
                   pathOptions={{
-                    color:     route.color,
-                    weight:    5,
-                    opacity:   0.70,
-                    dashArray: "12 8",
-                    lineCap:   "round",
+                    color:     route.color || secondaryColor,
+                    weight:    4,
+                    opacity:   0.5,
+                    dashArray: "10, 15",
+                    lineCap:   "butt",
                     lineJoin:  "round",
                   }}
-                  eventHandlers={{
-                    click:     () => onRouteSelect?.(route.id),
-                    mouseover: (e) => e.target.setStyle({ weight: 7, opacity: 0.90, dashArray: null }),
-                    mouseout:  (e) => e.target.setStyle({ weight: 5, opacity: 0.70, dashArray: "12 8" }),
-                  }}
                 />
-              ))}
+              );
+            })}
 
-              {/* Selected route — solid, thick, on top */}
-              {selected.map((route) => (
-                <Polyline
-                  key={`sel-${route.id}`}
-                  positions={route.coords}
-                  pathOptions={{
-                    color:   route.color,
-                    weight:  8,
-                    opacity: 0.95,
-                    lineCap: "round",
-                    lineJoin: "round",
-                  }}
-                />
-              ))}
-            </>
-          );
-        })()}
+            {/* 2. Render the SELECTED route as solid and thick */}
+            {selectedRoute && (
+              <Polyline
+                key={`sel-${selectedRoute.id || selectedRouteIdx}`}
+                positions={selectedRoute.coords}
+                pathOptions={{
+                  color:   selectedRoute.color || primaryColor,
+                  weight:  7,
+                  opacity: 0.9,
+                  lineCap: "round",
+                  lineJoin: "round",
+                }}
+              />
+            )}
+          </>
+        )}
 
-        {/* Route label badge at midpoint of each route */}
-        {!isNavigating && allRoutes.map((route, idx) => {
-          const isSelected = idx === selectedRouteIdx;
-          const mid = route.coords?.[Math.floor((route.coords.length ?? 0) / 2)];
-          if (!mid) return null;
-          return (
-            <Marker
-              key={`lbl-${route.id}-${isSelected}`}    // key change forces icon refresh
-              position={mid}
-              icon={makeRouteLabelIcon(route, isSelected)}
-              zIndexOffset={isSelected ? 500 : 100}
-              eventHandlers={{ click: () => onRouteSelect?.(idx) }}
-            />
-          );
-        })}
+        {/* Route label badge at midpoint of the selected route ONLY */}
+        {!isNavigating && selectedRoute && (
+          <Marker
+            key={`lbl-${selectedRoute.id}-true`}
+            position={selectedRoute.coords?.[Math.floor((selectedRoute.coords.length ?? 0) / 2)]}
+            icon={makeRouteLabelIcon(selectedRoute, true)}
+            zIndexOffset={500}
+            eventHandlers={{ click: () => onRouteSelect?.(selectedRouteIdx) }}
+          />
+        )}
 
         {/* Navigation: travelled segment (grey dashed) */}
         {showSplit && travelledCoords.length > 1 && (

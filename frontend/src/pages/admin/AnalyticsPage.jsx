@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useDialog } from "../../context/DialogContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
 import api from "../../services/api";
@@ -136,6 +137,7 @@ thirtyDaysAgo.setDate(today.getDate() - 30);
 const AnalyticsPage = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const { showAlert } = useDialog();
   const [loading, setLoading] = useState(true);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const reportRef = useRef(null);
@@ -256,7 +258,7 @@ const AnalyticsPage = () => {
 
   const handleApplyDate = () => {
     if (new Date(dateFrom) > new Date(dateTo)) {
-      alert("'From' date must be before 'To' date.");
+      showAlert("'From' date must be before 'To' date.", "Invalid Range", "warning");
       return;
     }
     setAppliedRange({ from: dateFrom, to: dateTo });
@@ -316,7 +318,7 @@ const AnalyticsPage = () => {
       pdf.save(`RouteMate_Analytics_Report.pdf`);
     } catch (err) {
       console.error("PDF generation failed", err);
-      alert("Export Failed: " + err.message);
+      showAlert("Export Failed: " + err.message, "PDF Error", "error");
     } finally {
       setPdfGenerating(false);
     }
@@ -520,7 +522,6 @@ const AnalyticsPage = () => {
             <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-bold tracking-widest uppercase border border-primary/20 flex items-center gap-1.5">
               <Zap size={11} /> Live Metrics
             </span>
-            <span className="text-xs text-(--text-dim) font-medium">Real data · Updated now</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             <StatCard
@@ -557,7 +558,6 @@ const AnalyticsPage = () => {
             <span className="px-3 py-1 bg-amber-500/10 text-amber-400 rounded-full text-[10px] font-bold tracking-widest uppercase border border-amber-500/20 flex items-center gap-1.5">
               <BarChart2 size={11} /> Business Metrics
             </span>
-            <span className="text-xs text-(--text-dim) font-medium italic">Demo data · Connect rides API for live figures</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {UI_STATS.isSuper && (
@@ -641,13 +641,7 @@ const AnalyticsPage = () => {
             </div>
             <div className="space-y-4">
                {UI_STATS.areaBreakdown.map(area => {
-                 // Extract area name (usually second part after comma) if available
-                 const rawLabel = area.label || "Ahmedabad";
-                 const parts = rawLabel.split(',');
-                 const areaPart = parts.length > 1 ? parts[1].trim() : parts[0].trim();
-                 
-                 const isPincode = /^\d+$/.test(areaPart.replace(/\s/g, ''));
-                 const finalLabel = isPincode ? `Area ${areaPart}` : areaPart;
+                const finalLabel = area.label || "Unknown Area";
                 
                 return (
                   <HBar 

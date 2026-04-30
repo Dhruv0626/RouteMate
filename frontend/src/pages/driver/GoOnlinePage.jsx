@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { useDialog } from "../../context/DialogContext";
 import LocationSearch from "../../components/map/LocationSearch";
 import {
   MapContainer,
@@ -69,6 +70,7 @@ const MapClickPicker = ({ pickingMode, onPick }) => {
 // ── Main component ────────────────────────────────────────────────────────────
 const GoOnlinePage = () => {
   const navigate = useNavigate();
+  const { showAlert } = useDialog();
   const [isOnline, setIsOnline] = useState(false);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -251,7 +253,7 @@ const GoOnlinePage = () => {
   };
 
   const handleUseLocation = () => {
-    if (!navigator.geolocation) return alert("Geolocation not supported");
+    if (!navigator.geolocation) return showAlert("Geolocation is not supported by your browser.", "Location Error", "error");
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
       const address = await reverseGeocode(latitude, longitude);
@@ -259,7 +261,7 @@ const GoOnlinePage = () => {
       else if (pickingMode === "destination") setDestPin({ lat: latitude, lng: longitude, address });
       else setSourcePin({ lat: latitude, lng: longitude, address }); // Default to source
       setPickingMode(null);
-    }, () => alert("Could not fetch location"));
+    }, () => showAlert("Could not fetch your live location. Please check your GPS settings.", "Location Error", "error"));
   };
 
   // ── Online toggle ────────────────────────────────────────────────────────────

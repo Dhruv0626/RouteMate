@@ -19,9 +19,11 @@ import rideRoutes from "./src/routes/Ride.js";
 import publishedRideRoutes from "./src/routes/PublishedRide.js";
 import savedPlaceRoutes from "./src/routes/SavedPlace.js";
 import sosRoutes from "./src/routes/SOS.js";
+import paymentRoutes from "./src/routes/Payment.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 import { initSocket } from "./src/utils/SocketManager.js";
 import { initTripMonitorCron } from "./src/utils/TripMonitorCron.js";
+import { razorpayWebhook } from "./src/controllers/PaymentController.js";
 import TripModel from "./src/models/Trip.js";
 
 // ─── Passport Configuration ───────────────────────────────────────────────────
@@ -84,6 +86,9 @@ app.use(
 app.use(cookieParser());
 
 // ─── 4. Body Parsers ──────────────────────────────────────────────────────────
+// Razorpay webhook must be BEFORE express.json() to get the raw body as Buffer for signature verification
+app.post("/api/webhook/razorpay", express.raw({ type: "application/json" }), razorpayWebhook);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -102,6 +107,7 @@ app.use("/api/rides", rideRoutes);
 app.use("/api/published-rides", publishedRideRoutes);
 app.use("/api/saved-places", savedPlaceRoutes);
 app.use("/api/sos", sosRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {

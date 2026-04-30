@@ -47,6 +47,10 @@ const UserSchema = new Schema(
 
     walletBalance: { type: Number, default: 0 },
 
+    // ── Referral (Passenger) ─────────────────────────────────────────────────────
+    referralCode: { type: String, unique: true, sparse: true },  // e.g. "RAHUL50"
+    referredBy:   { type: Schema.Types.ObjectId, ref: "User" },  // passenger who referred
+
     // ── Emergency Contacts (Passenger SOS) ────────────────────────────────────
     emergencyContacts: {
       type: [

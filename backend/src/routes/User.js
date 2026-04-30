@@ -14,7 +14,9 @@ import {
     FinalizeOAuthRegistration,
     UpdateMobileNumber,
     UpdateProfileImage,
-    updateFCMToken
+    updateFCMToken,
+    applyReferralCode,
+    GetReferralStats
 } from "../controllers/UserController.js";
 import { GetSettings } from "../controllers/SystemSettingsController.js";
 import { ForgotPassword, ResetPassword } from "../controllers/PasswordController.js";
@@ -111,7 +113,9 @@ router.get(
 // ─── Protected Routes (JWT required) ─────────────────────────────────────────
 router.get("/profile", authMiddleware, GetProfile);
 router.post("/update-profile-image", authMiddleware, UpdateProfileImage);
-router.post("/update-fcm-token", authMiddleware, updateFCMToken);
+router.patch("/update-fcm", authMiddleware, updateFCMToken);
+router.post("/apply-referral", authMiddleware, applyReferralCode);
+router.get("/referral-stats", authMiddleware, GetReferralStats);
 router.delete("/delete-account", authMiddleware, DeleteUserForSelf);
 
 // ─── System Settings (Read-only for all authenticated users) ─────────────────

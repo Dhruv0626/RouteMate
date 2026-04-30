@@ -122,7 +122,8 @@ const SystemSettingsPage = () => {
     withdrawalMinAmount: 100,
     withdrawalReserveBalance: 50,
     withdrawalDailyMax: 50000,
-    referralBonusAmount: 0
+    referralBonusAmount: 0,
+    referralBonusExpiryDays: 0
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -381,7 +382,7 @@ const SystemSettingsPage = () => {
                         )}
                     </div>
                     <ConfigInput 
-                        label="Platform Account User ID" desc="The central account where all 15% commissions are credited."
+                        label="Platform Account User ID" desc={`The central account where all ${config.commission}% commissions are credited.`}
                         disabled={!isSuper}
                         value={config.platformAccountUserId}
                         onChange={(v) => setConfig({...config, platformAccountUserId: v})}
@@ -447,19 +448,27 @@ const SystemSettingsPage = () => {
                         </div>
                         {isSuper && (
                             <button 
-                                onClick={() => handleSave("Passenger", ["referralBonusAmount"])}
+                                onClick={() => handleSave("Passenger", ["referralBonusAmount", "referralBonusExpiryDays"])}
                                 className="px-4 py-2 rounded-xl bg-primary text-black text-[10px] font-black uppercase hover:scale-105 transition-all"
                             >
                                 Save Passenger Rules
                             </button>
                         )}
                     </div>
-                    <ConfigInput 
-                        label="Referral Bonus Amount" desc="Credited when referred friend completes first trip. 0 = OFF."
-                        disabled={!isSuper}
-                        value={config.referralBonusAmount} prefix="₹" type="number"
-                        onChange={(v) => setConfig({...config, referralBonusAmount: v})}
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <ConfigInput 
+                            label="Referral Bonus Amount" desc="Credited when referred friend completes first trip. 0 = OFF."
+                            disabled={!isSuper}
+                            value={config.referralBonusAmount} prefix="₹" type="number"
+                            onChange={(v) => setConfig({...config, referralBonusAmount: v})}
+                        />
+                        <ConfigInput 
+                            label="Referral Bonus Expiry (Days)" desc="Days before bonus is debited from wallet (0 = no expiry)."
+                            disabled={!isSuper}
+                            value={config.referralBonusExpiryDays} suffix="Days" type="number"
+                            onChange={(v) => setConfig({...config, referralBonusExpiryDays: v})}
+                        />
+                    </div>
                     <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 flex items-start gap-4">
                         <Info size={16} className="text-amber-500 shrink-0 mt-0.5" />
                         <p className="text-[10px] text-amber-500/80 font-medium leading-relaxed">
@@ -561,7 +570,6 @@ const SystemSettingsPage = () => {
            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
            <p className="text-[10px] font-black tracking-widest uppercase">Global Cloud Nodes Live</p>
         </div>
-        <p className="text-[10px] font-black tracking-widest uppercase">Kernel Version 5.1.0-STABLE</p>
       </footer>
     </div>
   );

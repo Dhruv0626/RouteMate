@@ -2,8 +2,10 @@ import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
   Navigation, User as UserIcon, Loader2,
   Play, Square, AlertCircle, CheckCircle2, Shuffle, MapPinOff, ChevronRight,
+  Gift, Ticket
 } from "lucide-react";
 import { useAuth }          from "../context/AuthContext";
+import { useDialog }        from "../context/DialogContext";
 import { useNavigate, useLocation }      from "react-router-dom";
 import ThemeToggle          from "../components/ui/ThemeToggle";
 import LocationSearch       from "../components/map/LocationSearch";
@@ -290,6 +292,7 @@ function Dot({ color }) {
 // ─── RideMapPage ──────────────────────────────────────────────────────────────
 const RideMapPage = () => {
   const { user }   = useAuth();
+  const { showAlert } = useDialog();
   const navigate   = useNavigate();
   const location   = useLocation();
 
@@ -337,17 +340,53 @@ const RideMapPage = () => {
   const [bookingSuccess, setBookingSuccess] = useState(null);
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
 
-  // Fetch system config on mount
+  const [referralInput, setReferralInput] = useState("");
+  const [applyingReferral, setApplyingReferral] = useState(false);
+  const [referralStatus, setReferralStatus] = useState(null);
+
+  const handleApplyReferral = async () => {
+    if (!referralInput.trim()) return;
+    setApplyingReferral(true);
+    setReferralStatus(null);
+    try {
+      const res = await api.post("/users/apply-referral", { code: referralInput });
+      if (res.data.success) {
+        setReferralStatus({ type: "success", msg: res.data.message });
+        setReferralInput("");
+      }
+    } catch (err) {
+      setReferralStatus({ type: "error", msg: err.response?.data?.message || "Failed to apply code" });
+    } finally {
+      setApplyingReferral(false);
+    }
+  };
+
+  // Fetch system config and check for active rides
   useEffect(() => {
-    const fetchConfig = async () => {
+    const fetchConfigAndActiveRide = async () => {
       try {
         const { data } = await api.get("/users/system-settings");
         if (data.success) setSystemConfig(data.settings);
+
+        // Check for active rides to redirect
+        const liveRes = await api.get("/published-rides/live/my-bookings");
+        if (liveRes.data.success && liveRes.data.data.length > 0) {
+           const activeRide = liveRes.data.data.find(r => r.status !== 'completed' && r.status !== 'cancelled');
+           if (activeRide) {
+             // Redirect passengers to their dedicated live tracking page
+             if (activeRide.status === "in_progress" || activeRide.status === "reached") {
+                navigate(`/passenger/live-tracking/${activeRide._id}`, { replace: true });
+             } else {
+                // For pickup phase as well, use the new live tracking page
+                navigate(`/passenger/live-tracking/${activeRide._id}`, { replace: true });
+             }
+           }
+        }
       } catch (err) {
-        console.error("Failed to fetch system config:", err.message);
+        console.error("Failed to fetch initial data:", err.message);
       }
     };
-    fetchConfig();
+    fetchConfigAndActiveRide();
   }, []);
 
   // ─── GPS watch (respects locationTracking setting) ────────────────────────
@@ -392,9 +431,9 @@ const RideMapPage = () => {
       try {
         setTraffic(getTrafficCondition());
         
-        // 1. Fetch routes first to get accurate road distance
+        // 1. Fetch routes first and keep ONLY the single shortest/fastest one
         const fetchedRoutes = await getMultipleRoutes(from, to, systemConfig);
-        setRoutes(fetchedRoutes);
+        setRoutes(fetchedRoutes.length > 0 ? [fetchedRoutes[0]] : []);
 
         // 2. Fetch rides with the precise road distance from the best route
         const bestRouteDist = fetchedRoutes[0]?.distanceKm;
@@ -493,7 +532,7 @@ const RideMapPage = () => {
         setTimeout(() => navigate("/passenger/dashboard"), 2500);
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Booking failed.");
+      showAlert(err.response?.data?.message || "Booking failed.", "Booking Error", "error");
     } finally {
       setBookingLoading(false);
     }
@@ -603,6 +642,47 @@ const RideMapPage = () => {
               The driver picks the route — you pick the vehicle and fare tier. 🚀
             </p>
           </div>
+
+          {/* ── Referral Box (Only for first ride) ── */}
+          {user?.role === "passenger" && (user?.passengerStats?.totalTrips || 0) === 0 && !user?.referredBy && (
+            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 relative overflow-hidden group"
+                 style={{ border: "1px solid var(--card-border)", background: "var(--card-bg)" }}>
+              <div className="absolute -right-2 -top-2 opacity-5 group-hover:rotate-12 transition-transform duration-500">
+                 <Gift size={80} className="text-indigo-500" />
+              </div>
+              <div className="relative z-10 flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <Ticket size={16} className="text-indigo-500" />
+                  <span style={{ fontSize: "13px", fontWeight: 900, color: "var(--text-main)" }}>Referral Code?</span>
+                </div>
+                
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={referralInput}
+                    onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                    placeholder="CODE123"
+                    className="flex-1 px-3 py-2 bg-(--bg-main) border border-(--card-border) rounded-xl text-xs font-black focus:border-indigo-500/60 outline-none uppercase"
+                    style={{ background: "var(--bg-main)", border: "1px solid var(--card-border)", color: "var(--text-main)" }}
+                  />
+                  <button 
+                    onClick={handleApplyReferral}
+                    disabled={applyingReferral || !referralInput}
+                    className="px-4 py-2 bg-indigo-600 text-white font-black rounded-xl text-xs hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {applyingReferral ? "..." : "Apply"}
+                  </button>
+                </div>
+              </div>
+              {referralStatus && (
+                <p className={`text-[10px] font-bold mt-2 px-2 py-1 rounded-lg border inline-block ${
+                  referralStatus.type === 'error' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                }`}>
+                  {referralStatus.msg}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* ── Location Inputs ── */}
           <div className="rounded-2xl p-4 flex flex-col gap-4"

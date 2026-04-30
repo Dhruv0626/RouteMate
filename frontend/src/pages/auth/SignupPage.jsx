@@ -34,8 +34,11 @@ const SignupPage = () => {
   const [role, setRole] = useState("passenger");
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
+    name: "",
+    email: "",
     password: "",
     secretKey: "",
+    appliedReferralCode: "",
   });
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -56,6 +59,7 @@ const SignupPage = () => {
         email: "",
         password: "",
         secretKey: "",
+        appliedReferralCode: "",
       });
       setError("");
       setFieldErrors({});
@@ -412,6 +416,8 @@ const SignupPage = () => {
                     </button>
                   }
                 />
+
+
 
 
                 <div className="pt-2">

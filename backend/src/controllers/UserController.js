@@ -1,4 +1,5 @@
 import UserModel from "../models/User.js";
+import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -542,26 +543,34 @@ export const VerifyEmailOTP = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid or expired OTP code." });
         }
 
-        // 3. CHECK DUPLICATE EMAIL (Just in case another signup finished during the timeframe)
+        // 3. CHECK DUPLICATE EMAIL
         const existing = await UserModel.findOne({ email: decoded.email });
         if (existing) {
             return res.status(409).json({ success: false, message: "User with this email was already registered." });
         }
 
-        // 4. PERSIST USER TO DATABASE (First time storage!)
+        // 4. Generate unique referral code for this user
+        const baseRef = decoded.name.replace(/[^a-zA-Z]/g, "").substring(0, 4).toUpperCase() || "RMAT";
+        let uniqueRefCode = baseRef + Math.floor(1000 + Math.random() * 9000);
+        while (await UserModel.findOne({ referralCode: uniqueRefCode })) {
+            uniqueRefCode = baseRef + Math.floor(1000 + Math.random() * 9000);
+        }
+
+        // 5. PERSIST USER TO DATABASE (First time storage!)
         const user = await UserModel.create({
             name: decoded.name,
             email: decoded.email,
             password: decoded.password, // Already hashed
             Mobile_no: decoded.Mobile_no,
             role: decoded.role,
-            isVerified: true
+            isVerified: true,
+            referralCode: uniqueRefCode
         });
 
         // 🧹 Update cache for Admin dashboard stats
         await cacheService.del("admin:dashboard-stats");
 
-        // 5. Sign in user immediately
+        // 6. Sign in user immediately
         const accessToken = generateAccessToken(user);
         const refreshToken = generateRefreshToken(user);
 
@@ -815,5 +824,118 @@ export const updateFCMToken = async (req, res) => {
     } catch (error) {
         console.error("Update FCM Token Error:", error);
         res.status(500).json({ success: false, message: "Server error updating token" });
+    }
+};
+
+/**
+ * Apply Referral Code (Passenger First Trip)
+ */
+export const applyReferralCode = async (req, res) => {
+    try {
+        const { code } = req.body;
+        const userId = req.user.id;
+
+        if (!code) {
+            return res.status(400).json({ success: false, message: "Referral code is required." });
+        }
+
+        const user = await UserModel.findById(userId);
+        if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+        if (user.role !== "passenger") {
+            return res.status(400).json({ success: false, message: "Referrals only available for passengers." });
+        }
+
+        if ((user.passengerStats?.totalTrips || 0) > 0) {
+            return res.status(400).json({ success: false, message: "Referral code can only be applied before your first trip." });
+        }
+
+        if (user.referredBy) {
+            return res.status(400).json({ success: false, message: "You have already applied a referral code." });
+        }
+
+        const referrer = await UserModel.findOne({ referralCode: code.toUpperCase() });
+        if (!referrer) {
+            return res.status(400).json({ success: false, message: "Invalid referral code." });
+        }
+
+        if (referrer._id.toString() === userId.toString()) {
+            return res.status(400).json({ success: false, message: "You cannot refer yourself." });
+        }
+
+        user.referredBy = referrer._id;
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: `Referral code applied! You are referred by ${referrer.name}.`,
+            referrerName: referrer.name
+        });
+
+    } catch (error) {
+        console.error("Apply Referral Error:", error.message);
+        res.status(500).json({ success: false, message: "Server error while applying referral code." });
+    }
+};
+
+/**
+ * Get User Referral Statistics
+ */
+export const GetReferralStats = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        let user = await UserModel.findById(userId).select("referralCode name");
+        
+        if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+        // ── Auto-generate code if missing (for legacy users) ──
+        if (!user.referralCode) {
+            const baseRef = user.name.replace(/[^a-zA-Z]/g, "").substring(0, 4).toUpperCase() || "RMAT";
+            let uniqueRefCode = baseRef + Math.floor(1000 + Math.random() * 9000);
+            
+            // Basic collision check
+            let exists = await UserModel.findOne({ referralCode: uniqueRefCode });
+            while (exists) {
+                uniqueRefCode = baseRef + Math.floor(1000 + Math.random() * 9000);
+                exists = await UserModel.findOne({ referralCode: uniqueRefCode });
+            }
+            
+            user.referralCode = uniqueRefCode;
+            await user.save();
+        }
+
+        // Count how many people joined using this code
+        const joinedCount = await UserModel.countDocuments({ referredBy: userId });
+
+        // Total earnings from referrals
+        const WalletTransaction = mongoose.model("WalletTransaction");
+        const walletTx = await WalletTransaction.find({ 
+            user: userId, 
+            reference: "referral" 
+        });
+        const totalEarned = walletTx.reduce((sum, tx) => sum + tx.amount, 0);
+
+        // Get list of recent referrals (names and dates)
+        const recentReferrals = await UserModel.find({ referredBy: userId })
+            .select("name createdAt")
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .lean();
+
+        res.status(200).json({
+            success: true,
+            data: {
+                referralCode: user.referralCode,
+                joinedCount,
+                totalEarned,
+                recentReferrals: recentReferrals.map(r => ({
+                    name: r.name,
+                    date: new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                }))
+            }
+        });
+    } catch (error) {
+        console.error("Get Referral Stats Error:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch referral statistics" });
     }
 };

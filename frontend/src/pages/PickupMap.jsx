@@ -117,13 +117,17 @@ const PickupMap = () => {
         return { ...prev, status: data.status };
       });
       
-      if (data.status === "completed") {
-        showAlert("Your ride has been completed successfully! Thank you for choosing RouteMate.", "Ride Completed", "success");
-        setTimeout(() => navigate("/passenger/dashboard"), 3500);
+      if (data.status === "in_progress" || data.status === "reached") {
+         const msg = data.status === "in_progress" ? "Your trip has started! Redirecting..." : "Destination reached! Redirecting to payment...";
+         showAlert(msg, "Trip Update", "success");
+         setTimeout(() => {
+           const targetPath = user.role === "passenger" ? `/passenger/live-tracking/${rideId}` : `/start-ride/${rideId}`;
+           navigate(targetPath);
+         }, 2000);
       }
-      if (data.status === "in_progress") {
-         showAlert("Your trip has started! Redirecting to live tracking...", "Trip Started", "success");
-         setTimeout(() => navigate(`/start-ride/${rideId}`), 2000);
+      if (data.status === "completed") {
+        showAlert("Your ride has been completed successfully!", "Ride Completed", "success");
+        setTimeout(() => navigate("/passenger/dashboard"), 3500);
       }
       if (data.status === "cancelled") {
         showAlert("The driver has cancelled this ride.", "Ride Cancelled", "error");
@@ -158,6 +162,19 @@ const PickupMap = () => {
         const res = await api.get(`/published-rides/${rideId}`);
         if (res.data.success) {
           const found = res.data.data;
+          
+          // If passenger, redirect to PassengerLiveTracking
+          if (user.role === "passenger") {
+            navigate(`/passenger/live-tracking/${rideId}`, { replace: true });
+            return;
+          }
+
+          // If ride is already in progress or reached, redirect to start-ride (for drivers)
+          if (found.status === "in_progress" || found.status === "reached" || found.status === "completed") {
+            navigate(`/start-ride/${rideId}`, { replace: true });
+            return;
+          }
+
           setRide(found);
           setIsDriver(user.role === "driver" || found.driver?._id === user.id);
         }
@@ -492,7 +509,7 @@ const PickupMap = () => {
           <MapContainer center={mapCenter} zoom={14} className="w-full h-full" zoomControl={false} ref={setMap}>
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             maxZoom={19}
           />
 

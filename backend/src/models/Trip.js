@@ -15,7 +15,8 @@ const TripSchema = new Schema(
         "matched",       // driver accepted, heading to pickup
         "arrived",       // driver reached pickup point, waiting for OTP
         "ongoing",       // OTP verified, ride started
-        "completed",     // ride finished
+        "reached_destination", // driver reached dropoff, waiting for payment
+        "completed",     // payment received, ride finished
         "cancelled",     // cancelled at any phase
       ],
       default: "searching",
@@ -96,12 +97,12 @@ const TripSchema = new Schema(
 
     // ── SOS Auto-Detection Fields ───────────────────────────────────────────────
     lastDistanceToDestination: { type: Number },    // km — Haversine check
-    consecutiveNoProgress:     { type: Number, default: 0 }, // counter — resets on progress
-    passengerConfirmedSafe:    { type: Boolean, default: false }, // true = SOS cancelled
-    sosWarningSentAt:          { type: Date },       // timestamp of last "Are you safe?" notification
-    stoppedAt:                 { type: Date },       // when driver stopped (speed < 3 km/h)
-    emergencyToken:            { type: String },
-    emergencyTokenExpiry:      { type: Date },
+    consecutiveNoProgress: { type: Number, default: 0 }, // counter — resets on progress
+    passengerConfirmedSafe: { type: Boolean, default: false }, // true = SOS cancelled
+    sosWarningSentAt: { type: Date },       // timestamp of last "Are you safe?" notification
+    stoppedAt: { type: Date },       // when driver stopped (speed < 3 km/h)
+    emergencyToken: { type: String },
+    emergencyTokenExpiry: { type: Date },
   },
   { timestamps: true }
 );

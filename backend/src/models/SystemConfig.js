@@ -111,6 +111,8 @@ const SystemConfigSchema = new Schema(
         withdrawalReserveBalance: { type: Number, default: 50 },
         withdrawalDailyMax: { type: Number, default: 50000 },
         referralBonusAmount: { type: Number, default: 0 },
+        referralBonusExpiryDays: { type: Number, default: 30 },
+        // 0 = no expiry; set by superadmin
 
         // ── Audit ──────────────────────────────────────────────────────────────
         updatedAt: { type: Date },

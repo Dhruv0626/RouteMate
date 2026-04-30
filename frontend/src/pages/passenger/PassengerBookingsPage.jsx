@@ -63,7 +63,7 @@ const PassengerBookingsPage = () => {
           <div className="flex flex-col items-center gap-3 py-20 text-(--text-dim)">
             <Car size={48} className="opacity-20" />
             <p className="font-bold text-(--text-main)">No booked rides yet</p>
-            <button onClick={() => navigate("/passenger/dashboard/find-rides")}
+            <button onClick={() => navigate("/passenger/dashboard/ride")}
               className="mt-2 px-5 py-2.5 bg-primary text-black font-bold rounded-xl text-sm hover:scale-105 transition-all">
               Find a Ride
             </button>
@@ -113,7 +113,7 @@ const PassengerBookingsPage = () => {
                    <Clock size={14} /> {dep.toLocaleString("en-IN", { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" })}
                  </span>
                  <span className="flex items-center gap-1 font-semibold text-primary">
-                   <IndianRupee size={14} /> ₹{myBooking.amountPaid}
+                   <IndianRupee size={14} /> {myBooking.amountPaid}
                  </span>
                </div>
 

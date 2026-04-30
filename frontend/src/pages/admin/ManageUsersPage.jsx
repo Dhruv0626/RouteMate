@@ -42,6 +42,10 @@ const ManageUsersPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [actionLoading, setActionLoading] = useState(null); // stores userId currently being updated
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditDescription, setCreditDescription] = useState("");
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const { showAlert, showConfirm } = useDialog();
@@ -61,6 +65,33 @@ const ManageUsersPage = () => {
       console.error("Failed to fetch users", error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdminCredit = async () => {
+    if (!creditAmount || isNaN(creditAmount) || Number(creditAmount) <= 0) {
+      showAlert("Please enter a valid amount greater than 0", "Invalid Amount", "error");
+      return;
+    }
+    
+    try {
+      setActionLoading(selectedUser._id);
+      const { data } = await api.post("/payments/admin-credit", {
+        targetUserId: selectedUser._id,
+        amount: Number(creditAmount),
+        description: creditDescription || "Support team credit",
+      });
+      if (data.success) {
+        showAlert(`Successfully credited ₹${creditAmount} to ${selectedUser.name}'s wallet.`, "Credit Applied", "success");
+        setWalletModalOpen(false);
+        setCreditAmount("");
+        setCreditDescription("");
+        fetchUsers(); // Refresh the list
+      }
+    } catch (error) {
+      showAlert(error.response?.data?.message || "Credit failed", "Error", "error");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -289,6 +320,18 @@ const ManageUsersPage = () => {
                         </button>
 
                         <button 
+                          onClick={() => {
+                            setSelectedUser(u);
+                            setWalletModalOpen(true);
+                          }}
+                          disabled={actionLoading === u._id}
+                          className="p-2.5 rounded-xl border border-primary/20 bg-primary/10 text-primary hover:bg-primary hover:text-black transition-all"
+                          title="Add Wallet Credit"
+                        >
+                          ₹
+                        </button>
+
+                        <button 
                           onClick={() => handleDeleteUser(u._id, u.name)}
                           disabled={actionLoading === u._id}
                           className="p-2.5 rounded-xl border border-red-500/20 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all"
@@ -338,6 +381,57 @@ const ManageUsersPage = () => {
         <p className="text-[10px] font-bold tracking-widest uppercase">Safe & Secure Panel</p>
         <p className="text-[10px] font-bold tracking-widest uppercase">RouteMate Infrastructure</p>
       </footer>
+
+      {/* Admin Credit Modal */}
+      {walletModalOpen && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass-card max-w-sm w-full rounded-3xl p-6 shadow-2xl border border-(--card-border) animate-in fade-in zoom-in duration-200">
+            <h3 className="text-xl font-black mb-2 text-(--text-main)">Adjust Wallet</h3>
+            <p className="text-sm text-(--text-dim) mb-6">
+              Add credit to <span className="font-bold text-primary">{selectedUser.name}</span>'s wallet balance.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-(--text-dim) block mb-2">Amount (₹)</label>
+                <input 
+                  type="number"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(e.target.value)}
+                  placeholder="e.g. 500"
+                  className="w-full bg-black/5 dark:bg-black/20 border border-(--card-border) rounded-xl p-3 outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold tracking-widest uppercase text-(--text-dim) block mb-2">Reason / Description</label>
+                <input 
+                  type="text"
+                  value={creditDescription}
+                  onChange={(e) => setCreditDescription(e.target.value)}
+                  placeholder="e.g. Refund for trip #123"
+                  className="w-full bg-black/5 dark:bg-black/20 border border-(--card-border) rounded-xl p-3 outline-none focus:border-primary/50"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button 
+                onClick={() => setWalletModalOpen(false)}
+                className="flex-1 py-3 rounded-xl border border-(--card-border) font-bold hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAdminCredit}
+                disabled={actionLoading === selectedUser._id}
+                className="flex-1 py-3 rounded-xl bg-primary text-black font-black hover:bg-primary/90 transition-all flex justify-center items-center"
+              >
+                {actionLoading === selectedUser._id ? <RefreshCw className="animate-spin" size={18} /> : "Apply Credit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

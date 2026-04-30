@@ -7,12 +7,14 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { useDialog } from "../../context/DialogContext";
 import Loader from "../../components/ui/Loader";
 import api from "../../services/api";
 
 const SecurityPage = () => {
   const navigate = useNavigate();
   const { user: currentUser } = useAuth();
+  const { showAlert } = useDialog();
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -38,7 +40,7 @@ const SecurityPage = () => {
     setScanning(true);
     setTimeout(() => {
       setScanning(false);
-      alert("Platform Scan Complete: 0 Vulnerabilities Detected. Firewall integrity is nominal.");
+      showAlert("Platform Scan Complete: 0 Vulnerabilities Detected. Firewall integrity is nominal.", "Security Scan", "success");
     }, 2500);
   };
 

@@ -7,12 +7,14 @@ import {
 } from "lucide-react";
 import api from "../../services/api";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { useDialog } from "../../context/DialogContext";
 import { fetchOsrmVia } from "../../utils/geocode";
 
 const RideMap = lazy(() => import("../../components/map/RideMap"));
 
 const RideRequestDetailsPage = () => {
   const { rideId, bookingId } = useParams();
+  const { showAlert } = useDialog();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -79,13 +81,13 @@ const RideRequestDetailsPage = () => {
         if (!pickup.lat || !dropoff.lat) return;
 
         const route = await fetchOsrmVia(
-          { lat: driverLoc.lat, lng: driverLoc.lng }, // Start: Driver current location
-          pickup,                                     // Via: Passenger pickup
+          pickup,                                     // Start: Passenger pickup
+          null,                                       // No via
           dropoff                                     // End: Passenger dropoff
         );
 
         if (route) {
-          setOptimizedRoute(route.coords);
+          setOptimizedRoute(route);
         }
       } catch (err) {
         console.error("Failed to fetch optimized route:", err);
@@ -109,7 +111,7 @@ const RideRequestDetailsPage = () => {
         navigate("/driver/dashboard/bookings");
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Action failed. Please try again.");
+      showAlert(err.response?.data?.message || "Action failed. Please try again.", "Request Error", "error");
     } finally {
       setResponding(false);
     }
@@ -186,19 +188,37 @@ const RideRequestDetailsPage = () => {
               }}
               userLocation={driverLoc} 
               driverVehicleType={ride.vehicleType} 
-              allRoutes={optimizedRoute ? [{
-                id: "optimized-route",
-                coords: optimizedRoute,
-                color: "#6366f1",
-                label: "Required Route"
-              }] : (ride.routeCoords?.length ? [{
-                id: ride._id,
-                coords: ride.routeCoords.map(c => [c[1], c[0]]),
-                color: "#6366f1",
-                label: "Planned Route"
-              }] : [])}
+              allRoutes={(() => {
+                const routes = [];
+                // 1. Prefer Optimized Route (Detour)
+                if (optimizedRoute) {
+                  const s = optimizedRoute.durationS || 0;
+                  const durationMin = Math.max(1, Math.round(s / 60));
+                  
+                  routes.push({
+                    id: "optimized-detour",
+                    coords: optimizedRoute.coords,
+                    color: "#6366f1", // indigo
+                    label: "Required Route",
+                    durationMin: durationMin,
+                    distanceStr: optimizedRoute.distanceStr
+                  });
+                }
+                // 2. Fallback to Planned Route ONLY if no optimized route yet
+                else if (ride?.routeCoords?.length) {
+                  routes.push({
+                    id: "original-plan",
+                    coords: ride.routeCoords.map(c => [c[1], c[0]]),
+                    color: "#6366f1", 
+                    label: "Planned Route",
+                    durationMin: ride.durationMin || 0
+                  });
+                }
+                return routes;
+              })()}
               availableRides={[]}
               selectedRouteIdx={0}
+              showUnselected={false}
               isNavigating={false} 
            />
         </Suspense>

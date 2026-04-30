@@ -38,9 +38,14 @@ const PaymentSchema = new Schema(
       default: "pending",
     },
 
-    // ── Wallet Transaction Links (populated only when method = "wallet") ───
+    // ── Wallet Transaction Links (populated only when method = "wallet" or "upi") ───
     passengerWalletTx: { type: Schema.Types.ObjectId, ref: "WalletTransaction" }, // debit
     driverWalletTx:    { type: Schema.Types.ObjectId, ref: "WalletTransaction" }, // credit
+    platformWalletTx:  { type: Schema.Types.ObjectId, ref: "WalletTransaction" }, // superadmin credit
+
+    // ── Razorpay Reference ─────────────────────────────────────────────────────
+    razorpayOrderId:   { type: String, default: "" },  // Razorpay order_id
+    razorpayPaymentId: { type: String, default: "" },  // Razorpay payment_id
 
     // ── UPI Reference (populated only when method = "upi") ────────────────
     upiTransactionId:  { type: String, default: "" },
@@ -54,7 +59,7 @@ const PaymentSchema = new Schema(
   { timestamps: true }
 );
 
-PaymentSchema.index({ trip: 1 });
+
 PaymentSchema.index({ passenger: 1, createdAt: -1 });
 PaymentSchema.index({ driver:    1, createdAt: -1 });
 

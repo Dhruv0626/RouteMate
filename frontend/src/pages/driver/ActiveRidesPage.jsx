@@ -315,7 +315,8 @@ const ActiveRidesPage = () => {
                           const idStr = typeof id === 'object' ? id._id : id;
                           navigate(`/pickup-map/${idStr}`);
                         }}
-                        className="flex items-center justify-center gap-2 py-3 px-4 bg-amber-400 hover:bg-amber-500 text-black rounded-lg font-bold transition"
+                        disabled={ride.phase === "ongoing"}
+                        className="flex items-center justify-center gap-2 py-3 px-4 bg-amber-400 hover:bg-amber-500 disabled:bg-gray-200 dark:disabled:bg-gray-800 disabled:text-gray-400 disabled:cursor-not-allowed text-black rounded-lg font-bold transition"
                       >
                         <Navigation className="w-5 h-5" />
                         Pickup Point

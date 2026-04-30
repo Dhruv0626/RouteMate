@@ -11,6 +11,7 @@ import {
 import L from "leaflet";
 import { makePin } from "../../utils/mapIcons";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { useDialog } from "../../context/DialogContext";
 import LocationSearch from "../../components/map/LocationSearch";
 import api from "../../services/api";
 import { reverseGeocode } from "../../utils/geocode";
@@ -37,6 +38,7 @@ const MapPicker = ({ mode, onPick }) => {
 
 // ── Booking Modal ─────────────────────────────────────────────────────────────
 const BookingModal = ({ ride, onClose, onBooked }) => {
+  const { showAlert } = useDialog();
   const [pickMode, setPickMode] = useState(null); // "source" | "dest"
   const [srcPin, setSrcPin]     = useState(null);
   const [dstPin, setDstPin]     = useState(null);
@@ -62,7 +64,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
   };
 
   const handleUseLocation = () => {
-    if (!navigator.geolocation) return alert("Geolocation not supported");
+    if (!navigator.geolocation) return showAlert("Geolocation is not supported by your browser.", "Location Error", "error");
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
       const address = await reverseGeocode(latitude, longitude);
@@ -70,7 +72,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
       else if (pickMode === "dest") setDstPin({ lat: latitude, lng: longitude, address });
       else setSrcPin({ lat: latitude, lng: longitude, address }); // Default to source if no mode picked
       setPickMode(null);
-    }, () => alert("Could not fetch location"));
+    }, () => showAlert("Could not fetch your live location. Please check your GPS settings.", "Location Error", "error"));
   };
 
   // Live fare estimate + Road routing

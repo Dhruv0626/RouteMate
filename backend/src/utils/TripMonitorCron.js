@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import mongoose from "mongoose";
 import TripModel from "../models/Trip.js";
 import SOSModel from "../models/SOS.js";
 import { notifyUser } from "./NotifyUtil.js";
@@ -48,6 +49,7 @@ const checkStoppedDriver = async (trip) => {
   const now = Date.now();
   const STOP_LIMIT_MS = 15 * 60 * 1000; // 15 minutes
   const CONFIRM_WINDOW_MS = 3 * 60 * 1000; // 3 minutes after warning
+  const confirmedSafe = trip.passengerConfirmedSafe;
 
   if (!trip.stoppedAt) return; // driver is moving
 
@@ -57,7 +59,7 @@ const checkStoppedDriver = async (trip) => {
     // Check if we already sent a warning
     if (trip.sosWarningSentAt) {
       const warnedMs = now - new Date(trip.sosWarningSentAt).getTime();
-      if (warnedMs >= CONFIRM_WINDOW_MS && !trip.passengerConfirmedSafe) {
+      if (warnedMs >= CONFIRM_WINDOW_MS && !confirmedSafe) {
         // Passenger didn't confirm safe within 3 min → trigger SOS
         console.log(`🆘 Auto-SOS: driver stopped 15+ min — Trip: ${trip._id}`);
         await triggerSOS({ tripId: trip._id, triggerMethod: "auto_timeout" });
@@ -81,16 +83,8 @@ const checkRouteDeviation = async (trip) => {
   const destCoords = trip.destination?.location?.coordinates;
   if (!destCoords || destCoords.length < 2) return; // No destination to check
 
-  const [destLng, destLat] = destCoords;
-
   // We need the driver's current location (stored via location update events)
-  // If trip has a lastKnownLocation (stored by socket), we can use it.
-  // For now we track via `lastDistanceToDestination` stored by the location-update socket handler.
   if (trip.lastDistanceToDestination === null || trip.lastDistanceToDestination === undefined) return;
-
-  // This is set by the socket handler on each driver location update.
-  // consecutiveNoProgress tracks how many cron cycles (2 min each) the driver moved further.
-  // 3 consecutive checks = 6 minutes of wrong direction.
 
   if (trip.consecutiveNoProgress >= 3) {
     if (trip.sosWarningSentAt) {
@@ -123,7 +117,6 @@ const runTripMonitor = async () => {
 
     if (ongoingTrips.length === 0) return;
 
-
     for (const trip of ongoingTrips) {
       // Skip if an active SOS already exists
       const activeSOS = await SOSModel.findOne({ trip: trip._id, status: "active" });
@@ -141,13 +134,67 @@ const runTripMonitor = async () => {
   }
 };
 
+// ─── Referral Bonus Expiry Job (Runs daily at midnight) ─────────────────────
+const expireReferralBonuses = async () => {
+  try {
+    const WalletTransaction = mongoose.model("WalletTransaction");
+    const User = mongoose.model("User");
+    
+    // Find all referral credits that have expired and haven't been marked as processed
+    const now = new Date();
+    const expiredTxs = await WalletTransaction.find({
+      reference: "referral",
+      type: "credit",
+      expiresAt: { $lte: now },
+      isExpired: false
+    });
+
+    if (expiredTxs.length === 0) return;
+
+    console.log(`[ReferralExpiryCron] Processing ${expiredTxs.length} expired bonuses...`);
+
+    for (const tx of expiredTxs) {
+      const user = await User.findById(tx.user);
+      if (!user) continue;
+
+      // Debit the amount (capped at current balance)
+      const debitAmount = Math.min(tx.amount, user.walletBalance);
+      
+      if (debitAmount > 0) {
+        await WalletTransaction.createTransaction({
+          user: user._id,
+          type: "debit",
+          amount: debitAmount,
+          reference: "promo",
+          description: `Deduction: Referral bonus (₹${tx.amount}) expired.`
+        });
+      }
+
+      // Mark original tx as expired so we don't process it again
+      tx.isExpired = true;
+      await tx.save();
+
+      // Notify user
+      await notifyUser({
+        userId: user._id,
+        title: "Bonus Expired ⏰",
+        message: `Your referral bonus of ₹${tx.amount} has expired and been removed from your wallet.`,
+        type: "info"
+      });
+    }
+  } catch (err) {
+    console.error("[ReferralExpiryCron] Error:", err.message);
+  }
+};
+
 // ─── Export: Initialize Cron ─────────────────────────────────────────────────
 /**
- * Runs every 2 minutes — checks all ongoing trips for:
- *   1. Driver stopped 15+ min (auto_timeout)
- *   2. Driver moving away from destination for 3 consecutive checks (route_deviation)
+ * Runs every 2 minutes — checks all ongoing trips for SOS conditions.
+ * Also runs daily at midnight to expire referral bonuses.
  */
 export const initTripMonitorCron = () => {
   cron.schedule("*/2 * * * *", runTripMonitor);
-
+  
+  // Daily at midnight
+  cron.schedule("0 0 * * *", expireReferralBonuses);
 };
