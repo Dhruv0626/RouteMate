@@ -108,14 +108,14 @@ export async function fetchRoute(fromLat, fromLng, toLat, toLng, { signal, steps
     const r = parseOsrmRaw(osrmRoutes[0]);
     let routeSteps = [];
     if (steps) routeSteps = osrmRoutes[0].legs?.[0]?.steps || [];
-    return { ...r, durationMin: Math.round(r.durationSecs / 60), steps: routeSteps };
+    return { ...r, durationMin: Math.round(r.distanceKm * 2), steps: routeSteps };
   }
 
   // 2. Try Valhalla
   const valRoutes = await fetchValhalla(fromLng, fromLat, toLng, toLat, { signal });
   if (valRoutes?.length) {
     const r = parseOsrmRaw(valRoutes[0]);
-    return { ...r, durationMin: Math.round(r.durationSecs / 60), steps: [] };
+    return { ...r, durationMin: Math.round(r.distanceKm * 2), steps: [] };
   }
 
   // 3. Straight-line fallback (no real geometry, at least gives a distance)
@@ -144,7 +144,8 @@ export async function fetchRouteInfo(fromLat, fromLng, toLat, toLng) {
       const data = await res.json();
       if (data.code === "Ok" && data.routes?.[0]) {
         const r = data.routes[0];
-        return { distanceKm: parseFloat((r.distance / 1000).toFixed(1)), durationMin: Math.round(r.duration / 60) };
+        const distKm = parseFloat((r.distance / 1000).toFixed(1));
+        return { distanceKm: distKm, durationMin: Math.round(distKm * 2) };
       }
     }
   } catch { /* fall through */ }
@@ -191,8 +192,7 @@ export async function fetchMultipleRoutes(pickup, dropoff, systemConfig = null, 
 
   return pool.slice(0, 3).map((r, idx) => {
     const distanceKm  = parseFloat((r.distanceKm ?? r.distanceM / 1000).toFixed(1));
-    const rawMin      = Math.round((r.durationSecs ?? r.durationS) / 60);
-    const durationMin = Math.max(1, Math.round(rawMin * trafficMultiplier));
+    const durationMin = Math.max(1, Math.round(distanceKm * 2));
     const meta        = ROUTE_META[idx] ?? { label: `Route ${idx + 1}`, tag: "", color: "#6366f1" };
     return {
       id: idx, label: meta.label, tag: meta.tag, color: meta.color,
