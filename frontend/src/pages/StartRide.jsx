@@ -73,7 +73,7 @@ const fetchOSRM = async (fromLat, fromLng, toLat, toLng, signal) => {
   if (result) {
     return {
       path: result.path,
-      etaMins: Math.round(result.durationSecs * 1.4 / 60),
+      etaMins: Math.round(result.distanceKm * 2),
       distKm: parseFloat(result.distanceKm.toFixed(1)),
       steps: result.steps || [],
     };
@@ -380,8 +380,9 @@ const StartRide = () => {
           const res  = await fetch(url);
           const data = await res.json();
           if (data.code === "Ok" && data.routes?.[0]) {
-            setEtaMins(Math.round((data.routes[0].duration * 1.4) / 60));
-            setRouteDistKm(Math.round(data.routes[0].distance / 100) / 10);
+            const dKm = data.routes[0].distance / 1000;
+            setEtaMins(Math.round(dKm * 2));
+            setRouteDistKm(Math.round(dKm * 10) / 10);
           }
         } catch (_) {}
       })();

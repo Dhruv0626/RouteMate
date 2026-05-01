@@ -314,7 +314,7 @@ const PassengerLiveTracking = () => {
                setDisplayRoute(result.path);
                lastFetchedRouteKeyRef.current = routeKey;
                if (isPickup) {
-                 setLiveEtaMins(Math.round(result.durationSecs * 1.4 / 60));
+                 setLiveEtaMins(Math.round(result.distanceKm * 2));
                }
             }
           } catch (err) {
@@ -329,7 +329,7 @@ const PassengerLiveTracking = () => {
           const info = await routingFetchInfo(
             effectiveDriverLocation.lat, effectiveDriverLocation.lng, destCoords[0], destCoords[1]
           );
-          if (info) setDestEtaMins(Math.round(info.durationMin * 1.4));
+          if (info) setDestEtaMins(Math.round(info.distanceKm * 2));
         } catch (err) {
           console.error("Failed to fetch live ETA", err);
         }
@@ -338,7 +338,7 @@ const PassengerLiveTracking = () => {
           const info = await routingFetchInfo(
             effectiveDriverLocation.lat, effectiveDriverLocation.lng, routeEnd[0], routeEnd[1]
           );
-          if (info) setLiveEtaMins(Math.round(info.durationMin * 1.4));
+          if (info) setLiveEtaMins(Math.round(info.distanceKm * 2));
         } catch (err) {
           console.error("Failed to fetch live ETA", err);
         }
