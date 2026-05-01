@@ -363,7 +363,7 @@ const RideMapPage = () => {
         if (data.success) setSystemConfig(data.settings);
 
         // Check for active rides to redirect
-        const liveRes = await api.get("/published-rides/live/my-bookings");
+        const liveRes = await api.get("/published-rides/my-booked");
         if (liveRes.data.success && liveRes.data.data.length > 0) {
            const activeRide = liveRes.data.data.find(r => r.status !== 'completed' && r.status !== 'cancelled');
            if (activeRide) {

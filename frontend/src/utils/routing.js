@@ -160,7 +160,7 @@ export async function fetchRouteInfo(fromLat, fromLng, toLat, toLng) {
  * Fetch multiple alternative routes.
  * Returns array of route objects shaped for RideMapPage (same as getMultipleRoutes in geocode.js).
  */
-export async function fetchMultipleRoutes(pickup, dropoff, systemConfig = null, trafficMultiplier = 1.0) {
+export async function fetchMultipleRoutes(pickup, dropoff, systemConfig = null) {
   if (!pickup || !dropoff) return [];
 
   // 1. Try OSRM mirror with alternatives=true (up to 3 routes in one call)
@@ -196,7 +196,7 @@ export async function fetchMultipleRoutes(pickup, dropoff, systemConfig = null, 
     const meta        = ROUTE_META[idx] ?? { label: `Route ${idx + 1}`, tag: "", color: "#6366f1" };
     return {
       id: idx, label: meta.label, tag: meta.tag, color: meta.color,
-      distanceKm, distanceStr: `${distanceKm} km`, durationMin, durationRaw: rawMin,
+      distanceKm, distanceStr: `${distanceKm} km`, durationMin, durationRaw: durationMin,
       coords: r.path ?? r.coords,
     };
   });

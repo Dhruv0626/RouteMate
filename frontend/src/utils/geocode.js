@@ -215,8 +215,7 @@ export const ROUTE_META = [
 // ─── Multi-route (delegates to resilient routing.js) ─────────────────────────
 export async function getMultipleRoutes(pickup, dropoff, systemConfig = null) {
   if (!pickup || !dropoff) return [];
-  const traffic = getTrafficCondition();
-  return _fetchMultipleRoutes(pickup, dropoff, systemConfig, traffic.multiplier);
+  return _fetchMultipleRoutes(pickup, dropoff, systemConfig);
 }
 
 // ─── Legacy via-waypoint (now uses routing.js internally) ────────────────────

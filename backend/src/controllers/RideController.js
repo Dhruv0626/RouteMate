@@ -41,7 +41,10 @@ const calculateFare = async (distanceKm, vehicleType) => {
     surge_cap: parse(pricing.surgeCap || (is_ev ? 1.5 : 1.8)),
     distance_km: distanceKm,
     time_min: distanceKm * 2, // Estimate 2 mins per km
-    is_night: new Date().getHours() >= 22 || new Date().getHours() < 6,
+    is_night: (() => {
+        const istHour = new Date(Date.now() + (5.5 * 60 * 60 * 1000)).getUTCHours();
+        return istHour >= 22 || istHour < 6;
+    })(),
     total_requests: Math.max(total_requests, 5),
     available_drivers: Math.max(available_drivers, 5)
   });
@@ -103,11 +106,13 @@ export const GetDriverHistory = async (req, res) => {
       .populate("passenger", "name email profileImage Mobile_no")
       .populate("publishedRide");
 
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nowIST = new Date(Date.now() + (5.5 * 60 * 60 * 1000));
+    const startOfDay = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate(), 0, 0, 0) - (5.5 * 60 * 60 * 1000));
+    
+    const startOfWeek = new Date(startOfDay);
+    startOfWeek.setDate(startOfWeek.getDate() - nowIST.getUTCDay());
+    
+    const startOfMonth = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), 1, 0, 0, 0) - (5.5 * 60 * 60 * 1000));
 
     const driverProfile = await DriverProfileModel.findOne({ user: userId });
 
@@ -300,8 +305,8 @@ export const GetActiveTrips = async (req, res) => {
       .populate("publishedRide", "vehicleType");
 
     // Simple aggregation for today's stats to show on the dashboard
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const nowIST = new Date(Date.now() + (5.5 * 60 * 60 * 1000));
+    const startOfDay = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate(), 0, 0, 0) - (5.5 * 60 * 60 * 1000));
     // Corrected aggregation with ObjectId casting and added driver profile fetch
     const [statsResult, driverProfile] = await Promise.all([
       TripModel.aggregate([

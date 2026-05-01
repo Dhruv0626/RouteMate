@@ -43,12 +43,13 @@ const getPlatformStats = async () => {
     }
 };
 
-// ─── Help: Check if current time is night (10PM - 6AM) ─────────────────────────
+// ─── Help: Check if current time is night (10PM - 6AM) in IST ─────────────────
 const isNightTime = (date = new Date()) => {
     const d = new Date(date);
-    const hour = d.getHours();
+    // Convert to IST (+5.5 hours) for server-side checks (Render is UTC)
+    const istHour = new Date(d.getTime() + (5.5 * 60 * 60 * 1000)).getUTCHours();
     // Night charge logic: 10 PM to 6 AM
-    return hour >= 22 || hour < 6;
+    return istHour >= 22 || istHour < 6;
 };
 
 // ─── Smart Ride Price Calculation Engine (RouteMAte) ─────────────────────────
@@ -188,8 +189,11 @@ export const GetAvailableRides = async (req, res) => {
         }
         if (destinationCity) filter["destination.address"] = { $regex: destinationCity, $options: "i" };
         if (date) {
-            const startDate = new Date(date); startDate.setHours(0, 0, 0, 0);
-            const endDate = new Date(date); endDate.setHours(23, 59, 59, 999);
+            // date is YYYY-MM-DD
+            const d = new Date(date);
+            // Calculate IST midnight in UTC
+            const startDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0) - (5.5 * 60 * 60 * 1000));
+            const endDate = new Date(startDate.getTime() + (24 * 60 * 60 * 1000) - 1);
             filter.departureTime = { $gte: startDate, $lte: endDate };
         }
 
