@@ -213,17 +213,13 @@ const GoOnlinePage = () => {
       const fetchRoute = async () => {
         setFetchingRoute(true);
         try {
-          const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${sourcePin.lng},${sourcePin.lat};${destPin.lng},${destPin.lat}?overview=full&geometries=geojson`;
-          const osrmRes = await fetch(osrmUrl);
-          const osrmData = await osrmRes.json();
-          
-          if (osrmData.code === "Ok" && osrmData.routes?.length > 0) {
-            const route = osrmData.routes[0];
-            // [lng, lat] from OSRM -> [lat, lng] for Leaflet
-            setRouteCoords(route.geometry.coordinates.map(c => [c[1], c[0]]));
-            setDistanceKm(Math.round((route.distance / 1000) * 10) / 10);
+          const { fetchRoute: routingFetch } = await import("../../utils/routing");
+          const result = await routingFetch(sourcePin.lat, sourcePin.lng, destPin.lat, destPin.lng);
+          if (result) {
+            setRouteCoords(result.path); // already [[lat,lng]]
+            setDistanceKm(parseFloat(result.distanceKm.toFixed(1)));
           } else {
-            // Fallback to haversine if OSRM fails
+            // Fallback to haversine if routing fails
             const d = haversineKm(sourcePin.lat, sourcePin.lng, destPin.lat, destPin.lng);
             setDistanceKm(Math.round(d * 10) / 10);
             setRouteCoords([[sourcePin.lat, sourcePin.lng], [destPin.lat, destPin.lng]]);

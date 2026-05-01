@@ -48,18 +48,12 @@ const distanceToPolyline = (lat, lng, polyline) => {
   return min;
 };
 
-// ─── OSRM fetch with retry ─────────────────────────────────────────────────────
-const OSRM_BASE = "https://router.project-osrm.org/route/v1/driving";
-
+// ─── Routing (resilient multi-provider) ────────────────────────────────────────────────
 const fetchOSRM = async (fromLat, fromLng, toLat, toLng, signal) => {
-  const url = `${OSRM_BASE}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`;
-  const res = await fetch(url, signal ? { signal } : undefined);
-  const data = await res.json();
-  if (data.code === "Ok" && data.routes?.[0]?.geometry?.coordinates) {
-    const path   = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-    // Multiply OSRM duration by 1.4 for more realistic city traffic estimates
-    const etaMins = Math.round((data.routes[0].duration * 1.4) / 60);
-    return { path, etaMins };
+  const { fetchRoute } = await import("../utils/routing");
+  const result = await fetchRoute(fromLat, fromLng, toLat, toLng, { signal });
+  if (result) {
+    return { path: result.path, etaMins: Math.round(result.durationSecs * 1.4 / 60) };
   }
   return null;
 };

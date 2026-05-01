@@ -20,6 +20,7 @@ import publishedRideRoutes from "./src/routes/PublishedRide.js";
 import savedPlaceRoutes from "./src/routes/SavedPlace.js";
 import sosRoutes from "./src/routes/SOS.js";
 import paymentRoutes from "./src/routes/Payment.js";
+import reviewRoutes from "./src/routes/reviewRoutes.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 import { initSocket } from "./src/utils/SocketManager.js";
 import { initTripMonitorCron } from "./src/utils/TripMonitorCron.js";
@@ -108,6 +109,7 @@ app.use("/api/published-rides", publishedRideRoutes);
 app.use("/api/saved-places", savedPlaceRoutes);
 app.use("/api/sos", sosRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 // ─── 7. Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {

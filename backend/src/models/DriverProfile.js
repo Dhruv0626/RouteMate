@@ -56,6 +56,8 @@ const DriverProfileSchema = new Schema(
     averageRating:        { type: Number, default: 0.0 },
     totalRatingsReceived: { type: Number, default: 0 },
     trustScore:           { type: Number, default: 0 },
+    totalTagsReceived:    { type: Number, default: 0 },
+    positiveTagCount:     { type: Number, default: 0 },
 
     // ── Wallet ─────────────────────────────────────────────────────────────────
     walletBalance:    { type: Number, default: 0 },

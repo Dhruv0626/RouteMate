@@ -13,6 +13,7 @@ import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
 import { makeVehicleIcon, makePin } from "../utils/mapIcons";
 import SOSButton from "../components/passenger/SOSButton";
+import { fetchRoute as routingFetch } from "../utils/routing";
 
 
 const greenPin = makePin("#10b981", "PICKUP");
@@ -67,21 +68,19 @@ const TurnArrow = ({ step }) => {
   return <ArrowUp size={28} className="text-white" strokeWidth={3} />;
 };
 
-const OSRM_BASE = "https://router.project-osrm.org/route/v1/driving";
-
 const fetchOSRM = async (fromLat, fromLng, toLat, toLng, signal) => {
-  const url = `${OSRM_BASE}/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`;
-  const res  = await fetch(url, signal ? { signal } : undefined);
-  const data = await res.json();
-  if (data.code === "Ok" && data.routes?.[0]?.geometry?.coordinates) {
-    const path    = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-    const etaMins = Math.round((data.routes[0].duration * 1.4) / 60);
-    const distKm  = Math.round(data.routes[0].distance / 100) / 10;
-    const steps   = data.routes[0].legs?.[0]?.steps || [];
-    return { path, etaMins, distKm, steps };
+  const result = await routingFetch(fromLat, fromLng, toLat, toLng, { signal, steps: true });
+  if (result) {
+    return {
+      path: result.path,
+      etaMins: Math.round(result.durationSecs * 1.4 / 60),
+      distKm: parseFloat(result.distanceKm.toFixed(1)),
+      steps: result.steps || [],
+    };
   }
   return null;
 };
+
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const StartRide = () => {
@@ -142,11 +141,21 @@ const StartRide = () => {
     }
   }, [ride?.status, isDriver]);
 
-  // ─── Socket ───────────────────────────────────────────────────────────────
   useEffect(() => {
     socket.connect();
-    socket.emit("join_ride", rideId);
-    if (user?.id) socket.emit("join_user", user.id);
+    
+    const joinRooms = () => {
+      if (!rideId) return;
+      socket.emit("join_ride", rideId.toString());
+      if (user?._id || user?.id) {
+        socket.emit("join_user", (user._id || user.id).toString());
+      }
+      console.log("Driver joined rooms:", { rideId, userId: user?._id || user?.id });
+    };
+
+    socket.on("connect", joinRooms);
+    if (socket.connected) joinRooms();
+
     socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
     socket.on("ride_status_update", (data) => {
       setRide(prev => { if (!prev) return null; return { ...prev, status: data.status }; });
@@ -155,6 +164,7 @@ const StartRide = () => {
         setTimeout(() => navigate("/passenger/dashboard"), 3000);
       }
     });
+
     // Auto-SOS warning from backend cron
     socket.on("sos_warning", (data) => {
       if (data.tripId === rideId && user.role !== "driver") {
@@ -164,15 +174,16 @@ const StartRide = () => {
     });
     
     // Payment Completion Event — Automatically exits map for both parties
-    socket.on("payment_completed", (data) => {
+    socket.on("payment_completed", async (data) => {
+      console.log("Payment completion event received:", data);
       const methodLabel = data.method === "wallet" ? "Wallet" : data.method === "cash" ? "Cash" : "UPI";
-      showAlert(`Payment successful via ${methodLabel}! Redirecting…`, "Trip Finished", "success");
       
-      // Delay slightly to let the user see the success message
-      setTimeout(() => {
-        const dashboardPath = user.role === "driver" ? "/driver/dashboard" : "/passenger/dashboard";
-        navigate(dashboardPath);
-      }, 2500);
+      const idToUse = data.tripId || rideId;
+      const direction = user.role === "driver" ? "to_passenger" : "to_driver";
+
+      await showAlert(`Payment successful via ${methodLabel}! Redirecting to review…`, "Trip Finished", "success");
+      
+      navigate(`/review/${idToUse}?direction=${direction}`);
     });
 
     // ── CRITICAL: Prevent Accidental Page Reload/Leave ──
@@ -845,24 +856,39 @@ const StartRide = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-3">
                       <button onClick={async () => {
                         const confirmed = await showConfirm("Did you receive cash from the passenger?", "Confirm Cash", "success", "Yes, Received");
                         if (!confirmed) return;
                         try {
                           const res = await api.post("/payments/cash-received", { rideId: ride._id });
                           if (res.data.success) {
-                            showAlert("Cash payment recorded! Redirecting to dashboard…", "Success", "success");
-                            // Navigate directly — socket event will also redirect passenger
-                            setTimeout(() => navigate("/driver/dashboard"), 2000);
+                            showAlert("Cash payment recorded! Redirecting to review...", "Success", "success");
+                            const idToReview = res.data.tripId || ride.tripId || ride._id;
+                            setTimeout(() => navigate(`/review/${idToReview}?direction=to_passenger`), 2000);
                           }
                         } catch (err) {
                           showAlert(err.response?.data?.message || "Failed to process cash payment", "Error", "error");
                         }
                       }}
-                        className="flex-1 bg-emerald-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
+                        className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
                         <IndianRupee size={20} /> Collect Cash
                       </button>
+
+                      <div className="flex flex-col gap-2 pt-1 border-t border-white/5">
+                        <button 
+                          onClick={() => {
+                            const idToReview = ride.tripId || ride._id;
+                            navigate(`/review/${idToReview}?direction=to_passenger`);
+                          }}
+                          className="w-full bg-white/5 border border-white/10 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2 active:scale-95 transition-all text-sm"
+                        >
+                          Proceed to Review →
+                        </button>
+                        <p className="text-[9px] text-center text-white/40 font-medium">
+                          Click only if passenger paid via <span className="text-white/60">UPI or Wallet</span> to navigate.
+                        </p>
+                      </div>
                     </div>
                   </>
                 )}
@@ -871,7 +897,7 @@ const StartRide = () => {
                     <div className="flex items-center justify-between px-1">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Payment Pending</span>
+                        <span className="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Payment Successful</span>
                       </div>
                       <div className="flex items-center gap-1.5 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
                         <span className="text-sm font-black text-emerald-500 flex items-center gap-0.5">
@@ -879,21 +905,17 @@ const StartRide = () => {
                         </span>
                       </div>
                     </div>
-                    <button onClick={async () => {
-                      try {
-                        const res = await api.post("/payments/cash-received", { rideId: ride._id });
-                        if (res.data.success) {
-                          showAlert("Cash payment recorded!", "Success", "success");
-                          navigate("/driver/dashboard");
-                        }
-                      } catch (err) {
-                        showAlert(err.response?.data?.message || "Failed to process cash payment", "Error", "error");
-                      }
-                    }}
-                      className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
-                      <IndianRupee size={20} /> Collect Cash
+                    
+                    <button 
+                      onClick={() => {
+                        const idToReview = ride.tripId || ride._id;
+                        navigate(`/review/${idToReview}?direction=to_passenger`);
+                      }}
+                      className="w-full bg-primary text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                    >
+                      Proceed to Review →
                     </button>
-                    <p className="text-[10px] text-center text-white/50">Wait for the passenger if they are paying via App/Wallet.</p>
+                    <p className="text-[10px] text-center text-white/50 font-medium">Trip is completed. Thank you for riding!</p>
                   </div>
                 )}
               </div>

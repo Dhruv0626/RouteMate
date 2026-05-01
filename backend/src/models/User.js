@@ -15,6 +15,8 @@ const UserSchema = new Schema(
     isVerified: { type: Boolean, default: false },
     isBlocked: { type: Boolean, default: false },
     fcmToken: { type: String, default: "" },               // push notification token
+    isFlagged: { type: Boolean, default: false },
+    blockReviewPending: { type: Boolean, default: false },
 
     // ── Passenger Stats (only used when role = passenger) ──────────────────
     passengerStats: {
@@ -23,6 +25,9 @@ const UserSchema = new Schema(
       averageRating: { type: Number, default: 0.0 },  // rated by drivers
       totalRatingsReceived: { type: Number, default: 0 },
       trustScore: { type: Number, default: 0 },  // 0–100
+      cancellationRate: { type: Number, default: 0 },
+      totalTagsReceived: { type: Number, default: 0 },
+      positiveTagCount: { type: Number, default: 0 },
     },
 
     // Refresh Token Rotation — stores the latest hashed refresh token

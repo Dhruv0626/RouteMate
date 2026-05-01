@@ -594,15 +594,15 @@ export const UpdateRideStatus = async (req, res) => {
         // ── STRICT STATUS PROGRESSION GUARD ──
         // Defines the only allowed forward transitions. No backward moves ever allowed.
         const allowedTransitions = {
-            open:        ["full", "booked", "active", "arrived", "cancelled"],
-            full:        ["booked", "active", "arrived", "cancelled"],
-            booked:      ["active", "arrived", "cancelled"],
-            active:      ["arrived", "in_progress", "cancelled"],
-            arrived:     ["in_progress", "reached", "cancelled"], // Allow direct jump to reached if needed
+            open: ["full", "booked", "active", "arrived", "cancelled"],
+            full: ["booked", "active", "arrived", "cancelled"],
+            booked: ["active", "arrived", "cancelled"],
+            active: ["arrived", "in_progress", "cancelled"],
+            arrived: ["in_progress", "reached", "cancelled"], // Allow direct jump to reached if needed
             in_progress: ["reached", "cancelled"],
-            reached:     ["completed", "cancelled"],
-            completed:   [],
-            cancelled:   [],
+            reached: ["completed", "cancelled"],
+            completed: [],
+            cancelled: [],
         };
 
         const currentAllowed = allowedTransitions[ride.status] || [];
@@ -664,7 +664,7 @@ export const UpdateRideStatus = async (req, res) => {
         const io = getIO();
         if (io) {
             io.to(rideId).emit("ride_status_update", { rideId, status });
-            
+
             // Emit to each confirmed passenger's personal room for global redirect
             if (ride.bookings && ride.bookings.length > 0) {
                 ride.bookings.forEach(b => {
@@ -679,7 +679,7 @@ export const UpdateRideStatus = async (req, res) => {
         const tripPhase = status === "in_progress" ? "ongoing"
             : status === "reached" ? "reached_destination"
                 : status === "completed" ? "completed"
-                
+
                     : status === "arrived" ? "arrived"
                         : status === "cancelled" ? "cancelled"
                             : "matched";
@@ -702,7 +702,7 @@ export const UpdateRideStatus = async (req, res) => {
 
             if (status === "cancelled") {
                 trip.cancelledAt = new Date();
-                
+
                 const booking = ride.bookings.find(b => b.passenger.toString() === trip.passenger.toString());
                 if (booking) booking.status = "cancelled";
 
@@ -754,7 +754,7 @@ export const UpdateRideStatus = async (req, res) => {
                 if (passenger && passenger.referredBy && (passenger.passengerStats?.totalTrips || 0) === 1) {
                     const { default: WalletTransaction } = await import("../models/WalletTransaction.js");
                     const bonus = sysConfig?.referralBonusAmount || 0;
-                    
+
                     if (bonus > 0) {
                         const expiryDays = sysConfig?.referralBonusExpiryDays || 0;
                         const expiresAt = expiryDays > 0 ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000) : null;
@@ -843,20 +843,47 @@ export const UpdateRideStatus = async (req, res) => {
 export const GetSingleRide = async (req, res) => {
     try {
         const { rideId } = req.params;
-        const ride = await PublishedRideModel.findById(rideId)
+        let ride = await PublishedRideModel.findById(rideId)
             .populate("driver", "name email Mobile_no profileImage")
             .populate("bookings.passenger", "name email Mobile_no profileImage");
 
-        if (!ride) return res.status(404).json({ success: false, message: "Ride not found" });
+        if (!ride) {
+            // Check if it's a Trip ID
+            const TripModel = (await import("../models/Trip.js")).default;
+            const trip = await TripModel.findById(rideId)
+                .populate("driver", "name email Mobile_no profileImage")
+                .populate("passenger", "name email Mobile_no profileImage");
+
+            if (!trip) {
+                return res.status(404).json({ success: false, message: "Ride/Trip not found" });
+            }
+
+            // Return trip structured similarly to a ride for the frontend
+            const tripObj = trip.toObject();
+            return res.status(200).json({
+                success: true,
+                data: {
+                    ...tripObj,
+                    status: tripObj.phase, // frontend expects .status
+                    isTripOnly: true
+                }
+            });
+        }
 
         const rideObj = ride.toObject();
-        
+
         // Find associated trip to get OTP if user is the passenger
         const TripModel = (await import("../models/Trip.js")).default;
         const trip = await TripModel.findOne({ publishedRide: rideId, passenger: req.user.id });
+
         if (trip) {
             rideObj.otp = trip.otp;
             rideObj.tripId = trip._id;
+            rideObj.fare = trip.fare; // Use trip fare if available
+        } else if (rideObj.bookings?.length > 0) {
+            // Fallback: Use first confirmed booking fare
+            const booking = rideObj.bookings.find(b => b.status === "confirmed") || rideObj.bookings[0];
+            rideObj.fare = { total: booking.amountPaid || booking.fareBreakdown?.totalWithTax || 0 };
         }
 
         res.status(200).json({ success: true, data: rideObj });

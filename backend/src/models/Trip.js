@@ -103,6 +103,9 @@ const TripSchema = new Schema(
     stoppedAt: { type: Date },       // when driver stopped (speed < 3 km/h)
     emergencyToken: { type: String },
     emergencyTokenExpiry: { type: Date },
+
+    // ── Review System ────────────────────────────────────────────────────────
+    reviewsRevealed: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

@@ -58,6 +58,9 @@ import NotificationsPage from "./pages/NotificationsPage";
 import SettingsPage from "./pages/SettingsPage";
 import EmergencyPage from "./pages/EmergencyPage";
 import AdminSOSPage from "./pages/admin/AdminSOSPage";
+import ReviewSubmissionPage from "./pages/ReviewSubmissionPage";
+import AdminFlagDashboard from "./pages/AdminFlagDashboard";
+import AdminReviewsPage from "./pages/AdminReviewsPage";
 import { ShieldAlert } from "lucide-react";
 
 import { getMyDriverProfile } from "./services/driverProfileService";
@@ -412,10 +415,26 @@ function AppContent() {
           }
         />
         <Route
+          path="/admin/flags"
+          element={
+            <AdminProtectedRoute>
+              <AdminFlagDashboard />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
           path="/:role/dashboard/notifications"
           element={
             <AdminProtectedRoute>
               <NotificationsPage />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/reviews"
+          element={
+            <AdminProtectedRoute>
+              <AdminReviewsPage />
             </AdminProtectedRoute>
           }
         />
@@ -674,6 +693,9 @@ function AppContent() {
           path="/:role/dashboard"
           element={<DashboardRoute />}
         />
+
+        {/* Review Routes */}
+        <Route path="/review/:tripId" element={<ProtectedRoute><ReviewSubmissionPage /></ProtectedRoute>} />
 
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />

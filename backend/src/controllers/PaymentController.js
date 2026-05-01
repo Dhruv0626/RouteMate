@@ -138,15 +138,15 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
       const existingPayment = await PaymentModel.findById(trip.payment).lean();
       await session.abortTransaction();
       session.endSession();
-      return { 
-        platformCut: existingPayment?.platformFee || platformCut, 
-        driverEarning: existingPayment?.driverEarnings || driverEarning, 
-        paymentId: trip.payment 
+      return {
+        platformCut: existingPayment?.platformFee || platformCut,
+        driverEarning: existingPayment?.driverEarnings || driverEarning,
+        paymentId: trip.payment
       };
     }
 
     let passengerTx = null;
-    
+
     if (method === "wallet") {
       // Wallet payment: debit passenger
       const pax = await UserModel.findById(passengerId).session(session);
@@ -224,20 +224,20 @@ const processTripSplit = async ({ amountRupees, tripId, passengerId, driverId, m
       notifyUser({ userId: passengerId, title: "✅ Wallet Payment Done", message: `₹${amountRupees} paid from wallet.`, type: "info" }).catch(() => { });
     }
 
-    // Notify clients on the socket room that payment is complete
-    try {
+      // Notify clients on the socket room that payment is complete
       const io = getIO();
       const rideRoom = trip.publishedRide?.toString() || tripId.toString();
-      // Emit to ride room (catches anyone in the ride)
-      io.to(rideRoom).emit("payment_completed", { method });
-      // Emit to personal user rooms (catches reconnected clients)
-      if (passengerId) io.to(passengerId.toString()).emit("payment_completed", { method });
-      if (driverId) io.to(driverId.toString()).emit("payment_completed", { method });
-    } catch (e) {
-      console.error("Socket error on payment emit", e);
-    }
+      const payload = { method, tripId: tripId.toString(), rideId: trip.publishedRide?.toString() };
 
-    return { platformCut, driverEarning, paymentId: paymentDoc._id };
+      // Emit to ride room (catches anyone in the ride)
+      io.to(rideRoom).emit("payment_completed", payload);
+      // Emit to specific trip room
+      io.to(tripId.toString()).emit("payment_completed", payload);
+      // Emit to personal user rooms (catches reconnected clients)
+      if (passengerId) io.to(passengerId.toString()).emit("payment_completed", payload);
+      if (driverId) io.to(driverId.toString()).emit("payment_completed", payload);
+
+    return { platformCut, driverEarning, paymentId: paymentDoc._id, tripId: tripId.toString() };
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
@@ -304,7 +304,7 @@ export const verifyPayment = async (req, res) => {
     const paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
     const amountRupees = paymentDetails.amount / 100;
     const notes = paymentDetails.notes || {};
-    
+
     // Robust extraction of IDs, falling back to Razorpay notes if frontend missed them
     const finalUserId = userId || req.user?._id?.toString() || req.user?.id || notes.userId;
     const actualTripId = tripId || notes.tripId;
@@ -584,12 +584,13 @@ export const razorpayWebhook = async (req, res) => {
           const io = getIO();
           const tripDoc = await TripModel.findById(tripId).lean();
           const rideRoom = tripDoc?.publishedRide?.toString() || tripId;
+          const payload = { method: "upi", tripId: tripId.toString(), rideId: tripDoc?.publishedRide?.toString() };
 
           // Emit to ride room, trip room, and personal user rooms for 100% reliability
-          io.to(rideRoom).emit("payment_completed", { method: "upi" });
-          io.to(tripId).emit("payment_completed", { method: "upi" });
-          if (passengerId) io.to(passengerId.toString()).emit("payment_completed", { method: "upi" });
-          if (driverId) io.to(driverId.toString()).emit("payment_completed", { method: "upi" });
+          io.to(rideRoom).emit("payment_completed", payload);
+          io.to(tripId.toString()).emit("payment_completed", payload);
+          if (passengerId) io.to(passengerId.toString()).emit("payment_completed", payload);
+          if (driverId) io.to(driverId.toString()).emit("payment_completed", payload);
         } catch (e) { console.error("UPI webhook socket emit error:", e); }
       }
 
@@ -741,11 +742,15 @@ export const cashReceived = async (req, res) => {
       try {
         const io = getIO();
         const rideRoom = trip.publishedRide?.toString() || trip._id.toString();
+        const payload = { method: "cash", tripId: trip._id.toString(), rideId: trip.publishedRide?.toString() };
+
         // Emit to ride room (catches anyone in the ride)
-        io.to(rideRoom).emit("payment_completed", { method: "cash" });
+        io.to(rideRoom).emit("payment_completed", payload);
+        // Emit to specific trip room
+        io.to(trip._id.toString()).emit("payment_completed", payload);
         // Emit to personal user rooms (catches reconnected clients)
-        io.to(trip.passenger.toString()).emit("payment_completed", { method: "cash" });
-        io.to(driverUserId.toString()).emit("payment_completed", { method: "cash" });
+        io.to(trip.passenger.toString()).emit("payment_completed", payload);
+        io.to(driverUserId.toString()).emit("payment_completed", payload);
       } catch (e) {
         console.error("Socket error on payment emit", e);
       }
@@ -753,6 +758,7 @@ export const cashReceived = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: "Cash payment recorded",
+        tripId: trip._id.toString(),
         commissionDeducted: platformCut,
         driverNet,
         commissionWalletBalance: commissionBalance,
@@ -852,7 +858,8 @@ export const getMyWallet = async (req, res) => {
 
     const aggregates = await WalletTransaction.aggregate([
       { $match: { user: new mongoose.Types.ObjectId(userId) } },
-      { $group: {
+      {
+        $group: {
           _id: null,
           totalEarned: { $sum: { $cond: [{ $and: [{ $eq: ["$type", "credit"] }, { $eq: ["$reference", "trip"] }] }, "$amount", 0] } },
           totalWithdrawn: { $sum: { $cond: [{ $eq: ["$reference", "withdrawal"] }, "$amount", 0] } },
@@ -869,14 +876,15 @@ export const getMyWallet = async (req, res) => {
       // Get the absolute true lifetime totals for the driver from the Payment records directly
       const paymentAggregates = await PaymentModel.aggregate([
         { $match: { driver: new mongoose.Types.ObjectId(userId), status: "completed" } },
-        { $group: {
+        {
+          $group: {
             _id: null,
             trueTotalEarned: { $sum: "$driverEarnings" },
             trueTotalCommissionPaid: { $sum: "$platformFee" }
           }
         }
       ]);
-      
+
       if (paymentAggregates.length > 0) {
         stats.totalEarned = paymentAggregates[0].trueTotalEarned || 0;
         // NOT overriding stats.totalCommissionPaid, because the driver ONLY wants to see cash commission debt

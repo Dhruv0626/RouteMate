@@ -117,14 +117,11 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
     let cancelled = false;
     const fetchEta = async () => {
       try {
-        // OSRM: Driver source → Passenger pickup travel time
-        const url = `https://router.project-osrm.org/route/v1/driving/${driverSrc[0]},${driverSrc[1]};${passPickup.lng},${passPickup.lat}?overview=false`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!cancelled && data.code === "Ok" && data.routes?.[0]) {
-          const travelSecs = data.routes[0].duration;
-          const travelMins = Math.round(travelSecs / 60);
-          setTravelToPickupMins(travelMins);
+        // Fetch driver source → Passenger pickup travel time
+        const { fetchRouteInfo } = await import("../utils/routing");
+        const info = await fetchRouteInfo(driverSrc[1], driverSrc[0], passPickup.lat, passPickup.lng);
+        if (!cancelled && info) {
+          setTravelToPickupMins(info.durationMin);
         }
       } catch (e) {
         // silently fail

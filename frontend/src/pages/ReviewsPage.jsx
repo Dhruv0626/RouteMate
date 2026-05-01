@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Star, 
   ChevronLeft, 
@@ -8,18 +8,52 @@ import {
   User, 
   Calendar,
   Filter,
-  ArrowRight
+  ArrowRight,
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ui/ThemeToggle";
-
-const MOCK_REVIEWS = [];
-
-const PENDING_REVIEWS = [];
+import ReviewCard from "../components/ReviewCard";
 
 const ReviewsPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [reviews, setReviews] = useState([]);
+  const [stats, setStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("all");
+
+  const fetchReviews = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+
+    try {
+      const res = await api.get(`/reviews/user/${user?.id || user?._id}`);
+      if (res.data.success) {
+        setReviews(res.data.reviews || []);
+        setStats(res.data.stats || {});
+      }
+    } catch (err) {
+      console.error("Failed to fetch reviews", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) fetchReviews();
+  }, [user]);
+
+  const filteredReviews = reviews.filter(r => {
+    if (filter === "positive") return r.rating >= 4;
+    if (filter === "critical") return r.rating <= 2;
+    return true;
+  });
 
   return (
     <div className="mesh-bg min-h-screen font-sans text-(--text-main)">
@@ -35,47 +69,40 @@ const ReviewsPage = () => {
             </button>
             <h1 className="font-display text-lg font-black text-(--text-main)">Rate & Review</h1>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <button onClick={() => fetchReviews(true)} disabled={refreshing} className="p-2 text-(--text-dim) hover:text-primary transition-all">
+              <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl space-y-8 px-6 py-8">
         
-        {/* Pending Reviews Section */}
-        {PENDING_REVIEWS.length > 0 && (
-          <section>
-            <h2 className="font-display text-lg font-black text-(--text-main) mb-6 flex items-center gap-2">
-              Pending Reviews <span className="bg-amber-400 h-1.5 w-1.5 rounded-full"></span>
-            </h2>
-            <div className="space-y-4">
-              {PENDING_REVIEWS.map((trip) => (
-                <div key={trip.id} className="from-primary/20 to-primary/5 rounded-3xl border border-primary/20 bg-linear-to-br p-6 shadow-xl relative overflow-hidden group">
-                  <div className="absolute -right-8 -top-8 h-32 w-32 bg-primary/20 blur-3xl rounded-full" />
-                  <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                      <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center text-black shadow-lg">
-                        <User size={24} />
-                      </div>
-                      <div>
-                        <h3 className="font-black text-(--text-main) text-lg">{trip.driver}</h3>
-                        <p className="text-xs text-(--text-dim) font-bold uppercase tracking-widest mt-0.5">{trip.trip}</p>
-                        <p className="text-[10px] text-(--text-dim) font-black mt-1 uppercase tracking-widest opacity-60">Completed {trip.date}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-3">
-                       <div className="flex items-center gap-1 justify-center sm:justify-end">
-                         {[1, 2, 3, 4, 5].map(star => (
-                           <Star key={star} size={24} className="text-(--card-border) cursor-pointer hover:text-primary transition-colors" />
-                         ))}
-                       </div>
-                       <button className="bg-primary text-black px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-all">
-                         Leave Feedback
-                       </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+        {/* Stats Section */}
+        {!loading && (
+          <section className="grid grid-cols-2 gap-4">
+            <div className="glass-card rounded-3xl border border-(--card-border) p-5 flex flex-col gap-1">
+              <span className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Trust Score</span>
+              <div className="flex items-center gap-2">
+                 <ThumbsUp size={18} className="text-primary" />
+                 <span className="text-2xl font-black">{stats.trustScore?.toFixed(0) || "0"}</span>
+                 {stats.trustBadge && (
+                   <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ml-auto bg-${stats.trustBadge.color}-500/10 text-${stats.trustBadge.color}-400`}>
+                     {stats.trustBadge.badge}
+                   </span>
+                 )}
+              </div>
+            </div>
+            <div className="glass-card rounded-3xl border border-(--card-border) p-5 flex flex-col gap-1">
+              <span className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Avg Rating</span>
+              <div className="flex items-center gap-2">
+                 <Star size={18} className="text-[#FFB800]" fill="#FFB800" />
+                 <span className="text-2xl font-black">
+                   {stats.averageRating ? stats.averageRating.toFixed(1) : (stats.newDriver ? "NEW" : "5.0")}
+                 </span>
+              </div>
             </div>
           </section>
         )}
@@ -91,37 +118,23 @@ const ReviewsPage = () => {
         </section>
 
         {/* Review List */}
-        <section className="space-y-4">
-          {MOCK_REVIEWS.map((review) => (
-            <div key={review.id} className="glass-card rounded-3xl border border-(--card-border) p-6 hover:border-primary/30 transition-all">
-              <div className="flex items-start justify-between mb-4">
-                 <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center text-(--text-dim)">
-                       <User size={18} />
-                    </div>
-                    <div>
-                       <h4 className="text-sm font-black text-(--text-main)">{review.driver}</h4>
-                       <span className="text-[9px] font-black text-(--text-dim) uppercase tracking-[0.2em]">{review.date} • {review.trip}</span>
-                    </div>
-                 </div>
-                 <div className="flex items-center gap-1 text-amber-400 bg-amber-400/10 px-2 py-1 rounded-lg">
-                    <Star size={12} fill="currentColor" />
-                    <span className="text-xs font-black">{review.rating.toFixed(1)}</span>
-                 </div>
-              </div>
-              <p className="text-sm text-(--text-dim) leading-relaxed">
-                 "{review.comment}"
-              </p>
-              <div className="mt-4 flex items-center gap-4 pt-4 border-t border-(--card-border)/50">
-                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-black text-[10px] font-black uppercase hover:scale-105 transition-all shadow-sm shadow-primary/10">
-                     <ThumbsUp size={12} /> Helpful
-                  </button>
-                  <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-black text-[10px] font-black uppercase hover:scale-105 transition-all shadow-sm shadow-primary/10">
-                     <MessageSquare size={12} /> View Reply
-                  </button>
-              </div>
+        <section className="space-y-4 pb-20">
+          {loading ? (
+            <div className="py-20 flex flex-col items-center gap-4">
+               <Loader2 className="animate-spin text-primary opacity-20" size={32} />
+               <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest animate-pulse">Fetching your feedback history...</p>
             </div>
-          ))}
+          ) : filteredReviews.length === 0 ? (
+            <div className="py-20 text-center glass-card rounded-[2.5rem] border border-(--card-border)">
+               <MessageSquare size={48} className="mx-auto text-(--text-dim) opacity-10 mb-4" />
+               <h3 className="font-black text-lg">No reviews found</h3>
+               <p className="text-xs text-(--text-dim)">Complete trips to build your reputation on RouteMate.</p>
+            </div>
+          ) : (
+            filteredReviews.map((review) => (
+              <ReviewCard key={review._id} review={review} revealed={true} />
+            ))
+          )}
         </section>
 
       </main>

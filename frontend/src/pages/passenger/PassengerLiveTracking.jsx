@@ -12,6 +12,7 @@ import { useDialog } from "../../context/DialogContext";
 import { makeVehicleIcon, makePin } from "../../utils/mapIcons";
 import SOSButton from "../../components/passenger/SOSButton";
 import { loadRazorpay, openRazorpayCheckout, getMyWallet } from "../../services/paymentService";
+import { fetchRoute as routingFetch, fetchRouteInfo as routingFetchInfo } from "../../utils/routing";
 
 const distanceMetres = (lat1, lng1, lat2, lng2) => {
   const R = 6371000;
@@ -102,19 +103,18 @@ const PassengerLiveTracking = () => {
 
   useEffect(() => {
     if (!rideId) return;
+    socket.connect();
     
     const joinRooms = () => {
-      socket.emit("join_ride", rideId);
+      socket.emit("join_ride", rideId.toString());
       if (user?._id || user?.id) {
-        socket.emit("join_user", user._id || user.id);
+        socket.emit("join_user", (user._id || user.id).toString());
       }
+      console.log("Passenger joined rooms:", { rideId, userId: user?._id || user?.id });
     };
 
-    // Initial join
-    joinRooms();
-
-    // Re-join on reconnection
     socket.on("connect", joinRooms);
+    if (socket.connected) joinRooms();
 
     const onStatusUpdate = (data) => {
       console.log("Ride status update received:", data);
@@ -136,12 +136,16 @@ const PassengerLiveTracking = () => {
       });
     };
 
-    const onPaymentCompleted = (data) => {
+    const onPaymentCompleted = async (data) => {
+      console.log("Payment completion event received:", data);
       const methodLabel = data.method === "wallet" ? "Wallet" : data.method === "cash" ? "Cash" : "UPI";
-      showAlert(`Payment successful via ${methodLabel}! Redirecting…`, "Trip Finished", "success");
-      setTimeout(() => {
-        navigate("/passenger/dashboard");
-      }, 2500);
+      
+      const idToUse = data.tripId || rideId;
+      
+      // Await the alert so the "OK" button triggers immediate navigation
+      await showAlert(`Payment successful via ${methodLabel}! Redirecting to review…`, "Trip Finished", "success");
+      
+      navigate(`/review/${idToUse}?direction=to_driver`);
     };
 
     const onSosWarning = (data) => {
@@ -305,13 +309,12 @@ const PassengerLiveTracking = () => {
 
         if (lastFetchedRouteKeyRef.current !== routeKey || isFar) {
           try {
-            const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${routeStart[1]},${routeStart[0]};${routeEnd[1]},${routeEnd[0]}?overview=full&geometries=geojson`);
-            const data = await res.json();
-            if (data.routes && data.routes[0]) {
-               setDisplayRoute(data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
+            const result = await routingFetch(routeStart[0], routeStart[1], routeEnd[0], routeEnd[1]);
+            if (result) {
+               setDisplayRoute(result.path);
                lastFetchedRouteKeyRef.current = routeKey;
                if (isPickup) {
-                 setLiveEtaMins(Math.round((data.routes[0].duration * 1.4) / 60));
+                 setLiveEtaMins(Math.round(result.durationSecs * 1.4 / 60));
                }
             }
           } catch (err) {
@@ -323,21 +326,19 @@ const PassengerLiveTracking = () => {
       // 2. Determine Live ETA (when in progress)
       if (!isPickup && effectiveDriverLocation && destCoords) {
         try {
-          const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${effectiveDriverLocation.lng},${effectiveDriverLocation.lat};${destCoords[1]},${destCoords[0]}?overview=false`);
-          const data = await res.json();
-          if (data.routes && data.routes[0]) {
-             setDestEtaMins(Math.round((data.routes[0].duration * 1.4) / 60));
-          }
+          const info = await routingFetchInfo(
+            effectiveDriverLocation.lat, effectiveDriverLocation.lng, destCoords[0], destCoords[1]
+          );
+          if (info) setDestEtaMins(Math.round(info.durationMin * 1.4));
         } catch (err) {
           console.error("Failed to fetch live ETA", err);
         }
       } else if (isPickup && effectiveDriverLocation && routeEnd && lastFetchedRouteKeyRef.current === "pickup") {
         try {
-          const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${effectiveDriverLocation.lng},${effectiveDriverLocation.lat};${routeEnd[1]},${routeEnd[0]}?overview=false`);
-          const data = await res.json();
-          if (data.routes && data.routes[0]) {
-             setLiveEtaMins(Math.round((data.routes[0].duration * 1.4) / 60));
-          }
+          const info = await routingFetchInfo(
+            effectiveDriverLocation.lat, effectiveDriverLocation.lng, routeEnd[0], routeEnd[1]
+          );
+          if (info) setLiveEtaMins(Math.round(info.durationMin * 1.4));
         } catch (err) {
           console.error("Failed to fetch live ETA", err);
         }
@@ -694,8 +695,9 @@ const PassengerLiveTracking = () => {
                               }
                               const res = await api.post("/payments/wallet-pay", { rideId: ride._id });
                               if (res.data.success) {
-                                showAlert("Wallet payment successful! Redirecting to dashboard…", "Done", "success");
-                                setTimeout(() => navigate("/passenger/dashboard"), 2500);
+                                showAlert("Wallet payment successful! Redirecting to review…", "Done", "success");
+                                const idToUse = res.data.tripId || ride.tripId || ride._id;
+                                setTimeout(() => navigate(`/review/${idToUse}?direction=to_driver`), 2500);
                               }
                             } catch (err) {
                               showAlert(err.response?.data?.message || "Wallet payment failed", "Error", "error");
@@ -717,8 +719,9 @@ const PassengerLiveTracking = () => {
                                 description: "Trip Payment via UPI",
                               });
                               if (result?.success) {
-                                showAlert("Payment successful! Redirecting to dashboard…", "Success", "success");
-                                setTimeout(() => navigate("/passenger/dashboard"), 2500);
+                                showAlert("Payment successful! Redirecting to review…", "Success", "success");
+                                const idToUse = result.tripId || ride.tripId || ride._id;
+                                setTimeout(() => navigate(`/review/${idToUse}?direction=to_driver`), 2500);
                               } else if (result === null) {
                                 showAlert("Payment cancelled.", "Cancelled", "info");
                               }
@@ -732,7 +735,12 @@ const PassengerLiveTracking = () => {
                         </button>
                       </div>
                       <button
-                        onClick={() => showAlert("Please pay the driver in cash. Once the driver confirms, your ride will be closed.", "Cash Selected", "info")}
+                        onClick={async () => {
+                          await showAlert("Please pay the driver in cash. Once the driver confirms, your ride will be closed.", "Cash Selected", "info");
+                          // Redirect to review page immediately so they can wait there or fill it
+                          const idToUse = ride.tripId || ride._id;
+                          navigate(`/review/${idToUse}?direction=to_driver`);
+                        }}
                         className="w-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 py-3 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
                       >
                         💵 I will pay Cash
