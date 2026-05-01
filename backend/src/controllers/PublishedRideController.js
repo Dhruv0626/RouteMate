@@ -27,19 +27,19 @@ const getPlatformStats = async () => {
         // Supply = Total Drivers Online
         const available_drivers = await DriverProfileModel.countDocuments({ isOnline: true, isApproved: true });
 
-        // Demand = Total "pending" or "booked" rides in the last 15 minutes
+        // Demand = Total trips created in the last 15 minutes (active interest)
         const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
-        const total_requests = await PublishedRideModel.countDocuments({
+        const total_requests = await TripModel.countDocuments({
             createdAt: { $gte: fifteenMinsAgo }
         });
 
         return {
-            total_requests: Math.max(total_requests, 5), // Min floor for stability
+            total_requests: Math.max(total_requests, 2), // Lower floor for more realistic ratios
             available_drivers: Math.max(available_drivers, 5)
         };
     } catch (error) {
         console.error("🔴 Platform Stats Error:", error.message);
-        return { total_requests: 10, available_drivers: 10 };
+        return { total_requests: 5, available_drivers: 10 };
     }
 };
 

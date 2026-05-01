@@ -49,27 +49,21 @@ export const calculateFareDetails = (input) => {
   const safe_available_drivers = Math.max(available_drivers, 1);
   const demand_ratio = total_requests / safe_available_drivers;
 
-  // --- Step 4: Determine Surge Multiplier ---
-  let surge_multiplier = 1.0;
+  // --- Step 4: Determine Surge Multiplier (Ratio-Based) ---
+  const raw_surge = Math.max(1.0, demand_ratio);
+  let surge_multiplier = Math.min(surge_cap, raw_surge);
+  
   let surge_label = "No Surge";
-  let cap_applied = false;
+  let cap_applied = surge_multiplier >= surge_cap && demand_ratio > 1.0;
 
-  if (demand_ratio <= 1.2) {
-    surge_multiplier = 1.0;
+  if (demand_ratio <= 1.1) {
     surge_label = "No Surge";
-  } else if (demand_ratio <= 1.5) {
-    surge_multiplier = 1.2;
+  } else if (demand_ratio <= 1.4) {
     surge_label = "Low Surge";
-  } else if (demand_ratio <= 2.0) {
-    surge_multiplier = 1.4;
+  } else if (demand_ratio <= 1.8) {
     surge_label = "Medium Surge";
-  } else if (demand_ratio <= 2.5) {
-    surge_multiplier = 1.6;
-    surge_label = "High Surge";
   } else {
-    surge_multiplier = surge_cap;
     surge_label = is_ev ? "EV Max Surge — Cap Applied" : "Max Surge — Cap Applied";
-    cap_applied = true;
   }
 
   // --- CRITICAL RULE: Hard Surge Cap ---

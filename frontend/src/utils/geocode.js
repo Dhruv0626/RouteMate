@@ -170,12 +170,12 @@ export function getTrafficCondition() {
   const h = new Date(utcMs + 5.5 * 3600 * 1000).getHours();
 
   if ((h >= 8 && h < 11) || (h >= 17 && h < 21))
-    return { multiplier: 1.55, label: "Heavy Traffic", color: "#ef4444", icon: "🔴" };
+    return { multiplier: 1.30, label: "Heavy Traffic", color: "#ef4444", icon: "🔴" };
   if (h >= 11 && h < 17)
-    return { multiplier: 1.20, label: "Moderate Traffic", color: "#f59e0b", icon: "🟡" };
+    return { multiplier: 1.10, label: "Moderate Traffic", color: "#f59e0b", icon: "🟡" };
   if (h >= 21 || h < 6)
-    return { multiplier: 0.85, label: "Light Traffic", color: "#22c55e", icon: "🟢" };
-  return { multiplier: 1.05, label: "Normal Traffic", color: "#22c55e", icon: "🟢" };
+    return { multiplier: 0.90, label: "Light Traffic", color: "#22c55e", icon: "🟢" };
+  return { multiplier: 1.00, label: "Normal Traffic", color: "#22c55e", icon: "🟢" };
 }
 
 // ─── Fare Tiers (₹ fixed rates) ───────────────────────────────────────────────
