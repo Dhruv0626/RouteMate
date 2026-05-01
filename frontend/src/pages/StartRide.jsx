@@ -244,7 +244,7 @@ const StartRide = () => {
   useEffect(() => {
     if (!ride || !isDriver || !rideId) return;
     if (!showOtpBox) return;
-    if (["arrived", "in_progress", "reached", "completed"].includes(ride.status)) return;
+    if (["arrived", "in_progress", "reached", "completed", "cancelled", "booked"].includes(ride.status)) return;
     api.patch(`/published-rides/${rideId}/status`, { status: "arrived" })
       .then(() => setRide(prev => ({ ...prev, status: "arrived" })))
       .catch(err => console.error("Auto-arrived error:", err));

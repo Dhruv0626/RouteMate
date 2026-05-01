@@ -14,14 +14,14 @@ import { useGeoNavigation } from "../hooks/useGeoNavigation";
 import api from "../services/api";
 
 const VEHICLE_METADATA = {
-  MOTO: { name: "Bike", capacity: 1, desc: "Affordable bike rides", image: "/images/Moto.png", tag: "" },
-  EVMOTO: { name: "Electric Bike", capacity: 1, desc: "Eco-friendly",image: "/images/EVmoto.png" , tag: "Eco" },
-  AUTO: { name: "Auto", capacity: 3, desc: "Quick city transport", image: "/images/Auto.png", tag: "" },
-  EVAUTO: { name: "Electric Auto", capacity: 3, desc: "Green city transport", image: "/images/EVauto.png", tag: "Eco" },
-  GO: { name: "GO", capacity: 4, desc: "Affordable Hatchback", image: "/images/Go.png", tag: "" },
-  EVGO: { name: "Electric GO", capacity: 4, desc: "Sustainable Hatchback",image: "/images/EVgo.png", tag: "Eco" },
-  PRIME: { name: "Prime Sedan", capacity: 4, desc: "Top-rated comfort sedans", image: "/images/Prime.png", tag: "Premium" },
-  XL: { name: "SUV XL", capacity: 6, desc: "Spacious SUVs for clans", image: "/images/XL.png", tag: "Spacious" }
+  MOTO: { name: "Bike", desc: "Affordable bike rides", image: "/images/Moto.png", tag: "" },
+  EVMOTO: { name: "Electric Bike", desc: "Eco-friendly",image: "/images/EVmoto.png" , tag: "Eco" },
+  AUTO: { name: "Auto", desc: "Quick city transport", image: "/images/Auto.png", tag: "" },
+  EVAUTO: { name: "Electric Auto", desc: "Green city transport", image: "/images/EVauto.png", tag: "Eco" },
+  GO: { name: "GO", desc: "Affordable Hatchback", image: "/images/Go.png", tag: "" },
+  EVGO: { name: "Electric GO", desc: "Sustainable Hatchback",image: "/images/EVgo.png", tag: "Eco" },
+  PRIME: { name: "Prime Sedan", desc: "Top-rated comfort sedans", image: "/images/Prime.png", tag: "Premium" },
+  XL: { name: "SUV XL", desc: "Spacious SUVs for clans", image: "/images/XL.png", tag: "Spacious" }
 };
 
 const RideMap = lazy(() => import("../components/map/RideMap"));
@@ -220,10 +220,7 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
             <span style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-main)" }}>
                 {meta.name}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.6 }}>
-                <UserIcon size={12} fill="currentColor" />
-                <span style={{ fontSize: '11px', fontWeight: 700 }}>{meta.capacity}</span>
-            </div>
+
             {meta.tag && (
                  <span style={{ 
                     fontSize: "9px", fontWeight: 900, px: "6px", py: "2px", 

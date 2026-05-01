@@ -145,9 +145,6 @@ const DriverBookingsPage = () => {
                   <span className="flex items-center gap-1 bg-(--bg-main) border border-(--card-border) rounded-full px-3 py-1 font-semibold">
                     <Clock size={10} /> {dep.toLocaleDateString("en-IN", { day:"numeric", month:"short" })} · {dep.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}
                   </span>
-                  <span className="flex items-center gap-1 bg-(--bg-main) border border-(--card-border) rounded-full px-3 py-1 font-semibold">
-                    <Users size={10} /> {ride.availableSeats}/{ride.totalSeats} seats left
-                  </span>
                   {ride.vehicleType && (
                     <span className="flex items-center gap-1 bg-(--bg-main) border border-(--card-border) rounded-full px-3 py-1 font-semibold">
                       <Car size={10} /> {ride.vehicleType}
@@ -198,20 +195,7 @@ const DriverBookingsPage = () => {
                         </div>
 
                         {/* Booking details */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                          <div className="rounded-lg bg-(--bg-main) p-2.5">
-                            <p className="text-[10px] text-(--text-dim) mb-0.5">Type</p>
-                            <div className="flex items-center gap-1">
-                              {booking.bookingType === "private"
-                                ? <Lock size={12} className="text-primary" />
-                                : <Share2 size={12} className="text-emerald-500" />}
-                              <p className="text-xs font-bold text-(--text-main) capitalize">{booking.bookingType}</p>
-                            </div>
-                          </div>
-                          <div className="rounded-lg bg-(--bg-main) p-2.5">
-                            <p className="text-[10px] text-(--text-dim) mb-0.5">Seats</p>
-                            <p className="text-xs font-bold text-(--text-main)">{booking.seats}</p>
-                          </div>
+                        <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
                           <div className="rounded-lg bg-(--bg-main) p-2.5">
                             <p className="text-[10px] text-(--text-dim) mb-0.5">Distance</p>
                             <p className="text-xs font-bold text-(--text-main)">{distText}</p>
