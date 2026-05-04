@@ -33,7 +33,7 @@ const getImageUrl = (url) => {
 
 const PassengerProfile = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,19 +49,42 @@ const PassengerProfile = () => {
   const [profileImagePreview, setProfileImagePreview] = useState("");
 
   const [stats, setStats] = useState({ totalRides: 0, avgRating: "0.0" });
+  const [savedPlacesCount, setSavedPlacesCount] = useState(0);
+  const [paymentMethodsCount, setPaymentMethodsCount] = useState(0); // For now, keep 0 as not implemented
   
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await api.get("/rides/passenger/history");
-        if (response.data.success && response.data.data?.stats) {
+        const [historyRes, placesRes] = await Promise.all([
+          api.get("/rides/passenger/history"),
+          api.get("/saved-places")
+        ]);
+
+        if (historyRes.data.success && historyRes.data.data?.stats) {
           setStats({
-            totalRides: response.data.data.stats.totalRides,
-            avgRating: response.data.data.stats.avgRating || "0.0",
+            totalRides: historyRes.data.data.stats.totalRides || 0,
+            avgRating: historyRes.data.data.stats.avgRating?.toFixed(1) || "0.0",
+          });
+        } else if (user?.passengerStats) {
+          // Fallback to user metadata
+          setStats({
+            totalRides: user.passengerStats.totalTrips || 0,
+            avgRating: user.passengerStats.averageRating?.toFixed(1) || "0.0",
           });
         }
+
+        if (placesRes.data.success) {
+          setSavedPlacesCount(placesRes.data.data.length);
+        }
       } catch (err) {
-        console.error("Failed to fetch passenger stats", err);
+        console.error("Failed to fetch passenger profile stats", err);
+        // Fallback to user metadata on error
+        if (user?.passengerStats) {
+          setStats({
+            totalRides: user.passengerStats.totalTrips || 0,
+            avgRating: user.passengerStats.averageRating?.toFixed(1) || "0.0",
+          });
+        }
       }
     };
 
@@ -106,19 +129,35 @@ const PassengerProfile = () => {
       .slice(0, 2);
   };
 
+
   const handleSave = async () => {
     setSaving(true);
     setError("");
     setSuccess("");
     
     try {
-      // Update User profile using the new feature-based REST endpoint
-      const response = await api.post("/users/update-mobile", { mobileNumber: formData.phone });
-      
-      if (response.data.success) {
-        setSuccess("Profile updated successfully!");
-        setIsEditing(false);
+      let updatedUser = { ...user };
+
+      // 1. Update mobile if changed
+      if (formData.phone !== user.Mobile_no) {
+        const mobileRes = await api.post("/users/update-mobile", { mobileNumber: formData.phone });
+        if (mobileRes.data.success) {
+          updatedUser = mobileRes.data.user;
+        }
       }
+
+      // 2. Update profile image if changed (if it's a data URL)
+      if (formData.profileImage && formData.profileImage !== user.profileImage && formData.profileImage.startsWith("data:")) {
+        const imageRes = await api.post("/users/update-profile-image", { imageUrl: formData.profileImage });
+        if (imageRes.data.success) {
+          updatedUser = imageRes.data.user;
+        }
+      }
+      
+      // Sync with Context
+      setUser(updatedUser);
+      setSuccess("Profile updated successfully!");
+      setIsEditing(false);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update profile. Please try again.");
     } finally {
@@ -185,13 +224,17 @@ const PassengerProfile = () => {
             <div className="glass-card rounded-3xl p-6 border-(--card-border)">
               <h3 className="text-sm font-black text-(--text-main) mb-4">Account Verified</h3>
               <div className="space-y-4">
-                <div className="flex items-center gap-3 text-emerald-500 bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20">
+                <div className={`flex items-center gap-3 p-3 rounded-2xl border ${user?.isVerified ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20'}`}>
                   <ShieldCheck size={18} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Email Verified</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    {user?.isVerified ? "Email Verified" : "Email Unverified"}
+                  </span>
                 </div>
-                <div className="flex items-center gap-3 text-emerald-500 bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20">
+                <div className={`flex items-center gap-3 p-3 rounded-2xl border ${user?.Mobile_no ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20'}`}>
                   <ShieldCheck size={18} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Phone Linked</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    {user?.Mobile_no ? "Phone Linked" : "Phone Missing"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -275,7 +318,9 @@ const PassengerProfile = () => {
                   </div>
                 </div>
                 <h4 className="font-black text-(--text-main)">Payment Methods</h4>
-                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">No methods added</p>
+                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">
+                  Wallet: ₹{user?.walletBalance || 0}
+                </p>
               </div>
               <div className="glass-card rounded-3xl p-6 border-(--card-border) group cursor-pointer hover:border-emerald-500/30 transition-all">
                 <div className="flex items-center justify-between mb-4">
@@ -284,7 +329,9 @@ const PassengerProfile = () => {
                   </div>
                 </div>
                 <h4 className="font-black text-(--text-main)">Saved Places</h4>
-                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">No places saved</p>
+                <p className="text-[10px] text-(--text-dim) font-bold mt-1 uppercase tracking-widest">
+                  {savedPlacesCount === 0 ? "No places saved" : `${savedPlacesCount} saved ${savedPlacesCount === 1 ? 'place' : 'places'}`}
+                </p>
               </div>
             </div>
 

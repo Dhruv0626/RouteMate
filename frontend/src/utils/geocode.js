@@ -9,7 +9,7 @@ import { fetchRoute as _fetchRoute, fetchMultipleRoutes as _fetchMultipleRoutes,
 // ─── Internal helper to split full name into bold + grey parts ────────────────
 function splitAddress(item) {
   const a = item?.address || {};
-  
+
   // Specific name: The most specific landmark/building/road
   const specificName =
     a.amenity || a.shop || a.tourism || a.leisure || a.stadium ||
@@ -24,7 +24,7 @@ function splitAddress(item) {
 
   // Build ordered list: Area -> Taluka -> City -> State
   const parts = [area, taluka, city].filter(Boolean);
-  
+
   // Ensure Ahmedabad is explicitly present if in Gujarat
   const hasAhmedabad = parts.some(pt => pt.toLowerCase().includes("ahmedabad") || pt.toLowerCase().includes("amdavad"));
   if (state === "Gujarat" && !hasAhmedabad && specificName?.toLowerCase() !== "ahmedabad") {
@@ -52,7 +52,7 @@ export function buildCleanName(item) {
   // Deduplicate and join
   const unique = [specificName].concat(subtitle.split(", ")).filter(Boolean);
   const cleanUnique = unique.filter((v, i, arr) => arr.indexOf(v) === i);
-  
+
   const base = cleanUnique.join(", ");
   return base;
 }
@@ -69,14 +69,14 @@ export async function reverseGeocode(lat, lng) {
     const data = await res.json();
     const name = buildCleanName(data);
     const { specificName, subtitle } = splitAddress(data);
-    
-    return { 
-      name, 
-      specificName: specificName || name, 
-      subtitle, 
+
+    return {
+      name,
+      specificName: specificName || name,
+      subtitle,
       fullAddress: data?.display_name || name,
-      lat, 
-      lng 
+      lat,
+      lng
     };
   } catch (e) {
     console.error("[geocode] reverseGeocode:", e.message);
@@ -117,18 +117,18 @@ export async function searchLocation(query) {
         if (p.district && p.district !== specificName) parts.push(p.district);
         if (p.city && p.city !== specificName) parts.push(p.city);
         if (p.county && p.county !== specificName) parts.push(p.county);
-        
+
         // Ensure Ahmedabad is explicitly present if in Gujarat
         const state = p.state;
         const hasAhmedabad = parts.some(pt => pt.toLowerCase().includes("ahmedabad") || pt.toLowerCase().includes("amdavad"));
-        
+
         if (state === "Gujarat" && !hasAhmedabad && specificName.toLowerCase() !== "ahmedabad") {
           parts.push("Ahmedabad");
         }
-        
+
         if (state && state !== specificName) parts.push(state);
         if (p.postcode) parts.push(`– ${p.postcode}`);
-        
+
         const subtitle = parts.filter((v, i, arr) => arr.indexOf(v) === i).join(", ");
 
         const fullName = subtitle ? `${specificName}, ${subtitle}` : specificName;

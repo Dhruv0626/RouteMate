@@ -123,8 +123,8 @@ export default function EmergencyContactsManager() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20">
-            <Shield size={18} className="text-red-400" />
+          <div className="p-2 rounded-xl bg-red-500/10 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+            <Shield size={18} className="text-red-600 dark:text-red-400" />
           </div>
           <div>
             <h3 className="font-bold text-sm text-(--text-main)">Emergency Contacts</h3>
@@ -177,8 +177,8 @@ export default function EmergencyContactsManager() {
         >
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                <User size={16} className="text-red-400" />
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center">
+                <User size={16} className="text-red-600 dark:text-red-400" />
               </div>
               <div>
                 <p className="font-bold text-sm text-(--text-main)">{contact.name}</p>
@@ -197,7 +197,7 @@ export default function EmergencyContactsManager() {
               <button
                 onClick={() => handleDelete(contact._id)}
                 disabled={deletingId === contact._id}
-                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-(--text-dim) hover:text-red-400"
+                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-(--text-dim) hover:text-red-600 dark:hover:text-red-400"
               >
                 {deletingId === contact._id
                   ? <Loader2 size={13} className="animate-spin" />
