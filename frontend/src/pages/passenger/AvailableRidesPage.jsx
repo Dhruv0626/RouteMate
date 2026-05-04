@@ -57,7 +57,8 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
       : [23.0225, 72.5714];
 
   const handleMapPick = async (lat, lng) => {
-    const address = await reverseGeocode(lat, lng);
+    const result = await reverseGeocode(lat, lng);
+    const address = result?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     if (pickMode === "source") setSrcPin({ lat, lng, address });
     else setDstPin({ lat, lng, address });
     setPickMode(null);
@@ -67,7 +68,8 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
     if (!navigator.geolocation) return showAlert("Geolocation is not supported by your browser.", "Location Error", "error");
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
-      const address = await reverseGeocode(latitude, longitude);
+      const result = await reverseGeocode(latitude, longitude);
+      const address = result?.name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
       if (pickMode === "source") setSrcPin({ lat: latitude, lng: longitude, address });
       else if (pickMode === "dest") setDstPin({ lat: latitude, lng: longitude, address });
       else setSrcPin({ lat: latitude, lng: longitude, address }); // Default to source if no mode picked

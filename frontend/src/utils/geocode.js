@@ -87,7 +87,7 @@ export async function reverseGeocode(lat, lng) {
 
 // ─── Location Search (Photon by Komoot — OSM autocomplete, no key, no rate-limit) ────
 export async function searchLocation(query) {
-  if (!query || query.trim().length < 1) return [];
+  if (!query || typeof query !== "string" || query.trim().length < 1) return [];
 
   // Gujarat bounding box: minLon, minLat, maxLon, maxLat
   const gujaratBbox = "68.0,20.1,74.5,24.7";

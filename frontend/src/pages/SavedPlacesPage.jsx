@@ -110,8 +110,9 @@ const SavedPlacesPage = () => {
     setMapCenter([lat, lng]);
     
     try {
-      const address = await reverseGeocode(lat, lng);
-      setNewPlace(prev => ({ ...prev, address: address || `${lat.toFixed(5)}, ${lng.toFixed(5)}` }));
+      const result = await reverseGeocode(lat, lng);
+      const addressName = result?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      setNewPlace(prev => ({ ...prev, address: addressName }));
     } catch (err) {
       console.error("Reverse geocoding failed", err);
     } finally {

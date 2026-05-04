@@ -239,7 +239,8 @@ const GoOnlinePage = () => {
 
   // ── Map pick handler ─────────────────────────────────────────────────────────
   const handleMapPick = async (lat, lng) => {
-    const address = await reverseGeocode(lat, lng);
+    const result = await reverseGeocode(lat, lng);
+    const address = result?.name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     if (pickingMode === "source") {
       setSourcePin({ lat, lng, address });
     } else if (pickingMode === "destination") {
@@ -252,7 +253,8 @@ const GoOnlinePage = () => {
     if (!navigator.geolocation) return showAlert("Geolocation is not supported by your browser.", "Location Error", "error");
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
-      const address = await reverseGeocode(latitude, longitude);
+      const result = await reverseGeocode(latitude, longitude);
+      const address = result?.name || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
       if (pickingMode === "source") setSourcePin({ lat: latitude, lng: longitude, address });
       else if (pickingMode === "destination") setDestPin({ lat: latitude, lng: longitude, address });
       else setSourcePin({ lat: latitude, lng: longitude, address }); // Default to source

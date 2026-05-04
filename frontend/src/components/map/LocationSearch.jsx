@@ -111,7 +111,7 @@ const LocationSearch = ({
 
   // ─── Fetch search suggestions (fires from 1st character) ────────────────
   useEffect(() => {
-    if (!debouncedQuery || debouncedQuery.trim().length < 1) {
+    if (!debouncedQuery || typeof debouncedQuery !== "string" || debouncedQuery.trim().length < 1) {
       setResults([]);
       if (!(showCurrentLocation && isFocused)) setIsOpen(false);
       return;
