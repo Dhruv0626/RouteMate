@@ -23,6 +23,7 @@ import { useAuth } from "../context/AuthContext";
 import { exportRideHistoryToCSV } from "../utils/exportUtils";
 import { getPassengerHistory, getDriverHistory } from "../services/rideService";
 import { useEffect } from "react";
+import { categoryLabels } from "../utils/vehicles";
 
 const HistoryPage = () => {
   const navigate = useNavigate();
@@ -90,7 +91,10 @@ const HistoryPage = () => {
             return {
               id: ride._id,
               name: role === "driver" ? (ride.passenger?.name || "Passenger") : (ride.driver?.name || "Searching..."),
-              photo: role === "driver" ? (ride.passenger?.profileImage || "👤") : (ride.driver?.profileImage || "🚕"),
+              photo: role === "driver" 
+                ? (ride.passenger?.profileImage || "👤") 
+                : (ride.driver?.profileImage || categoryLabels[ride.vehicleTypeRequested]?.image || "🚕"),
+              vehicleIcon: categoryLabels[ride.vehicleTypeRequested]?.image || "/images/cars/go.png",
               rating: role === "driver" ? (ride.rating?.passengerToDriver || 0.0) : (ride.rating?.driverToPassenger || 0.0), 
               pickup: ride.source?.address || "Unknown Location",
               dropoff: ride.destination?.address || "Unknown Location",
@@ -349,7 +353,15 @@ const HistoryPage = () => {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start gap-4 flex-1">
-                    <div className="text-4xl flex-shrink-0">{ride.photo}</div>
+                    <div className="flex-shrink-0">
+                      {role === "passenger" && ride.photo === "🚕" ? (
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                          <img src={ride.vehicleIcon} alt={ride.rideType} className="w-8 h-8 object-contain" />
+                        </div>
+                      ) : (
+                        <div className="text-4xl">{ride.photo}</div>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex flex-col gap-1 mb-1">
                           <h3 className="font-display font-bold text-(--text-main)">{ride.name}</h3>

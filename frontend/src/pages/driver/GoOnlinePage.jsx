@@ -516,7 +516,7 @@ const GoOnlinePage = () => {
 
                     {/* Driver's current location */}
                     {userLocation && (
-                      <Marker position={[userLocation.lat, userLocation.lng]} icon={makeVehicleIcon(profile?.vehicleType || "hatchback", 0, 40)}>
+                      <Marker position={[userLocation.lat, userLocation.lng]} icon={makeVehicleIcon(profile?.vehicle?.type || profile?.vehicleType || "hatchback", 0, 40)}>
                         <Popup><p className="font-bold text-xs">You are here</p></Popup>
                       </Marker>
                     )}

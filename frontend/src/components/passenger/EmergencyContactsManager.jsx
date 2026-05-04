@@ -127,8 +127,8 @@ export default function EmergencyContactsManager() {
             <Shield size={18} className="text-red-400" />
           </div>
           <div>
-            <h3 className="font-bold text-sm text-white">Emergency Contacts</h3>
-            <p className="text-xs text-gray-500">Notified instantly if SOS is triggered</p>
+            <h3 className="font-bold text-sm text-(--text-main)">Emergency Contacts</h3>
+            <p className="text-xs text-(--text-dim)">Notified instantly if SOS is triggered</p>
           </div>
         </div>
         {contacts.length < 2 && (
@@ -159,10 +159,10 @@ export default function EmergencyContactsManager() {
 
       {/* Empty state */}
       {!loading && contacts.length === 0 && !showForm && (
-        <div className="text-center py-8 px-4 rounded-2xl border border-dashed border-gray-700 bg-gray-900/30">
+        <div className="text-center py-8 px-4 rounded-2xl border border-dashed border-(--card-border) bg-(--card-bg)/30">
           <AlertTriangle size={28} className="mx-auto mb-3 text-yellow-500 opacity-60" />
-          <p className="text-sm font-semibold text-gray-400 mb-1">No emergency contacts added</p>
-          <p className="text-xs text-gray-600 mb-4">Add up to 2 contacts who will be notified in an emergency</p>
+          <p className="text-sm font-semibold text-(--text-dim) mb-1">No emergency contacts added</p>
+          <p className="text-xs text-(--text-dim) opacity-60 mb-4">Add up to 2 contacts who will be notified in an emergency</p>
           <button onClick={openAdd} className="px-4 py-2 rounded-xl bg-primary text-black text-xs font-bold hover:scale-105 transition-all">
             Add First Contact
           </button>
@@ -173,7 +173,7 @@ export default function EmergencyContactsManager() {
       {!loading && contacts.map((contact) => (
         <div
           key={contact._id}
-          className="p-4 rounded-2xl border border-gray-800 bg-gray-900/50 space-y-3"
+          className="p-4 rounded-2xl border border-(--card-border) bg-(--card-bg) space-y-3"
         >
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
@@ -181,8 +181,8 @@ export default function EmergencyContactsManager() {
                 <User size={16} className="text-red-400" />
               </div>
               <div>
-                <p className="font-bold text-sm text-white">{contact.name}</p>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-700">
+                <p className="font-bold text-sm text-(--text-main)">{contact.name}</p>
+                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-(--text-dim) border border-(--card-border)">
                   {contact.relation}
                 </span>
               </div>
@@ -190,14 +190,14 @@ export default function EmergencyContactsManager() {
             <div className="flex items-center gap-1">
               <button
                 onClick={() => openEdit(contact)}
-                className="p-1.5 rounded-lg hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-(--text-dim) hover:text-(--text-main)"
               >
                 <Edit3 size={13} />
               </button>
               <button
                 onClick={() => handleDelete(contact._id)}
                 disabled={deletingId === contact._id}
-                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-gray-400 hover:text-red-400"
+                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors text-(--text-dim) hover:text-red-400"
               >
                 {deletingId === contact._id
                   ? <Loader2 size={13} className="animate-spin" />
@@ -207,14 +207,14 @@ export default function EmergencyContactsManager() {
             </div>
           </div>
 
-          <div className="space-y-1.5 text-xs text-gray-500">
+          <div className="space-y-1.5 text-xs text-(--text-dim)">
             <div className="flex items-center gap-2">
-              <Phone size={11} className="text-gray-600" />
+              <Phone size={11} className="text-(--text-dim) opacity-60" />
               <span>{contact.mobile_no}</span>
             </div>
             {contact.email && (
               <div className="flex items-center gap-2">
-                <Mail size={11} className="text-gray-600" />
+                <Mail size={11} className="text-(--text-dim) opacity-60" />
                 <span>{contact.email}</span>
               </div>
             )}
@@ -239,7 +239,7 @@ export default function EmergencyContactsManager() {
             <button
               onClick={() => handleTest(contact._id)}
               disabled={testingId === contact._id}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-700 hover:border-primary/40 hover:bg-primary/5 transition-all text-xs text-gray-400 hover:text-primary"
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-(--card-border) hover:border-primary/40 hover:bg-primary/5 transition-all text-xs text-(--text-dim) hover:text-primary"
             >
               {testingId === contact._id
                 ? <Loader2 size={12} className="animate-spin" />
@@ -253,7 +253,7 @@ export default function EmergencyContactsManager() {
 
       {/* Max limit notice */}
       {contacts.length >= 2 && (
-        <p className="text-xs text-center text-gray-600">
+        <p className="text-[10px] font-black uppercase tracking-widest text-center text-(--text-dim) opacity-60">
           Maximum 2 contacts reached. Remove one to add another.
         </p>
       )}
@@ -262,10 +262,10 @@ export default function EmergencyContactsManager() {
       {showForm && (
         <div className="p-4 rounded-2xl border border-primary/30 bg-primary/5 space-y-3">
           <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-bold text-white">
+            <p className="text-sm font-bold text-(--text-main)">
               {editingId ? "Edit Contact" : "New Emergency Contact"}
             </p>
-            <button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-gray-700 text-gray-400">
+            <button onClick={() => setShowForm(false)} className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-(--text-dim)">
               <X size={14} />
             </button>
           </div>
@@ -278,55 +278,55 @@ export default function EmergencyContactsManager() {
 
           {/* Name */}
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Full Name *</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-(--text-dim) mb-1 block">Full Name *</label>
             <input
               type="text"
               placeholder="Contact's full name"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl bg-gray-900 border border-gray-700 text-white text-sm focus:border-primary/50 focus:outline-none transition-colors"
+              className="w-full px-3 py-2.5 rounded-xl bg-(--bg-main) border border-(--card-border) text-(--text-main) text-sm focus:border-primary/50 focus:outline-none transition-colors"
             />
           </div>
 
           {/* Mobile */}
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Mobile Number * (10 digit)</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-(--text-dim) mb-1 block">Mobile Number * (10 digit)</label>
             <input
               type="tel"
               placeholder="9876543210"
               value={form.mobile_no}
               onChange={e => setForm(f => ({ ...f, mobile_no: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl bg-gray-900 border border-gray-700 text-white text-sm focus:border-primary/50 focus:outline-none transition-colors"
+              className="w-full px-3 py-2.5 rounded-xl bg-(--bg-main) border border-(--card-border) text-(--text-main) text-sm focus:border-primary/50 focus:outline-none transition-colors"
             />
           </div>
 
           {/* Email */}
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Email (for SOS alerts)</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-(--text-dim) mb-1 block">Email (for SOS alerts)</label>
             <input
               type="email"
               placeholder="contact@email.com (optional)"
               value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl bg-gray-900 border border-gray-700 text-white text-sm focus:border-primary/50 focus:outline-none transition-colors"
+              className="w-full px-3 py-2.5 rounded-xl bg-(--bg-main) border border-(--card-border) text-(--text-main) text-sm focus:border-primary/50 focus:outline-none transition-colors"
             />
           </div>
 
           {/* Relation */}
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Relation *</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-(--text-dim) mb-1 block">Relation *</label>
             <div className="relative">
               <select
                 value={form.relation}
                 onChange={e => setForm(f => ({ ...f, relation: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl bg-gray-900 border border-gray-700 text-white text-sm focus:border-primary/50 focus:outline-none transition-colors appearance-none"
+                className="w-full px-3 py-2.5 rounded-xl bg-(--bg-main) border border-(--card-border) text-(--text-main) text-sm focus:border-primary/50 focus:outline-none transition-colors appearance-none"
               >
                 <option value="">Select relation...</option>
                 {RELATION_OPTIONS.map(r => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-(--text-dim) pointer-events-none" />
             </div>
           </div>
 
