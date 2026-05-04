@@ -53,39 +53,44 @@ const PassengerProfile = () => {
   const [paymentMethodsCount, setPaymentMethodsCount] = useState(0); // For now, keep 0 as not implemented
   
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [historyRes, placesRes] = await Promise.all([
-          api.get("/rides/passenger/history"),
-          api.get("/saved-places")
-        ]);
-
-        if (historyRes.data.success && historyRes.data.data?.stats) {
+    const fetchData = async () => {
+      if (user?.role === "passenger") {
+        // Fetch History for trip count and rating
+        try {
+          const historyRes = await api.get("/rides/passenger-history");
+          if (historyRes.data.success) {
+            const history = historyRes.data.data.rides || [];
+            const serverStats = historyRes.data.data.stats || {};
+            
+            const avgRating = history.length > 0 
+              ? history.reduce((acc, curr) => acc + (curr.rating || 5), 0) / history.length
+              : (user.passengerStats?.averageRating || 5.0);
+            
+            setStats({
+              totalRides: serverStats.totalRides || user.passengerStats?.totalTrips || history.length,
+              avgRating: typeof avgRating === 'number' ? avgRating.toFixed(1) : parseFloat(avgRating).toFixed(1)
+            });
+          }
+        } catch (err) {
+          console.error("Failed to fetch history", err);
+          // Fallback to metadata
           setStats({
-            totalRides: historyRes.data.data.stats.totalRides || 0,
-            avgRating: historyRes.data.data.stats.avgRating?.toFixed(1) || "0.0",
-          });
-        } else if (user?.passengerStats) {
-          // Fallback to user metadata
-          setStats({
-            totalRides: user.passengerStats.totalTrips || 0,
-            avgRating: user.passengerStats.averageRating?.toFixed(1) || "0.0",
+            totalRides: user.passengerStats?.totalTrips || 0,
+            avgRating: user.passengerStats?.averageRating?.toFixed(1) || "5.0"
           });
         }
 
-        if (placesRes.data.success) {
-          setSavedPlacesCount(placesRes.data.data.length);
-        }
-      } catch (err) {
-        console.error("Failed to fetch passenger profile stats", err);
-        // Fallback to user metadata on error
-        if (user?.passengerStats) {
-          setStats({
-            totalRides: user.passengerStats.totalTrips || 0,
-            avgRating: user.passengerStats.averageRating?.toFixed(1) || "0.0",
-          });
+        // Fetch Saved Places
+        try {
+          const placesRes = await api.get("/saved-places");
+          if (placesRes.data.success) {
+            setSavedPlacesCount(placesRes.data.data.length);
+          }
+        } catch (err) {
+          console.error("Failed to fetch saved places", err);
         }
       }
+      setLoading(false);
     };
 
     if (user) {
@@ -98,8 +103,7 @@ const PassengerProfile = () => {
       if (user.profileImage) {
         setProfileImagePreview(getImageUrl(user.profileImage));
       }
-      fetchStats();
-      setLoading(false);
+      fetchData();
     }
   }, [user]);
 
