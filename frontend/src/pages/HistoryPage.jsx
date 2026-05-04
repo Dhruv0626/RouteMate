@@ -93,7 +93,7 @@ const HistoryPage = () => {
               name: role === "driver" ? (ride.passenger?.name || "Passenger") : (ride.driver?.name || "Searching..."),
               photo: role === "driver" 
                 ? (ride.passenger?.profileImage || "👤") 
-                : (ride.driver?.profileImage || categoryLabels[ride.vehicleTypeRequested]?.image || "🚕"),
+                : (ride.driver?.profileImage || "🚕"),
               vehicleIcon: categoryLabels[ride.vehicleTypeRequested]?.image || "/images/cars/go.png",
               rating: role === "driver" ? (ride.rating?.passengerToDriver || 0.0) : (ride.rating?.driverToPassenger || 0.0), 
               pickup: ride.source?.address || "Unknown Location",
@@ -354,7 +354,9 @@ const HistoryPage = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start gap-4 flex-1">
                     <div className="flex-shrink-0">
-                      {role === "passenger" && ride.photo === "🚕" ? (
+                      {ride.photo && (ride.photo.startsWith('http') || ride.photo.startsWith('/')) ? (
+                         <img src={ride.photo} alt={ride.name} className="w-12 h-12 rounded-xl object-cover border border-(--card-border)" />
+                      ) : (role === "passenger" && ride.photo === "🚕") ? (
                         <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
                           <img src={ride.vehicleIcon} alt={ride.rideType} className="w-8 h-8 object-contain" />
                         </div>
