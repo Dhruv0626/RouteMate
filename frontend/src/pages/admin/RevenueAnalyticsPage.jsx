@@ -9,6 +9,7 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useDialog } from "../../context/DialogContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { exportRevenueToCSV, exportRevenueToPDF } from "../../utils/exportUtils";
 
 const RevenueAnalyticsPage = () => {
   const navigate = useNavigate();
@@ -40,38 +41,20 @@ const RevenueAnalyticsPage = () => {
   const totalTrips = revenueData.dailyIncome.reduce((acc, curr) => acc + curr.tripCount, 0);
   const avgPerTrip = totalTrips > 0 ? (totalPlatformRevenue / totalTrips).toFixed(2) : 0;
 
-  const handleExportCSV = () => {
+  const handleExport = (format) => {
     if (revenueData.trips.length === 0) {
       showAlert("There are no revenue records available to export for the selected date range.", "Export Prevented", "warning");
       return;
     }
 
-    const headers = ["Date", "Time", "From", "To", "Passenger", "Driver", "Total Fare", "Platform Income"];
-    const rows = revenueData.trips.map(trip => [
-      new Date(trip.date).toLocaleDateString("en-IN"),
-      new Date(trip.date).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' }),
-      `"${trip.source?.replace(/"/g, '""')}"`,
-      `"${trip.destination?.replace(/"/g, '""')}"`,
-      `"${trip.passenger}"`,
-      `"${trip.driver}"`,
-      trip.totalFare,
-      trip.platformIncome
-    ]);
-
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(r => r.join(","))
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `RouteMate_Revenue_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `RouteMate_Revenue_${today}.${format}`;
+    
+    if (format === 'csv') {
+      exportRevenueToCSV(revenueData.trips, filename);
+    } else {
+      exportRevenueToPDF(revenueData.trips, filename);
+    }
   };
 
   return (
@@ -159,12 +142,29 @@ const RevenueAnalyticsPage = () => {
                 Apply Filters
               </button>
            </div>
-           <button 
-             onClick={handleExportCSV}
-             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-(--card-border) text-xs font-bold hover:bg-(--card-bg) transition-all"
-           >
-              <Download size={14} /> Export CSV
-           </button>
+           <div className="relative group/export">
+              <button 
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-(--card-border) text-xs font-bold hover:bg-(--card-bg) transition-all"
+              >
+                 <Download size={14} /> Export Data
+              </button>
+              
+              {/* Export Dropdown */}
+              <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
+                <button
+                  onClick={() => handleExport('pdf')}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                >
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                >
+                  Download CSV
+                </button>
+              </div>
+           </div>
         </div>
 
         {/* ── Tables Section ── */}

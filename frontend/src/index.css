@@ -173,3 +173,26 @@ input::-webkit-caps-lock-indicator {
 *::-webkit-scrollbar {
   display: none; /* Chrome, Safari, and Opera */
 }
+
+/* ─── Prevent text cursor on non-input UI elements ──────────────────────── */
+/* Removes the annoying text cursor that appears when clicking anywhere */
+body, div, span, p, h1, h2, h3, h4, h5, h6, label, li, ul, ol, nav, section, article, aside, header, footer, main {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Restore text cursor only for actual text inputs */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+textarea,
+[contenteditable="true"] {
+  cursor: text !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}

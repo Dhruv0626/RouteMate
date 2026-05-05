@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import { useEffect } from "react";
+import { getMyWallet } from "../../services/paymentService";
+import { exportWalletStatementToPDF } from "../../utils/exportUtils";
 
 const PayoutsPage = () => {
   const navigate = useNavigate();
@@ -34,16 +37,38 @@ const PayoutsPage = () => {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [showNotification, setShowNotification] = useState(null);
 
-  const paymentHistory = [];
-
-  const walletStats = {
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [walletStats, setWalletStats] = useState({
     totalWithdrawn: 0,
     pendingWithdrawal: 0,
     availableBalance: 0,
-    nextPayoutDate: "N/A",
-  };
+    nextPayoutDate: "Every Friday",
+  });
 
-  const withdrawalStats = [];
+  useEffect(() => {
+    const fetchWallet = async () => {
+      try {
+        const res = await getMyWallet();
+        if (res.data.success) {
+          setWalletStats({
+            availableBalance: res.data.wallet.balance,
+            totalWithdrawn: res.data.wallet.totalWithdrawn || 0,
+            pendingWithdrawal: res.data.wallet.pendingWithdrawals || 0,
+            nextPayoutDate: "Every Friday",
+          });
+          setPaymentHistory(res.data.wallet.transactions || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch wallet data", err);
+      }
+    };
+    fetchWallet();
+  }, []);
+
+  const withdrawalStats = paymentHistory
+    .filter(tx => tx.type === 'withdrawal')
+    .slice(0, 6)
+    .map(tx => ({ month: new Date(tx.date).toLocaleDateString('en-IN', { month: 'short' }), amount: tx.amount }));
 
   const maxWithdrawal = Math.max(...withdrawalStats.map((s) => s.amount));
 
@@ -129,9 +154,18 @@ const PayoutsPage = () => {
   };
 
   const handleDownloadStatement = () => {
+    if (paymentHistory.length === 0) {
+      setShowNotification({
+        type: "info",
+        message: "No transactions to export",
+      });
+      return;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    exportWalletStatementToPDF(paymentHistory, walletStats, `RouteMate_Statement_${today}.pdf`);
     setShowNotification({
       type: "success",
-      message: "Statement downloaded successfully",
+      message: "Statement generated successfully",
     });
     setTimeout(() => setShowNotification(null), 3000);
   };

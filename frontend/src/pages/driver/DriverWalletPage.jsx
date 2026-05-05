@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   ChevronLeft, ArrowUpRight, ArrowDownLeft, RefreshCw,
   Wallet, TrendingUp, AlertTriangle, CheckCircle2, AlertCircle,
-  Loader2, IndianRupee, Zap, ShieldCheck, BanknoteIcon,
+  Loader2, IndianRupee, Zap, ShieldCheck, BanknoteIcon, Download
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import { useAuth } from "../../context/AuthContext";
 import { getMyWallet, openRazorpayCheckout, driverWithdrawal } from "../../services/paymentService";
+import { exportWalletToCSV, exportWalletStatementToPDF } from "../../utils/exportUtils";
 
 const COMMISSION_TOPUP_AMOUNTS = [50, 100, 200, 500];
 const WITHDRAWAL_AMOUNTS       = [100, 500, 1000, 2000];
@@ -132,6 +133,24 @@ const DriverWalletPage = () => {
       showToast(err.response?.data?.message || "Withdrawal failed", "error");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleExport = (format) => {
+    if (!txns || txns.length === 0) {
+      return showToast("No transactions available to export", "error");
+    }
+
+    const filename = `Driver_Wallet_Statement_${new Date().toISOString().split('T')[0]}.${format}`;
+    const walletStats = {
+      availableBalance: wallet?.walletBalance || 0,
+      totalWithdrawn: stats.totalWithdrawn || 0
+    };
+
+    if (format === 'csv') {
+      exportWalletToCSV(txns, filename);
+    } else {
+      exportWalletStatementToPDF(txns, walletStats, filename);
     }
   };
 
@@ -277,9 +296,24 @@ const DriverWalletPage = () => {
 
         {/* ── Transaction History ── */}
         <section className="space-y-4">
-          <h2 className="font-display text-lg font-black text-(--text-main) flex items-center gap-2 px-1">
-            Transactions <span className="bg-primary h-1.5 w-1.5 rounded-full"/>
-          </h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="font-display text-lg font-black text-(--text-main) flex items-center gap-2">
+              Transactions <span className="bg-primary h-1.5 w-1.5 rounded-full"/>
+            </h2>
+            <div className="relative group/export">
+              <button className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/20 transition-all">
+                <Download size={14} /> Export
+              </button>
+              <div className="absolute right-0 top-full mt-2 w-32 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
+                <button onClick={() => handleExport('pdf')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all">
+                  PDF Statement
+                </button>
+                <button onClick={() => handleExport('csv')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all">
+                  CSV Export
+                </button>
+              </div>
+            </div>
+          </div>
           {txns.length === 0 ? (
             <div className="glass-card rounded-3xl border border-(--card-border) p-12 text-center">
               <Wallet size={40} className="mx-auto text-(--text-dim) mb-3 opacity-40"/>

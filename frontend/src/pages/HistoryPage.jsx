@@ -20,7 +20,7 @@ import {
 import { useState } from "react";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import { useAuth } from "../context/AuthContext";
-import { exportRideHistoryToCSV } from "../utils/exportUtils";
+import { exportRideHistoryToCSV, exportRideHistoryToPDF } from "../utils/exportUtils";
 import { getPassengerHistory, getDriverHistory } from "../services/rideService";
 import { useEffect } from "react";
 import { categoryLabels } from "../utils/vehicles";
@@ -209,9 +209,13 @@ const HistoryPage = () => {
     }
   };
 
-  const handleExport = () => {
-    const filename = `${role}_ride_history_${new Date().toISOString().split("T")[0]}.csv`;
-    exportRideHistoryToCSV(filteredRides, filename);
+  const handleExport = (format) => {
+    const filename = `${role}_ride_history_${new Date().toISOString().split("T")[0]}.${format}`;
+    if (format === 'csv') {
+      exportRideHistoryToCSV(filteredRides, filename);
+    } else {
+      exportRideHistoryToPDF(filteredRides, filename);
+    }
   };
 
   return (
@@ -237,13 +241,30 @@ const HistoryPage = () => {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <button
-              onClick={handleExport}
-              className="rounded-xl bg-primary px-4 py-2 text-sm font-black text-black transition-all hover:scale-105 shadow-md shadow-primary/10 flex items-center gap-2"
-            >
-              <Download size={16} />
-              <span className="hidden sm:inline">Export</span>
-            </button>
+            <div className="relative group/export">
+              <button
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-black text-black transition-all hover:scale-105 shadow-md shadow-primary/10 flex items-center gap-2"
+              >
+                <Download size={16} />
+                <span className="hidden sm:inline">Export</span>
+              </button>
+              
+              {/* Export Dropdown */}
+              <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
+                <button
+                  onClick={() => handleExport('pdf')}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                >
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                >
+                  Download CSV
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>

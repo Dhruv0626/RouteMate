@@ -21,6 +21,7 @@ import {
 import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import api from "../../services/api";
+import { exportAuditLogsToCSV } from "../../utils/exportUtils";
 import Loader from "../../components/ui/Loader";
 
 const AdminHistoryPage = () => {
@@ -124,18 +125,8 @@ const AdminHistoryPage = () => {
   };
 
   const handleExport = () => {
-    const rows = [
-      ["ID", "Action", "Category", "Actor", "Target", "Date", "Status", "IP"],
-      ...filteredLogs.map((l) => [l.id, l.action, l.category, l.actor, l.target, l.date, l.status, l.ip]),
-    ];
-    const csvContent = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit_logs_${new Date().toLocaleDateString("en-IN").replace(/\//g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const filename = `audit_logs_${new Date().toLocaleDateString("en-IN").replace(/\//g, "-")}.csv`;
+    exportAuditLogsToCSV(filteredLogs, filename);
   };
 
   if (loading && auditLogs.length === 0) return <Loader fullPage text="Retrieving Platform Audit Records..." />;

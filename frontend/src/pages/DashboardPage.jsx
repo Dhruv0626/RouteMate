@@ -588,8 +588,14 @@ const DashboardPage = () => {
       <header className="sticky top-0 z-50 border-b border-(--card-border) bg-(--bg-main)/80 backdrop-blur-md transition-all duration-500">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-8">
-            <div className="group cursor-pointer transition-transform duration-300 hover:scale-105">
-              <span className="font-display text-2xl font-bold tracking-tighter">
+            <div 
+              onClick={() => navigate("/home")}
+              className="group flex cursor-pointer items-center gap-2 transition-transform duration-300 hover:scale-105"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 p-1.5 transition-all group-hover:bg-primary/20">
+                <img src="/images/logo/logo.png" alt="Logo" className="h-full w-full object-contain" />
+              </div>
+              <span className="font-display text-xl font-bold tracking-tighter hidden sm:block">
                 <span className="bg-linear-to-br from-(--text-main) to-(--text-dim) bg-clip-text text-transparent italic">
                   Route
                 </span>

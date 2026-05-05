@@ -314,6 +314,7 @@ function AppContent() {
     <PageTransition>
       <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/splash" element={<SplashPage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/loader" element={<Loader fullPage text="System Demo Mode..." />} />
 

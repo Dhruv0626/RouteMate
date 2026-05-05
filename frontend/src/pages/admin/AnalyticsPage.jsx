@@ -11,7 +11,7 @@ import { useDialog } from "../../context/DialogContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
 import api from "../../services/api";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 
 // ─── Sparkline Bar component ───────────────────────────────────────────────────
@@ -702,9 +702,12 @@ const AnalyticsPage = () => {
       {/* ── Hidden PDF Template ── */}
       <div style={{ position: 'absolute', left: '-9999px', top: '0' }}>
         <div ref={reportRef} style={{ width: '800px', padding: '40px', backgroundColor: '#ffffff', color: '#000000', fontFamily: 'Arial, sans-serif' }}>
-          <div style={{ borderBottom: '2px solid #ffcc00', paddingBottom: '20px', marginBottom: '30px' }}>
-             <h1 style={{ fontSize: '28px', margin: '0', color: '#000' }}>RouteMate Analytics</h1>
-             <p style={{ fontSize: '14px', color: '#666', margin: '5px 0' }}>Professional Platform Report · {formattedRange}</p>
+          <div style={{ borderBottom: '2px solid #ffcc00', paddingBottom: '20px', marginBottom: '30px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+             <img src="/images/logo/logo.png" alt="Logo" style={{ width: '40px', height: '40px' }} />
+             <div>
+               <h1 style={{ fontSize: '28px', margin: '0', color: '#000' }}>RouteMate Analytics</h1>
+               <p style={{ fontSize: '14px', color: '#666', margin: '5px 0' }}>Professional Platform Report · {formattedRange}</p>
+             </div>
           </div>
 
           <div style={{ marginBottom: '40px' }}>

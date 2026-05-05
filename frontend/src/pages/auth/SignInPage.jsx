@@ -120,12 +120,17 @@ const SignInPage = () => {
         {/* Left Side */}
         <div className="from-primary/10 hidden flex-col justify-between border-r border-(--card-border) bg-linear-to-br to-transparent p-10 lg:flex">
           <div className="relative z-10">
-            <h1 className="font-display mb-1 text-3xl font-black tracking-tighter text-(--text-main)">
-              <span className="bg-linear-to-br from-(--text-main) to-(--text-dim) bg-clip-text text-transparent italic">
-                Route
-              </span>
-              <span className="text-primary">Mate</span>
-            </h1>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/20 p-2 shadow-[0_0_15px_rgba(255,204,0,0.3)]">
+                <img src="/images/logo/logo.png" alt="Logo" className="h-full w-full object-contain" />
+              </div>
+              <h1 className="font-display text-3xl font-black tracking-tighter text-(--text-main)">
+                <span className="bg-linear-to-br from-(--text-main) to-(--text-dim) bg-clip-text text-transparent italic">
+                  Route
+                </span>
+                <span className="text-primary">Mate</span>
+              </h1>
+            </div>
             <p className="text-base leading-relaxed font-medium text-(--text-dim) opacity-80">
               Sign in to your dashboard.
             </p>

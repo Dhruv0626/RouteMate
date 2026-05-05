@@ -18,7 +18,7 @@ import {
 import { useState, useEffect } from "react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import Button from "../../components/ui/Button";
-import { exportEarningsToCSV } from "../../utils/exportUtils";
+import { exportEarningsToCSV, exportEarningsToPDF } from "../../utils/exportUtils";
 import { getDriverHistory } from "../../services/rideService";
 
 const EarningsPage = () => {
@@ -125,9 +125,14 @@ const EarningsPage = () => {
   const maxTrips = Math.max(...dailyEarnings.map((d) => d.trips), 1);
   const maxDailyEarning = Math.max(...dailyEarnings.map((d) => d.amount), 1);
 
-  const handleExport = () => {
+  const handleExport = (format) => {
     const today = new Date().toLocaleDateString("en-IN").replace(/\//g, "-");
-    exportEarningsToCSV(earningsStats, `earnings_report_${today}.csv`);
+    const filename = `earnings_report_${today}.${format}`;
+    if (format === 'csv') {
+      exportEarningsToCSV(earningsStats, filename);
+    } else {
+      exportEarningsToPDF(earningsStats, filename);
+    }
   };
 
   const handleRequestPayout = () => {
@@ -200,13 +205,30 @@ const EarningsPage = () => {
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <button
-              onClick={handleExport}
-              className="rounded-xl border border-(--card-border) bg-(--card-bg) px-4 py-2 text-sm font-semibold text-(--text-main) transition-all hover:border-primary/40 hover:bg-primary/5 flex items-center gap-2"
-            >
-              <Download size={16} />
-              <span className="hidden sm:inline">Export</span>
-            </button>
+            <div className="relative group/export">
+              <button
+                className="rounded-xl border border-(--card-border) bg-(--card-bg) px-4 py-2 text-sm font-semibold text-(--text-main) transition-all hover:border-primary/40 hover:bg-primary/5 flex items-center gap-2"
+              >
+                <Download size={16} />
+                <span className="hidden sm:inline">Export</span>
+              </button>
+              
+              {/* Export Dropdown */}
+              <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
+                <button
+                  onClick={() => handleExport('pdf')}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                >
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                >
+                  Download CSV
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>

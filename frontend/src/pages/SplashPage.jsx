@@ -6,6 +6,9 @@ const SplashPage = () => {
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
+    // If we are on the manual /splash route, don't auto-redirect
+    if (window.location.pathname === "/splash") return;
+
     // Show splash for 3.5 seconds then redirect
     const timer = setTimeout(() => {
       setIsExiting(true);
@@ -39,120 +42,36 @@ const SplashPage = () => {
 
       {/* Main Logo Container */}
       <div className="relative z-10 flex flex-col items-center justify-center gap-8">
-        {/* Animated Logo SVG */}
-        <div className="animate-float relative h-32 w-32">
-          <div className="from-primary/20 absolute inset-0 animate-pulse rounded-full bg-linear-to-br to-blue-500/20 blur-xl" />
-
-          <svg
-            viewBox="0 0 100 100"
-            className="relative z-10 h-full w-full drop-shadow-2xl"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Main Container Glass Circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="44"
-              fill="var(--card-bg)"
-              stroke="var(--card-border)"
-              strokeWidth="0.5"
-              className="backdrop-blur-sm"
-            />
-
-            {/* Outer Border */}
-            <circle
-              cx="50"
-              cy="50"
-              r="44"
-              fill="none"
-              stroke="#E6B800"
-              strokeWidth="2"
-              opacity="0.15"
-            />
-
-            {/* Animated Spinner */}
-            <circle
-              cx="50"
-              cy="50"
-              r="44"
-              fill="none"
-              stroke="#FFCC00"
-              strokeWidth="1.5"
-              strokeDasharray="80 220"
-              strokeLinecap="round"
-              className="animate-spin-slow"
-            />
-
-            {/* Secondary Orbit */}
-            <circle
-              cx="50"
-              cy="50"
-              r="50"
-              fill="none"
-              stroke="#fccd0e"
-              strokeWidth="2"
-              strokeDasharray="1 14"
-              className="animate-spin-reverse opacity-60"
-            />
-
-            {/* Route Path */}
-            <path
-              d="M30 50C30 50 40 35 50 50C60 65 70 50 70 50"
-              stroke="#FFCC00"
-              strokeWidth="3"
-              strokeLinecap="round"
-              opacity="0.1"
-            />
-
-            {/* Animated Route Line */}
-            <path
-              d="M30 50C30 50 40 35 50 50C60 65 70 50 70 50"
-              stroke="#FFCC00"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              className="animate-route-flow"
-              strokeDasharray="80"
-              strokeDashoffset="80"
-            />
-
-            {/* Destination Pin */}
-            <g
-              className="animate-pin-bounce"
-              style={{ transformOrigin: "70px 50px" }}
-            >
+        {/* Official Logo Container */}
+          {/* Central Location Route Animation (Restored) */}
+          <div className="relative z-10 flex h-48 w-48 items-center justify-center bg-white/5 rounded-full backdrop-blur-md border border-white/10 shadow-inner overflow-hidden">
+            <svg viewBox="0 0 100 100" className="w-32 h-32">
               <path
-                d="M70 43C67.8 43 66 44.8 66 47C66 49.8 70 54 70 54C70 54 74 49.8 74 47C74 44.8 72.2 43 70 43ZM70 49C68.9 49 68 48.1 68 47C68 45.9 68.9 45 70 45C71.1 45 72 45.9 72 47C72 48.1 71.1 49 70 49Z"
-                fill="#FFCC00"
+                d="M20 50 Q35 30 50 50 T80 50"
+                className="stroke-primary/20"
+                strokeWidth="6"
+                fill="none"
+                strokeLinecap="round"
               />
-              <circle
-                cx="70"
-                cy="54"
-                r="2.5"
-                stroke="#FFCC00"
-                strokeWidth="0.5"
-                opacity="0.4"
-                className="animate-ping"
+              <path
+                d="M20 50 Q35 30 50 50 T80 50"
+                className="stroke-primary animate-route-flow"
+                strokeWidth="6"
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray="10 100"
               />
-            </g>
+              <g className="animate-vehicle-travel">
+                <path
+                  d="M-4 -8 C-4 -8 -8 -4 -8 0 C-8 4 -4 8 0 8 C4 8 8 4 8 0 C8 -4 4 -8 4 -8 L0 -14 Z"
+                  fill="var(--color-primary)"
+                  transform="scale(0.5) rotate(90)"
+                />
+                <circle r="1.5" fill="white" transform="translate(0, -2)" />
+              </g>
+            </svg>
+          </div>
 
-            {/* Moving Vehicle */}
-            <g className="animate-vehicle-travel">
-              <circle r="1.5" fill="#FFCC00" />
-              <circle
-                r="3.5"
-                fill="#FFCC00"
-                opacity="0.2"
-                className="animate-pulse"
-              />
-            </g>
-          </svg>
-
-          {/* Outer Halo */}
-          <div
-            className="absolute inset-0 scale-110 animate-pulse rounded-full border-[1.5px] border-[#fccd0e]"
-            style={{ animationDelay: "0.3s" }}
-          />
-        </div>
 
         {/* Brand Text with Animation */}
         <div

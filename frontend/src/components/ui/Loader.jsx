@@ -132,23 +132,36 @@ const Loader = ({
       </div>
 
       {fullPage && (
-        <div className="relative z-10 mt-5 space-y-3 text-center">
-          <h2 className="font-display text-2xl font-black tracking-tighter text-(--text-main)">
-            <span className="bg-linear-to-br from-(--text-main) to-(--text-dim) bg-clip-text text-transparent italic">
-              Route
-            </span>
-            <span className="text-primary">Mate</span>
-          </h2>
+        <div className="relative z-10 mt-8 space-y-2 text-center">
+          <div className="flex items-center justify-center gap-2 mb-1">
+             <div className="h-[1px] w-8 bg-linear-to-r from-transparent to-primary/50" />
+             <h2 className="font-display text-2xl font-black tracking-tighter text-(--text-main)">
+              <span className="bg-linear-to-br from-(--text-main) to-(--text-dim) bg-clip-text text-transparent">
+                Route
+              </span>
+              <span className="text-primary italic">Mate</span>
+            </h2>
+            <div className="h-[1px] w-8 bg-linear-to-l from-transparent to-primary/50" />
+          </div>
 
-          <p className="animate-pulse text-[10px] font-black tracking-[0.4em] text-(--text-dim) uppercase">
-            {text}
-          </p>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-[9px] font-black tracking-[0.6em] text-primary uppercase animate-pulse">
+              {text}
+            </p>
+            <div className="h-1 w-32 bg-white/5 rounded-full overflow-hidden">
+               <div className="h-full bg-linear-to-r from-primary/20 via-primary to-primary/20 w-1/2 animate-shimmer" />
+            </div>
+          </div>
         </div>
       )}
 
       <style
         dangerouslySetInnerHTML={{
           __html: `
+        @keyframes shimmer {
+          0% { transform: translateX(-200%); }
+          100% { transform: translateX(200%); }
+        }
         @keyframes route-flow {
           0% { stroke-dashoffset: 100; opacity: 0; }
           20% { opacity: 1; }
@@ -174,6 +187,9 @@ const Loader = ({
           to { transform: rotate(0deg); }
         }
 
+        .animate-shimmer {
+          animation: shimmer 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
         .animate-route-flow {
           animation: route-flow 3s ease-in-out infinite;
         }
