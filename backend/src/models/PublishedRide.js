@@ -71,6 +71,18 @@ const PublishedRideSchema = new Schema(
             default: "open"
         },
 
+        // ── Late Departure Tracking ─────────────────────────────────────────
+        lateZone: { type: Number, default: 0 },            // 0 = on-time, 1-4 = zone
+        lateReason: { type: String, enum: ["traffic", "vehicle_issue", "personal", "other", null], default: null },
+        lateMinutes: { type: Number, default: 0 },         // filled by cron automatically
+        newDepartureTime: { type: Date, default: null },    // driver-set updated time (Zone 2+)
+        zone1AlertSentAt: { type: Date, default: null },   // 1-min silent reminder timestamp
+        zone1PassengerSentAt: { type: Date, default: null }, // 5-min passenger ETA notification
+        zone2AlertSentAt: { type: Date, default: null },
+        zone3AlertSentAt: { type: Date, default: null },
+        zone4CancelledAt: { type: Date, default: null },
+        noShowHandled: { type: Boolean, default: false },  // prevents double-processing
+
         // Full list of route waypoints [lng, lat] from OSRM
         routeCoords: {
             type: [[Number]],

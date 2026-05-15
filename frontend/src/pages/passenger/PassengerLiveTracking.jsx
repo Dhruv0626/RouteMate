@@ -49,6 +49,17 @@ const PassengerLiveTracking = () => {
   const [liveEtaMins, setLiveEtaMins] = useState(null);
   const [destEtaMins, setDestEtaMins] = useState(null);
 
+  // Live clock — ticks every 30s so ETA arrival time stays accurate without reloading
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Late departure alert state
+  const [lateAlert, setLateAlert] = useState(null); // { zone, message, lateMinutes, canCancel }
+  const [cancellingRide, setCancellingRide] = useState(false);
+
   // Live wallet balance (fetched fresh from server when payment panel shows)
   const [liveWalletBalance, setLiveWalletBalance] = useState(null);
   const [walletLoading, setWalletLoading] = useState(false);
@@ -118,7 +129,13 @@ const PassengerLiveTracking = () => {
 
     const onStatusUpdate = (data) => {
       console.log("Ride status update received:", data);
-      if (data.rideId === rideId) {
+      if (data.rideId === rideId || data.rideId === ride?._id) {
+        if (data.status === "cancelled") {
+          showAlert("This ride has been cancelled by the driver or system.", "Ride Cancelled", "error")
+            .then(() => navigate("/passenger/dashboard"));
+          return;
+        }
+
         setRide(prev => prev ? { ...prev, status: data.status } : prev);
         if (data.status === "reached" || data.status === "completed") {
           setIsMinimized(false);
@@ -155,10 +172,38 @@ const PassengerLiveTracking = () => {
       }
     };
 
+    // ── Late Departure Handlers ──────────────────────────────────────────────
+    const onLateUpdate = (data) => {
+      if (data.rideId !== rideId) return;
+      setLateAlert({
+        zone: data.zone,
+        message: data.message,
+        lateMinutes: data.lateMinutes,
+        canCancel: data.canCancel || false,
+        urgent: data.urgent || false,
+        reason: data.reason || null,
+        reasonLabel: data.reasonLabel || null,
+        newDepartureTime: data.newDepartureTime || null,
+      });
+    };
+
+    const onAutoCancelled = async (data) => {
+      if (data.rideId !== rideId) return;
+      setLateAlert(null);
+      await showAlert(
+        "Your ride has been automatically cancelled — the driver did not depart within 20 minutes. Your booking has been removed. Please try to find another ride.",
+        "🚫 Ride Auto-Cancelled",
+        "error"
+      );
+      navigate("/passenger/dashboard");
+    };
+
     socket.on("ride_status_update", onStatusUpdate);
     socket.on("location_update", onLocationUpdate);
     socket.on("payment_completed", onPaymentCompleted);
     socket.on("sos_warning", onSosWarning);
+    socket.on("ride_late_update", onLateUpdate);
+    socket.on("ride_auto_cancelled", onAutoCancelled);
 
     return () => {
       socket.off("connect", joinRooms);
@@ -166,6 +211,8 @@ const PassengerLiveTracking = () => {
       socket.off("location_update", onLocationUpdate);
       socket.off("payment_completed", onPaymentCompleted);
       socket.off("sos_warning", onSosWarning);
+      socket.off("ride_late_update", onLateUpdate);
+      socket.off("ride_auto_cancelled", onAutoCancelled);
     };
   }, [rideId, user?.id, user?.role]);
 
@@ -354,8 +401,90 @@ const PassengerLiveTracking = () => {
   
   const amountPaid = firstPassenger?.amountPaid || ride.fare?.totalWithTax || ride.fare?.total || 0;
 
+  // ── Cancel this ride (passenger-initiated during late zone 2/3) ─────────────
+  const handleCancelDueToDelay = async () => {
+    setCancellingRide(true);
+    try {
+      await api.post(`/published-rides/${rideId}/late-reason`, { reason: "other" }).catch(() => {});
+      // Navigate away — backend will handle booking cancellation when driver auto-cancels or passenger refreshes
+      await showAlert(
+        "Your booking has been marked for cancellation. If you paid via wallet, you will receive a full refund instantly.",
+        "Booking Cancelled",
+        "info"
+      );
+      navigate("/passenger/dashboard");
+    } catch (err) {
+      console.error("Cancel error:", err);
+    } finally {
+      setCancellingRide(false);
+    }
+  };
+
   return (
     <div className="relative flex flex-col h-screen bg-[#121212] font-sans overflow-hidden">
+      {/* ── Late Departure Banner ── */}
+      {lateAlert && !['in_progress','reached','completed'].includes(ride.status) && (
+        <div className={`absolute top-20 left-4 right-4 z-[3000] rounded-2xl p-4 shadow-2xl border animate-in slide-in-from-top-3 duration-500 ${
+          lateAlert.zone >= 3
+            ? 'bg-red-950/95 border-red-500/50 backdrop-blur-xl'
+            : lateAlert.zone === 2
+            ? 'bg-amber-950/95 border-amber-500/50 backdrop-blur-xl'
+            : 'bg-slate-900/95 border-slate-500/30 backdrop-blur-xl'
+        }`}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl shrink-0">
+              {lateAlert.zone >= 3 ? '🚨' : lateAlert.zone === 2 ? '⏳' : '🕐'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-black uppercase tracking-widest mb-1 ${
+                lateAlert.zone >= 3 ? 'text-red-400' : lateAlert.zone === 2 ? 'text-amber-400' : 'text-slate-300'
+              }`}>
+                {lateAlert.zone >= 3 ? 'SERIOUS DELAY — Final Warning'
+                  : lateAlert.zone === 2 ? 'MODERATE DELAY'
+                  : 'Minor Delay'}
+              </p>
+              <p className="text-sm text-white/80 font-medium leading-snug">
+                {lateAlert.reasonLabel
+                  ? `Driver reported: ${lateAlert.reasonLabel}${
+                      lateAlert.newDepartureTime
+                        ? ` · Revised Departure: ${new Date(lateAlert.newDepartureTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})}`
+                        : ''
+                    }`
+                  : lateAlert.message}
+              </p>
+              {lateAlert.lateMinutes > 0 && (
+                <p className="text-[11px] font-black text-white/50 mt-1 uppercase tracking-wider">
+                  ⏱ Current delay: {lateAlert.lateMinutes} min
+                </p>
+              )}
+              {lateAlert.canCancel && (
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={handleCancelDueToDelay}
+                    disabled={cancellingRide}
+                    className={`flex-1 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all ${
+                      lateAlert.zone >= 3
+                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+                        : 'bg-amber-500 text-black shadow-lg shadow-amber-500/30'
+                    } disabled:opacity-50`}
+                  >
+                    {cancellingRide ? 'Cancelling…' : '❌ Cancel — No Penalty'}
+                  </button>
+                  <button
+                    onClick={() => setLateAlert(null)}
+                    className="px-4 py-2.5 rounded-xl font-black text-xs text-white/60 border border-white/10 bg-white/5 active:scale-95 transition-all"
+                  >
+                    ✅ Wait
+                  </button>
+                </div>
+              )}
+            </div>
+            {!lateAlert.canCancel && (
+              <button onClick={() => setLateAlert(null)} className="text-white/30 hover:text-white/60 shrink-0 text-lg leading-none mt-0.5">✕</button>
+            )}
+          </div>
+        </div>
+      )}
       {/* ── Top Bar ── */}
       <div className="absolute top-0 left-0 right-0 z-[1000] p-4 flex items-center justify-between pointer-events-none">
         <button 
@@ -598,20 +727,85 @@ const PassengerLiveTracking = () => {
 
                     <div className="bg-white/5 border border-white/10 rounded-xl p-3">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-black text-white">
+                        <div className="flex-1 min-w-0">
+                          {/* ETA headline */}
+                          <p className={`text-sm font-black ${
+                            liveEtaMins !== null
+                              ? liveEtaMins === 0 ? "text-emerald-400"
+                              : liveEtaMins <= 3 ? "text-emerald-400"
+                              : "text-white"
+                              : "text-white/60"
+                          }`}>
                             {liveEtaMins !== null
-                              ? liveEtaMins === 0 ? "Driver is arriving now!"
-                              : `~${liveEtaMins} min away (live)`
-                              : effectiveDriverLocation ? "Calculating ETA…"
-                              : "Waiting for driver GPS signal"}
+                              ? liveEtaMins === 0
+                                ? "🟢 Driver is arriving now!"
+                                : `🚗 ~${liveEtaMins} min away`
+                              : effectiveDriverLocation
+                              ? "⏳ Calculating ETA…"
+                              : "📡 Waiting for driver GPS signal"}
                           </p>
-                          <p className="text-[10px] text-white/40 mt-0.5">
-                            {effectiveDriverLocation
+
+                          {/* Delay Info */}
+                          {ride.departureTime && (() => {
+                            const scheduledTime = new Date(ride.departureTime);
+                            const etaDate = liveEtaMins !== null ? new Date(nowTs + liveEtaMins * 60000) : null;
+                            const delayMinutes = etaDate ? Math.max(0, Math.round((etaDate - scheduledTime) / 60000)) : 0;
+
+                            return (
+                              <div className="mt-1 flex flex-col gap-0.5">
+                                <p className="text-[10px] text-white/40 flex items-center gap-1 font-bold uppercase tracking-widest">
+                                   Scheduled: <span className="text-white/60">{scheduledTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                </p>
+                                {delayMinutes > 0 && (
+                                  <p className="text-[11px] text-red-400 font-black flex items-center gap-1">
+                                     ⚠️ Expected Delay: {delayMinutes} min
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Clock time estimate — uses nowTs so it auto-updates every 30s */}
+                          {liveEtaMins !== null && liveEtaMins > 0 && (() => {
+                            const etaDate = new Date(nowTs + liveEtaMins * 60000);
+                            const etaTime = etaDate.toLocaleTimeString("en-IN", {
+                              hour: "2-digit", minute: "2-digit", hour12: true
+                            });
+                            return (
+                              <p className="text-[11px] text-emerald-400 font-black mt-1.5 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 w-fit">
+                                <span className="text-white/30 text-xs">🏁</span>
+                                ETA: <span className="text-emerald-400">{etaTime}</span>
+                              </p>
+                            );
+                          })()}
+
+                          {/* Sub-label */}
+                          <p className="text-[10px] text-white/40 mt-1">
+                            {liveEtaMins !== null
+                              ? "Live ETA · Updates as driver moves"
+                              : effectiveDriverLocation
                               ? "Updates live as driver moves"
                               : "Driver location will appear once GPS connects"}
                           </p>
+
+                          {/* Progress bar — fills as driver gets closer (max 20 min reference) */}
+                          {liveEtaMins !== null && (
+                            <div className="mt-2 h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-1000"
+                                style={{
+                                  width: `${Math.min(100, Math.max(4, ((20 - liveEtaMins) / 20) * 100))}%`,
+                                  background: liveEtaMins <= 2
+                                    ? "linear-gradient(to right, #10b981, #4ade80)"
+                                    : liveEtaMins <= 5
+                                    ? "linear-gradient(to right, #f59e0b, #fcd34d)"
+                                    : "linear-gradient(to right, #6366f1, #818cf8)"
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
+
                         {ride.driver?.Mobile_no && (
                           <a
                             href={`tel:${ride.driver.Mobile_no}`}

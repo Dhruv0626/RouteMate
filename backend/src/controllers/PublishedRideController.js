@@ -7,6 +7,7 @@ import UserModel from "../models/User.js";
 import WalletTransaction from "../models/WalletTransaction.js";
 import { getIO, emitToAdmins } from "../utils/SocketManager.js";
 import { calculateFareDetails } from "../utils/PriceEngine.js";
+import { notifyUser, notifyAdmins } from "../utils/NotifyUtil.js";
 
 // ─── Haversine distance (km) ──────────────────────────────────────────────────
 const haversineKm = ([lng1, lat1], [lng2, lat2]) => {
@@ -914,3 +915,112 @@ export const GetMyBookedRides = async (req, res) => {
         res.status(500).json({ success: false, message: "Error fetching booked rides" });
     }
 };
+
+// ─── Driver: Submit Late Reason (Zone 2+) ────────────────────────────────────
+/**
+ * POST /api/published-rides/:rideId/late-reason
+ * Body: { reason: "traffic"|"vehicle_issue"|"personal"|"other", newDepartureTime?: ISO string }
+ *
+ * Driver provides a reason for their delay and optionally a new departure time.
+ * All confirmed passengers receive an updated ETA notification.
+ */
+export const SubmitLateReason = async (req, res) => {
+    try {
+        const driverId = req.user.id;
+        const { rideId } = req.params;
+        const { reason, newDepartureTime } = req.body;
+
+        const validReasons = ["traffic", "vehicle_issue", "personal", "other"];
+        if (!reason || !validReasons.includes(reason)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid reason. Must be one of: ${validReasons.join(", ")}`
+            });
+        }
+
+        const ride = await PublishedRideModel.findOne({ _id: rideId, driver: driverId });
+        if (!ride) {
+            return res.status(404).json({ success: false, message: "Ride not found or unauthorized" });
+        }
+
+        if (ride.noShowHandled || ride.status === "cancelled") {
+            return res.status(400).json({ success: false, message: "Ride has already been auto-cancelled" });
+        }
+
+        // Update late reason on the ride
+        ride.lateReason = reason;
+
+        const reasonLabels = {
+            traffic: "🚗 Traffic Issue",
+            vehicle_issue: "🔧 Vehicle Issue",
+            personal: "👤 Personal Reason",
+            other: "🕐 Other Reason"
+        };
+        const reasonLabel = reasonLabels[reason];
+
+        let updatedETA = null;
+        if (newDepartureTime) {
+            const parsedTime = new Date(newDepartureTime);
+            if (!isNaN(parsedTime.getTime())) {
+                ride.newDepartureTime = parsedTime;
+                updatedETA = parsedTime.toLocaleTimeString("en-IN", {
+                    hour: "2-digit", minute: "2-digit", hour12: true
+                });
+            }
+        }
+
+        await ride.save();
+
+        // Notify all confirmed passengers about the reason + new ETA
+        const confirmedBookings = ride.bookings.filter(b => b.status === "confirmed");
+        for (const booking of confirmedBookings) {
+            await notifyUser({
+                userId: booking.passenger,
+                senderId: driverId,
+                title: "🔔 Driver Delay Update",
+                message: updatedETA
+                    ? `Your driver reported a delay due to: ${reasonLabel}. New estimated departure: ${updatedETA}.`
+                    : `Your driver reported a delay due to: ${reasonLabel}. Please wait — they will depart as soon as possible.`,
+                type: "info",
+                link: `/passenger/live-tracking/${rideId}`,
+                metadata: {
+                    rideId,
+                    reason,
+                    newDepartureTime: ride.newDepartureTime,
+                    motive: "late_reason_submitted"
+                }
+            });
+        }
+
+        // Socket: push updated info to passengers
+        const io = getIO();
+        if (io) {
+            for (const booking of confirmedBookings) {
+                io.to(booking.passenger.toString()).emit("ride_late_update", {
+                    rideId,
+                    zone: ride.lateZone,
+                    reason,
+                    reasonLabel,
+                    newDepartureTime: ride.newDepartureTime,
+                    message: updatedETA
+                        ? `Driver delayed: ${reasonLabel}. New ETA: ${updatedETA}`
+                        : `Driver delayed: ${reasonLabel}. Departing soon.`
+                });
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Late reason submitted. Passengers have been notified.",
+            data: {
+                rideId,
+                reason,
+                newDepartureTime: ride.newDepartureTime
+            }
+        });
+    } catch (error) {
+        console.error("SubmitLateReason Error:", error);
+        res.status(500).json({ success: false, message: "Failed to submit late reason" });
+    }
+};
+

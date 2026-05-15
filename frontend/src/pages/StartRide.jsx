@@ -172,6 +172,16 @@ const StartRide = () => {
         setSosWarningActive(true);
       }
     });
+
+    // Zone 4 auto-cancel — push driver back to dashboard
+    socket.on("ride_auto_cancelled", (data) => {
+      if (data.rideId !== rideId) return;
+      showAlert(
+        "Your ride has been automatically cancelled due to 30+ minutes of no departure. Trust Score -2 has been applied. Your published ride has been removed — please re-publish from your dashboard if you still intend to travel.",
+        "🚫 Ride Auto-Cancelled",
+        "error"
+      ).then(() => navigate("/driver/dashboard/active-rides"));
+    });
     
     // Payment Completion Event — Automatically exits map for both parties
     socket.on("payment_completed", async (data) => {
@@ -198,6 +208,7 @@ const StartRide = () => {
       socket.off("location_update");
       socket.off("ride_status_update");
       socket.off("sos_warning");
+      socket.off("ride_auto_cancelled");
       socket.off("payment_completed");
       window.removeEventListener("beforeunload", handleBeforeUnload);
       socket.disconnect();

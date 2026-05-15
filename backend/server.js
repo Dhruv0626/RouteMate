@@ -24,6 +24,7 @@ import reviewRoutes from "./src/routes/reviewRoutes.js";
 import { apiLimiter } from "./src/middlewares/RateLimiter.js";
 import { initSocket } from "./src/utils/SocketManager.js";
 import { initTripMonitorCron } from "./src/utils/TripMonitorCron.js";
+import { initDriverLateCron } from "./src/utils/DriverLateCron.js";
 import { razorpayWebhook } from "./src/controllers/PaymentController.js";
 import TripModel from "./src/models/Trip.js";
 
@@ -217,6 +218,9 @@ io.on("connection", (socket) => {
 httpServer.listen(PORT, "0.0.0.0", async () => {
   // ⏱️  Start trip safety monitor cron (every 2 min)
   initTripMonitorCron();
+
+  // 🚗  Start driver late departure monitor (every 1 min)
+  initDriverLateCron();
 
   // 🚀 KEEP-ALIVE: Ping the server every 10 minutes to prevent Render sleep mode
   const BACKEND_URL = process.env.BACKEND_URL;

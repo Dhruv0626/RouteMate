@@ -58,6 +58,7 @@ const DriverProfileSchema = new Schema(
     trustScore:           { type: Number, default: 0 },
     totalTagsReceived:    { type: Number, default: 0 },
     positiveTagCount:     { type: Number, default: 0 },
+    noShowCount:          { type: Number, default: 0 }, // Increments on Zone-4 auto-cancel; 3+ → admin suspend review
 
     // ── Wallet ─────────────────────────────────────────────────────────────────
     walletBalance:    { type: Number, default: 0 },

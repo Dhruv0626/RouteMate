@@ -8,7 +8,8 @@ import {
     UpdateRideStatus,
     GetMyPublishedRides,
     GetSingleRide,
-    GetMyBookedRides
+    GetMyBookedRides,
+    SubmitLateReason
 } from "../controllers/PublishedRideController.js";
 import authMiddleware from "../middlewares/AuthMid.js";
 import authorizeRoles from "../middlewares/RoleMid.js";
@@ -29,5 +30,6 @@ router.post("/publish",           authMiddleware, authorizeRoles("driver", "admi
 router.patch("/:rideId/bookings/:bookingId/respond", authMiddleware, authorizeRoles("driver", "admin"), RespondToBooking);
 router.patch("/:rideId/status",   authMiddleware, authorizeRoles("driver", "admin"), UpdateRideStatus);
 router.post("/book/:rideId",      authMiddleware, BookRide);
+router.post("/:rideId/late-reason", authMiddleware, authorizeRoles("driver", "admin"), SubmitLateReason);
 
 export default router;

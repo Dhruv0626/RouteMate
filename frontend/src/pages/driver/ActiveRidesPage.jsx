@@ -6,9 +6,11 @@ import {
   ArrowLeft, MapPin, Navigation, Clock, Phone, Star, 
   AlertCircle, CheckCircle, ChevronRight, Map, Zap, 
   MessageCircle, Eye, MoreVertical, TrendingUp, IndianRupee, 
-  Fuel, Activity, AlertTriangle, Loader2
+  Fuel, Activity, AlertTriangle, Loader2, X, Send
 } from "lucide-react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
+import socket from "../../services/socket";
+import { useAuth } from "../../context/AuthContext";
 
 const ActiveRidesPage = () => {
   const navigate = useNavigate();
@@ -25,6 +27,15 @@ const ActiveRidesPage = () => {
   const [loading, setLoading] = useState(true);
   const [expandedRide, setExpandedRide] = useState(null);
   const [showNavigation, setShowNavigation] = useState(false);
+  const { user } = useAuth();
+
+  // Late departure state
+  const [lateRide, setLateRide] = useState(null); // The ride object that is late
+  const [lateAlert, setLateAlert] = useState(null); // { zone, lateMinutes }
+  const [showLateModal, setShowLateModal] = useState(false);
+  const [submittingReason, setSubmittingReason] = useState(false);
+  const [lateReason, setLateReason] = useState("");
+  const [customNewTime, setCustomNewTime] = useState("");
 
   const handleCancel = async (rideId) => {
     const confirmed = await showConfirm("Are you sure you want to cancel this ride?", "Cancel Ride", "warning", "Yes, Cancel");
@@ -46,7 +57,17 @@ const ActiveRidesPage = () => {
         ]);
 
         if (ridesRes.data.success) {
-            setActiveRides(ridesRes.data.data || []);
+            const rides = ridesRes.data.data || [];
+            setActiveRides(rides);
+            
+            // Check if any ride is currently in a late zone needing action
+            const lateOne = rides.find(r => r.publishedRide?.lateZone >= 2 && !r.publishedRide?.lateReason);
+            if (lateOne) {
+              setLateRide(lateOne);
+              setLateAlert({ zone: lateOne.publishedRide.lateZone, lateMinutes: lateOne.publishedRide.lateMinutes });
+              setShowLateModal(true);
+            }
+
             setRideStats(prev => ({
                 ...prev,
                 activeRides: ridesRes.data.stats.activeCount || 0,
@@ -67,7 +88,56 @@ const ActiveRidesPage = () => {
       }
     };
     fetchData();
-  }, []);
+
+    // Socket Listeners
+    socket.connect();
+    if (user?.id) socket.emit("join", user.id);
+
+    socket.on("ride_late_update", (data) => {
+      console.log("DRIVER LATE UPDATE:", data);
+      // data: { rideId, zone, lateMinutes, canCancel, urgent }
+      setLateAlert(data);
+      if (data.zone >= 2) {
+        // Find the ride in our list
+        const rideObj = activeRides.find(r => (r.publishedRide?._id || r.publishedRide || r._id) === data.rideId);
+        if (rideObj) setLateRide(rideObj);
+        setShowLateModal(true);
+      } else {
+        showAlert(`You are ${data.lateMinutes} min late for a ride. Please depart soon!`, "Late Departure", "warning");
+      }
+    });
+
+    socket.on("ride_auto_cancelled", (data) => {
+      showAlert("Ride automatically cancelled due to 30+ minute delay.", "Ride Cancelled", "error");
+      setTimeout(() => window.location.reload(), 2000);
+    });
+
+    return () => {
+      socket.off("ride_late_update");
+      socket.off("ride_auto_cancelled");
+    };
+  }, [user?.id, activeRides.length]);
+
+  const handleSubmitLateReason = async () => {
+    if (!lateReason) return showAlert("Please select a reason", "Required", "warning");
+    const rideId = lateRide.publishedRide?._id || lateRide.publishedRide || lateRide._id;
+    
+    setSubmittingReason(true);
+    try {
+      await api.post(`/published-rides/${rideId}/late-reason`, {
+        reason: lateReason,
+        newDepartureTime: customNewTime || undefined
+      });
+      setShowLateModal(false);
+      showAlert("Reason submitted. Passengers have been notified.", "Success", "success");
+      setLateReason("");
+      setCustomNewTime("");
+    } catch (err) {
+      showAlert(err.response?.data?.message || "Failed to submit reason", "Error", "error");
+    } finally {
+      setSubmittingReason(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -272,15 +342,38 @@ const ActiveRidesPage = () => {
                         </div>
                       </div>
 
-                      {/* Progress & Stats (Simplified for real data) */}
-                      <div className="grid grid-cols-2 gap-4 border-t border-(--card-border) pt-4">
-                        <div>
-                          <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter">Distance Estimate</p>
-                          <p className="font-black text-sm text-(--text-main)">{ride.distanceEstimate || "?"} km</p>
+                      {/* Progress & Stats */}
+                      <div className="space-y-4 border-t border-(--card-border) pt-4 mt-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter">Distance Estimate</p>
+                            <p className="font-black text-sm text-(--text-main)">{ride.distanceEstimate || "?"} km</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter">Trip Fare</p>
+                            <p className="font-black text-lg text-emerald-500">₹{ride.fare?.total}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter">Trip Fare</p>
-                          <p className="font-black text-lg text-emerald-500">₹{ride.fare?.total}</p>
+                        
+                        <div className="grid grid-cols-2 gap-4 bg-black/5 dark:bg-white/5 p-3 rounded-xl border border-(--card-border)">
+                          <div>
+                            <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter flex items-center gap-1">
+                              <Clock size={10} /> Scheduled
+                            </p>
+                            <p className="font-bold text-sm text-(--text-main)">
+                               {new Date(ride.publishedRide?.departureTime || ride.departureTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase font-black text-(--text-dim) tracking-tighter">Lateness</p>
+                            <p className={`font-black text-sm flex items-center justify-end gap-1 ${ride.publishedRide?.lateMinutes > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                              {ride.publishedRide?.lateMinutes > 0 ? (
+                                <><AlertTriangle size={12} /> +{ride.publishedRide.lateMinutes} min</>
+                              ) : (
+                                <><CheckCircle size={12} /> On Time</>
+                              )}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -394,6 +487,87 @@ const ActiveRidesPage = () => {
           </div>
         )}
       </div>
+
+      {/* ── Late Departure Modal (Zone 2+) ── */}
+      {showLateModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="w-full max-w-md bg-(--card-bg) border border-red-500/30 rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl space-y-5 max-h-[95vh] overflow-y-auto no-scrollbar">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                <AlertTriangle className="w-8 h-8 text-red-500 animate-pulse" />
+              </div>
+              <h3 className="text-xl font-black text-(--text-main)">Action Required: Late Departure</h3>
+              <p className="text-sm text-(--text-dim) mt-2 leading-relaxed">
+                You are <span className="text-red-500 font-bold">{lateAlert?.lateMinutes || "??"} minutes</span> late. 
+                Per policy, you must provide a reason to keep the ride active.
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              <p className="text-[10px] font-black uppercase text-(--text-dim) tracking-widest px-1">Select Reason</p>
+              {[
+                { id: "traffic", label: "🚗 Heavy Traffic", color: "hover:border-blue-500/50" },
+                { id: "vehicle_issue", label: "🔧 Vehicle Issue", color: "hover:border-amber-500/50" },
+                { id: "personal", label: "👤 Personal Reason", color: "hover:border-purple-500/50" },
+                { id: "other", label: "🕐 New Departure Time", color: "hover:border-emerald-500/50" }
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => setLateReason(opt.id)}
+                  className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between ${
+                    lateReason === opt.id 
+                      ? "bg-primary/10 border-primary text-primary" 
+                      : `bg-black/5 dark:bg-white/5 border-(--card-border) text-(--text-main) ${opt.color}`
+                  }`}
+                >
+                  <span className="font-bold text-sm">{opt.label}</span>
+                  {lateReason === opt.id && <CheckCircle size={18} />}
+                </button>
+              ))}
+            </div>
+
+            {lateReason === "other" && (
+              <div className="animate-in slide-in-from-top-2 duration-300">
+                <p className="text-[10px] font-black uppercase text-(--text-dim) tracking-widest mb-2 px-1">Estimate New Departure</p>
+                <input 
+                  type="time"
+                  value={customNewTime}
+                  onChange={(e) => setCustomNewTime(e.target.value)}
+                  className="w-full p-4 rounded-xl border border-(--card-border) bg-black/5 dark:bg-white/5 text-(--text-main) font-bold focus:outline-none focus:border-primary/50"
+                />
+              </div>
+            )}
+
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+              <p className="text-[10px] text-amber-500 font-bold leading-relaxed">
+                ⚠️ {lateAlert?.zone === 3 ? "FINAL WARNING: Auto-cancel in 5 min. Trust Score -1 applied." : "Passengers are being notified. Frequent delays may affect your rating."}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleSubmitLateReason}
+                disabled={submittingReason || !lateReason}
+                className="w-full py-4 bg-primary text-black font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submittingReason ? <Loader2 className="animate-spin" /> : <Send size={18} />}
+                Submit Reason
+              </button>
+              
+              <button
+                onClick={() => {
+                  const id = lateRide.publishedRide?._id || lateRide.publishedRide || lateRide._id;
+                  handleCancel(id);
+                  setShowLateModal(false);
+                }}
+                className="w-full py-3 text-red-500 font-bold hover:bg-red-500/5 rounded-xl transition-all text-sm"
+              >
+                Unable to Pickup? Cancel Ride
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -302,7 +302,7 @@ export const GetActiveTrips = async (req, res) => {
       driver: userId,
       phase: { $in: ["matched", "arrived", "ongoing"] }
     }).populate("passenger", "name profileImage Mobile_no passengerStats")
-      .populate("publishedRide", "vehicleType");
+      .populate("publishedRide", "vehicleType departureTime lateZone lateReason lateMinutes");
 
     // Simple aggregation for today's stats to show on the dashboard
     const nowIST = new Date(Date.now() + (5.5 * 60 * 60 * 1000));
