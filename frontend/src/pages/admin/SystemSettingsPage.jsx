@@ -309,12 +309,20 @@ const SystemSettingsPage = () => {
              value={config.surgeMultiplier} icon={Sliders} suffix="x"
              onChange={(v) => setConfig({...config, surgeMultiplier: v})}
            />
-           <ConfigInput
-             label="Commission Fees" desc="Platform cut"
-             disabled={!isSuper}
-             value={config.commission} icon={Smartphone} suffix="%"
-             onChange={(v) => setConfig({...config, commission: v})}
-           />
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 col-span-full">
+               <ConfigInput
+                 label="Platform Commission" desc="RouteMate's cut per trip"
+                 disabled={!isSuper}
+                 value={strip(config.commission)} icon={Smartphone} suffix="%"
+                 onChange={(v) => setConfig({...config, commission: v + "%"})}
+               />
+               <ConfigInput
+                 label="Driver Share" desc="Estimated driver earnings"
+                 disabled={true}
+                 value={100 - (parseFloat(strip(config.commission)) || 0)} icon={Users} suffix="%"
+                 onChange={() => {}}
+               />
+           </div>
         </SettingGroup>
 
         <div className="glass-card rounded-3xl border border-(--card-border) p-6 space-y-6">
@@ -382,7 +390,7 @@ const SystemSettingsPage = () => {
                         )}
                     </div>
                     <ConfigInput 
-                        label="Platform Account User ID" desc={`The central account where all ${config.commission}% commissions are credited.`}
+                        label="Platform Account User ID" desc={`The central account where all ${config.commission || "15%"} commissions are credited.`}
                         disabled={!isSuper}
                         value={config.platformAccountUserId}
                         onChange={(v) => setConfig({...config, platformAccountUserId: v})}

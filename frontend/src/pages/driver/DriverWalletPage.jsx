@@ -272,7 +272,7 @@ const DriverWalletPage = () => {
             <p className={`text-4xl font-black ${
               tripsBlocked ? "text-rose-400" : commissionWarn ? "text-amber-400" : "text-(--text-main)"
             }`}>{fmt(commissionBal)}</p>
-            <p className="text-xs text-(--text-dim) mt-2">Covers {config.commission || "15"} platform fee on cash trips</p>
+            <p className="text-xs text-(--text-dim) mt-2">Covers {config.commission?.includes('%') ? config.commission : (config.commission || "15") + "%"} platform fee on cash trips</p>
             <button onClick={() => setShowTopup(true)}
               className="mt-5 w-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest py-3 rounded-2xl flex items-center justify-center gap-1.5 hover:bg-primary/20 transition-all border border-primary/20">
               <IndianRupee size={14}/> Topup Commission Wallet

@@ -21,8 +21,10 @@ const razorpay = new Razorpay({
 /** Get commission rate as decimal from SystemConfig (e.g. "15" → 0.15) */
 const getCommissionRate = async () => {
   const config = await SystemConfig.findOne().lean();
-  const raw = config?.commission || "15";
-  return parseFloat(String(raw).replace(/[^0-9.]/g, "")) / 100;
+  const raw = config?.commission;
+  const parsed = parseFloat(String(raw).replace(/[^0-9.]/g, ""));
+  const rate = isNaN(parsed) ? 15 : parsed;
+  return rate / 100;
 };
 
 /** Credit/debit User.walletBalance (passengers & superadmin) */

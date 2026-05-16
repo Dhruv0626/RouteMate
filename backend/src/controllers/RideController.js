@@ -139,7 +139,7 @@ export const GetDriverHistory = async (req, res) => {
                   { $eq: ["$phase", "completed"] },
                   { $eq: [{ $arrayElemAt: ["$paymentDetails.status", 0] }, "completed"] }
                 ]},
-                "$fare.total",
+                { $arrayElemAt: ["$paymentDetails.driverEarnings", 0] },
                 0
               ]
             }
@@ -152,7 +152,7 @@ export const GetDriverHistory = async (req, res) => {
                   { $eq: ["$phase", "completed"] },
                   { $eq: [{ $arrayElemAt: ["$paymentDetails.status", 0] }, "completed"] }
                 ]},
-                "$fare.total",
+                { $arrayElemAt: ["$paymentDetails.driverEarnings", 0] },
                 0
               ]
             }
@@ -178,7 +178,7 @@ export const GetDriverHistory = async (req, res) => {
                   { $eq: ["$phase", "completed"] },
                   { $eq: [{ $arrayElemAt: ["$paymentDetails.status", 0] }, "completed"] }
                 ]},
-                "$fare.total",
+                { $arrayElemAt: ["$paymentDetails.driverEarnings", 0] },
                 0
               ]
             }
@@ -204,7 +204,7 @@ export const GetDriverHistory = async (req, res) => {
                   { $eq: ["$phase", "completed"] },
                   { $eq: [{ $arrayElemAt: ["$paymentDetails.status", 0] }, "completed"] }
                 ]},
-                "$fare.total",
+                { $arrayElemAt: ["$paymentDetails.driverEarnings", 0] },
                 0
               ]
             }
@@ -255,7 +255,7 @@ export const GetDriverHistory = async (req, res) => {
       {
         $group: {
           _id: "$vehicleTypeRequested",
-          total: { $sum: "$fare.total" },
+          total: { $sum: { $arrayElemAt: ["$paymentDetails.driverEarnings", 0] } },
           count: { $sum: 1 }
         }
       }
@@ -326,7 +326,7 @@ export const GetActiveTrips = async (req, res) => {
         {
           $match: { "paymentDetails.status": "completed" }
         },
-        { $group: { _id: null, count: { $sum: 1 }, earnings: { $sum: "$fare.total" } } }
+        { $group: { _id: null, count: { $sum: 1 }, earnings: { $sum: { $arrayElemAt: ["$paymentDetails.driverEarnings", 0] } } } }
       ]),
       DriverProfileModel.findOne({ user: userId })
     ]);

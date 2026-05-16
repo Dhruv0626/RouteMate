@@ -38,6 +38,9 @@ const PayoutsPage = () => {
   const [showNotification, setShowNotification] = useState(null);
 
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [sysConfig, setSysConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   const [walletStats, setWalletStats] = useState({
     totalWithdrawn: 0,
     pendingWithdrawal: 0,
@@ -48,18 +51,22 @@ const PayoutsPage = () => {
   useEffect(() => {
     const fetchWallet = async () => {
       try {
+        setLoading(true);
         const res = await getMyWallet();
         if (res.data.success) {
           setWalletStats({
-            availableBalance: res.data.wallet.balance,
-            totalWithdrawn: res.data.wallet.totalWithdrawn || 0,
+            availableBalance: res.data.wallet.walletBalance || res.data.wallet.balance || 0,
+            totalWithdrawn: res.data.stats.totalWithdrawn || 0,
             pendingWithdrawal: res.data.wallet.pendingWithdrawals || 0,
             nextPayoutDate: "Every Friday",
           });
-          setPaymentHistory(res.data.wallet.transactions || []);
+          setPaymentHistory(res.data.transactions || []);
+          setSysConfig(res.data.config);
         }
       } catch (err) {
         console.error("Failed to fetch wallet data", err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchWallet();
@@ -654,10 +661,10 @@ const PayoutsPage = () => {
                     </h3>
                     <ul className="space-y-1 text-xs leading-relaxed text-(--text-dim)">
                       <li>
-                        • Minimum withdrawal amount: ₹500
+                        • Minimum withdrawal amount: ₹{sysConfig?.withdrawalMinAmount || 500}
                       </li>
                       <li>
-                        • Maximum withdrawal amount: ₹1,00,000 per transaction
+                        • Maximum withdrawal amount: ₹{(sysConfig?.withdrawalDailyMax || 100000).toLocaleString()} per transaction
                       </li>
                       <li>
                         • Payouts are processed every Friday

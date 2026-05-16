@@ -734,21 +734,25 @@ export const UpdateRideStatus = async (req, res) => {
                 // ── Financial Breakdown for Notification ──
                 const totalFare = trip.fare?.total || 0;
                 const sysConfig = await SystemConfig.findOne();
-                const commStr = sysConfig?.commission || "15";
-                const commPercent = parseFloat(commStr.replace(/[^0-9.]/g, "")) || 15;
+                const commStr = sysConfig?.commission;
+                const parsedComm = parseFloat(String(commStr).replace(/[^0-9.]/g, ""));
+                const commPercent = isNaN(parsedComm) ? 15 : parsedComm;
                 const platformEarnings = Math.round((totalFare * commPercent) / 100 * 100) / 100;
                 const driverPayout = Math.round((totalFare - platformEarnings) * 100) / 100;
+                const driverPercent = 100 - commPercent;
 
                 // ── Emit Real-time Notification to Admins ──
                 emitToAdmins({
                     title: "Trip Completed! 💰",
-                    message: `Ride ${rideId.slice(-6).toUpperCase()} done. Fare: ₹${totalFare} | App Revenue: ₹${platformEarnings.toFixed(2)} | Driver: ₹${driverPayout.toFixed(2)}`,
+                    message: `Ride ${rideId.slice(-6).toUpperCase()} done. Fare: ₹${totalFare} | App Revenue: ₹${platformEarnings.toFixed(2)} (${commPercent}%) | Driver: ₹${driverPayout.toFixed(2)} (${driverPercent}%)`,
                     type: "trip_completed",
                     metadata: {
                         rideId,
                         totalFare,
                         platformEarnings,
                         driverPayout,
+                        platformPercent: commPercent,
+                        driverPercent: driverPercent,
                         category: "finance"
                     }
                 });

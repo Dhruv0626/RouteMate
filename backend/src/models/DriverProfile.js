@@ -65,7 +65,7 @@ const DriverProfileSchema = new Schema(
     // UPI/Wallet trip earnings accumulate here → withdrawn to bank
 
     commissionWallet: { type: Number, default: 0 },
-    // Pays 15% platform commission on cash trips — can go negative
+    // Platform commission on cash trips (fetched dynamically from SystemConfig) — can go negative
     // Below commissionWalletMinThreshold from SystemConfig → new trips blocked
 
     // ── Weekly Schedule (embedded) ─────────────────────────────────────────
