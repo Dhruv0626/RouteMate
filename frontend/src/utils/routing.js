@@ -95,6 +95,18 @@ function parseOsrmRaw(route) {
   return { path, distanceKm: route.distance / 1000, durationSecs: route.duration };
 }
 
+// Helper to add dynamic distance buffer and ensure a realistic minimum speed:
+// We ensure the base driving speed is modeled realistically for city traffic:
+//   baseDuration = max(distanceKm * 2, rawDurationMin)
+// Then we add the distance-based buffer:
+//   if distance >= 10 km, add 5 minutes buffer.
+//   if distance < 10 km, add 2 minutes buffer.
+function applyDistanceBuffer(distanceKm, durationMin) {
+  const baseDuration = Math.max(Math.round(distanceKm * 2), durationMin);
+  const buffer = distanceKm >= 10 ? 5 : 2;
+  return baseDuration + buffer;
+}
+
 // ─── Primary public API ───────────────────────────────────────────────────────
 
 /**
@@ -108,24 +120,27 @@ export async function fetchRoute(fromLat, fromLng, toLat, toLng, { signal, steps
     const r = parseOsrmRaw(osrmRoutes[0]);
     let routeSteps = [];
     if (steps) routeSteps = osrmRoutes[0].legs?.[0]?.steps || [];
-    return { ...r, durationMin: Math.round(r.distanceKm * 2), steps: routeSteps };
+    const rawMin = Math.max(1, Math.round(r.durationSecs / 60));
+    return { ...r, durationMin: applyDistanceBuffer(r.distanceKm, rawMin), steps: routeSteps };
   }
 
   // 2. Try Valhalla
   const valRoutes = await fetchValhalla(fromLng, fromLat, toLng, toLat, { signal });
   if (valRoutes?.length) {
     const r = parseOsrmRaw(valRoutes[0]);
-    return { ...r, durationMin: Math.round(r.distanceKm * 2), steps: [] };
+    const rawMin = Math.max(1, Math.round(r.durationSecs / 60));
+    return { ...r, durationMin: applyDistanceBuffer(r.distanceKm, rawMin), steps: [] };
   }
 
   // 3. Straight-line fallback (no real geometry, at least gives a distance)
   const distKm = haversineKm(fromLat, fromLng, toLat, toLng);
   const estimatedMin = Math.round((distKm / 30) * 60); // ~30 km/h city speed
+  const parsedDist = parseFloat(distKm.toFixed(1));
   return {
     path: [[fromLat, fromLng], [toLat, toLng]],
-    distanceKm: parseFloat(distKm.toFixed(1)),
+    distanceKm: parsedDist,
     durationSecs: estimatedMin * 60,
-    durationMin: estimatedMin,
+    durationMin: applyDistanceBuffer(parsedDist, estimatedMin),
     steps: [],
     isFallback: true,
   };
@@ -145,7 +160,8 @@ export async function fetchRouteInfo(fromLat, fromLng, toLat, toLng) {
       if (data.code === "Ok" && data.routes?.[0]) {
         const r = data.routes[0];
         const distKm = parseFloat((r.distance / 1000).toFixed(1));
-        return { distanceKm: distKm, durationMin: Math.round(distKm * 2) };
+        const rawMin = Math.max(1, Math.round(r.duration / 60));
+        return { distanceKm: distKm, durationMin: applyDistanceBuffer(distKm, rawMin) };
       }
     }
   } catch { /* fall through */ }
@@ -192,7 +208,8 @@ export async function fetchMultipleRoutes(pickup, dropoff, systemConfig = null) 
 
   return pool.slice(0, 3).map((r, idx) => {
     const distanceKm  = parseFloat((r.distanceKm ?? r.distanceM / 1000).toFixed(1));
-    const durationMin = Math.max(1, Math.round(distanceKm * 2));
+    const rawDuration = Math.max(1, Math.round((r.durationSecs ?? r.duration ?? 0) / 60));
+    const durationMin = applyDistanceBuffer(distanceKm, rawDuration);
     const meta        = ROUTE_META[idx] ?? { label: `Route ${idx + 1}`, tag: "", color: "#6366f1" };
     return {
       id: idx, label: meta.label, tag: meta.tag, color: meta.color,

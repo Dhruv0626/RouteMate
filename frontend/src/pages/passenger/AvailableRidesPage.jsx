@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, MapPin, Search, Calendar, Users, IndianRupee,
   Car, Clock, Lock, Share2, CheckCircle, AlertCircle,
-  Navigation, X, Loader2, Filter,
+  Navigation, X, Loader2, Filter, Zap,
 } from "lucide-react";
 import {
   MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents,
@@ -12,8 +12,10 @@ import L from "leaflet";
 import { makePin } from "../../utils/mapIcons";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import { useDialog } from "../../context/DialogContext";
+import { useAuth } from "../../context/AuthContext";
 import LocationSearch from "../../components/map/LocationSearch";
 import api from "../../services/api";
+import { openRazorpayCheckout } from "../../services/paymentService";
 import { reverseGeocode } from "../../utils/geocode";
 
 // ── Leaflet icons ─────────────────────────────────────────────────────────────
@@ -272,6 +274,8 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const AvailableRidesPage = () => {
   const navigate = useNavigate();
+  const { user, setUser } = useAuth();
+  const { showAlert } = useDialog();
   const [rides, setRides] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -307,6 +311,32 @@ const AvailableRidesPage = () => {
     }
   };
 
+  const handlePayPenalty = async () => {
+    if (!user?.dueBalance || user.dueBalance <= 0) return;
+    setLoading(true);
+    try {
+      const response = await openRazorpayCheckout({
+        amount: user.dueBalance,
+        purpose: "penalty_payment",
+        name: user.name || "",
+        email: user.email || "",
+        description: `Clear cancellation penalty of ₹${user.dueBalance}`,
+      });
+      if (response && response.success) {
+        showAlert("Payment successful! Your account is now active.", "Success", "success");
+        setUser({ 
+          ...user, 
+          dueBalance: response.newDueBalance, 
+          accountStatus: response.accountStatus 
+        });
+      }
+    } catch (err) {
+      showAlert(err.message || "Payment failed", "Error", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => { fetchRides(); }, []);
 
   return (
@@ -336,40 +366,96 @@ const AvailableRidesPage = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-8 space-y-6">
+      <main className="mx-auto max-w-4xl px-6 py-8 space-y-6 relative">
+        
+        {/* Pending Payment Blocking Overlay */}
+        {user?.accountStatus === "payment_due" && (
+          <div className="absolute inset-0 z-40 bg-(--bg-main)/60 backdrop-blur-[2px] flex flex-col items-center justify-start pt-20 px-6 text-center">
+            <div className="glass-card p-8 rounded-3xl border border-red-500/30 shadow-2xl max-w-md animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-500/10">
+                <Lock size={32} />
+              </div>
+              <h2 className="text-2xl font-black text-(--text-main) mb-2">Booking Restricted</h2>
+              <p className="text-sm text-(--text-dim) mb-6">
+                You have a pending cancellation penalty of <span className="text-red-500 font-bold">₹{user.dueBalance}</span>. 
+                Please clear this balance to resume booking rides.
+              </p>
+              
+              <div className="space-y-3">
+                <button 
+                  onClick={handlePayPenalty}
+                  disabled={loading}
+                  className="w-full py-4 bg-primary text-black font-black rounded-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 size={18} className="animate-spin" /> : <IndianRupee size={18} />}
+                  Pay ₹{user.dueBalance} Now
+                </button>
+                <button 
+                  onClick={() => navigate("/passenger/dashboard")}
+                  className="w-full py-3 bg-white/5 text-(--text-dim) font-bold rounded-2xl hover:bg-white/10 transition-all text-xs uppercase tracking-widest"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+              
+              <p className="mt-6 text-[10px] text-(--text-dim) uppercase tracking-tighter opacity-50">
+                Secured by RouteMate Payment Engine
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Search filters */}
         <form onSubmit={fetchRides} className="rounded-2xl border border-(--card-border) bg-(--card-bg) p-5 space-y-4">
           <h2 className="font-bold text-(--text-main) flex items-center gap-2 text-sm">
             <Filter size={16} className="text-primary" /> Filter Rides
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="relative">
               <LocationSearch 
                 placeholder="From address / area" 
                 showCurrentLocation={true}
+                disabled={user?.accountStatus === "payment_due"}
                 onSelect={(loc) => setFilters(prev => ({ ...prev, sourceCity: loc?.name || "", src: loc }))}
               />
             </div>
             <div className="relative">
               <LocationSearch 
                 placeholder="To address / area" 
+                disabled={user?.accountStatus === "payment_due"}
                 onSelect={(loc) => setFilters(prev => ({ ...prev, destinationCity: loc?.name || "", dst: loc }))}
               />
             </div>
-            <div className="relative">
-              <input type="date" value={filters.date}
-                onChange={(e) => setFilters(prev => ({ ...prev, date: e.target.value }))}
-                className="w-full h-[41px] px-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm outline-none focus:border-primary/60 transition-all font-medium"
-              />
-            </div>
-            <button type="submit" disabled={loading}
-              className="w-full h-[41px] bg-primary text-black font-black rounded-xl hover:scale-[1.01] active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 text-sm">
+            <button type="submit" disabled={loading || user?.accountStatus === "payment_due"}
+              className="w-full h-[41px] bg-primary text-black font-black rounded-xl hover:scale-[1.01] active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
               {loading ? "..." : "Find"}
             </button>
           </div>
         </form>
+
+        {/* Inline payment-due warning below the search form */}
+        {user?.accountStatus === "payment_due" && (
+          <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-500/30 bg-red-500/8 px-5 py-4 animate-in fade-in">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-2xl shrink-0">🔒</span>
+              <div className="min-w-0">
+                <p className="text-sm font-black text-red-400">Booking Blocked</p>
+                <p className="text-xs text-(--text-dim) truncate">
+                  Cancellation penalty of <span className="text-red-400 font-bold">₹{user.dueBalance}</span> pending
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handlePayPenalty}
+              disabled={loading}
+              className="shrink-0 py-2.5 px-4 bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-xl active:scale-95 transition-all shadow-lg shadow-red-500/20 disabled:opacity-60 flex items-center gap-1.5"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <IndianRupee size={14} />}
+              Pay ₹{user.dueBalance}
+            </button>
+          </div>
+        )}
 
         {/* Success */}
         {success && (
@@ -408,7 +494,6 @@ const AvailableRidesPage = () => {
           <div className="space-y-4">
             <p className="text-sm font-bold text-(--text-dim)">{rides.length} ride{rides.length !== 1 ? "s" : ""} available</p>
             {rides.map((ride) => {
-              const depDate = new Date(ride.departureTime);
               return (
                 <div key={ride._id}
                   className="rounded-2xl border border-(--card-border) bg-(--card-bg) overflow-hidden hover:border-primary/40 transition-all group">
@@ -444,8 +529,8 @@ const AvailableRidesPage = () => {
                       </div>
 
                       <div className="ml-auto flex flex-wrap gap-2">
-                        <span className="flex items-center gap-1 bg-(--bg-main) border border-(--card-border) rounded-full px-3 py-1 text-xs font-semibold">
-                          <Clock size={10} /> {depDate.toLocaleDateString("en-IN", { day:"numeric", month:"short" })} · {depDate.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" })}
+                        <span className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-full px-3 py-1 text-xs font-bold animate-pulse">
+                          <Zap size={10} /> Active Now
                         </span>
                         {ride.vehicle?.number && (
                           <span className="flex items-center gap-1 bg-(--bg-main) border border-(--card-border) rounded-full px-3 py-1 text-xs font-semibold">

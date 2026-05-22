@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications } from "../context/NotificationContext";
+import { useLanguage } from "../context/LanguageContext";
 
 const getImageUrl = (url) => {
   if (!url) return null;
@@ -118,13 +119,13 @@ const ROLE_CARDS = {
       color: "primary",
       href: "/driver/dashboard/earnings",
     },
-    /* {
+    {
       icon: Calendar,
-      title: "My Schedule",
-      desc: "Plan your driving hours",
+      title: "Manage Rides",
+      desc: "View and delete/cancel published rides",
       color: "cyan",
-      href: "/driver/dashboard/schedule",
-    }, */
+      href: "/driver/dashboard/manage-rides",
+    },
     {
       icon: MapPin,
       title: "Active Rides",
@@ -145,13 +146,6 @@ const ROLE_CARDS = {
       desc: "Manage earnings & commission",
       color: "cyan",
       href: "/driver/dashboard/wallet",
-    },
-    {
-      icon: Clock,
-      title: "My Rides",
-      desc: "View your completed rides",
-      color: "violet",
-      href: "/driver/dashboard/history",
     },
     {
       icon: FileCheck,
@@ -325,6 +319,7 @@ const DashboardPage = () => {
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const role = user?.role || "passenger";
   const configRole = (role === "superadmin") ? "admin" : role;
@@ -412,7 +407,7 @@ const DashboardPage = () => {
             
             // Adjust stats to include live rides if needed
             if (user.role === "driver") {
-              const publishedCount = liveRides.filter(r => r.status !== "completed" && r.status !== "cancelled").length;
+              const publishedCount = liveRides.filter(r => r.status !== "completed" && r.status !== "cancelled" && r.status !== "expired").length;
               setStats([
                 { label: "Completed", value: s.completedRides.toString() || "0" },
                 { label: "Published", value: publishedCount.toString() },
@@ -431,7 +426,7 @@ const DashboardPage = () => {
 
               // Published rides → simplified for single fixed-price booking
               const publishedActivities = liveRides
-                .filter(r => r.status !== "completed" && r.status !== "cancelled")
+                .filter(r => r.status !== "completed" && r.status !== "cancelled" && r.status !== "expired")
                 .map(ride => {
                 const confirmedBooking = (ride.bookings || []).find(b => b.status === "confirmed");
                 const passengerName = confirmedBooking?.passenger?.name || null;
@@ -487,7 +482,7 @@ const DashboardPage = () => {
             } else {
               // ── PASSENGER: live bookings shown above, history below ──
               const activeActivities = liveRides
-                .filter(r => r.status !== 'completed')
+                .filter(r => r.status !== 'completed' && r.status !== 'cancelled' && r.status !== 'expired')
                 .map(ride => {
                   const myBooking = ride.myBookings?.[0];
                   const displayStatus = myBooking?.status === 'cancelled' ? 'REJECTED' : ride.status.toUpperCase();
@@ -506,7 +501,7 @@ const DashboardPage = () => {
                     status: displayStatus,
                     amount: myBooking?.amountPaid ? `₹${myBooking.amountPaid}` : (ride.vehicleType || 'PRIME').toUpperCase(),
                     icon: Car,
-                    isLive: ride.status !== 'cancelled' && myBooking?.status !== 'cancelled', // Exclude if ride OR booking is cancelled
+                    isLive: ride.status !== 'cancelled' && ride.status !== 'expired' && myBooking?.status !== 'cancelled', // Exclude if ride OR booking is cancelled
                     bookingStatus: myBooking?.status
                   };
                 });
@@ -549,7 +544,7 @@ const DashboardPage = () => {
     };
 
     if (user) fetchDashboardStats();
-  }, [user]);
+  }, [user, unreadCount]);
 
   const handleLogout = async () => {
     await logout();
@@ -608,10 +603,10 @@ const DashboardPage = () => {
                 Dashboard
               </span>
               <Link
-                to={`/${pathRole}/dashboard/history`}
+                to={pathRole === "driver" ? "/driver/dashboard/manage-rides" : `/${pathRole}/dashboard/history`}
                 className="text-xs font-medium text-(--text-dim) transition-colors hover:text-(--text-main)"
               >
-                History
+                {pathRole === "driver" ? "Manage Rides" : "History"}
               </Link>
             </nav>
           </div>
@@ -665,6 +660,27 @@ const DashboardPage = () => {
 
       {/* ── Content ── */}
       <main className="relative z-10 mx-auto max-w-6xl space-y-8 px-6 py-8">
+        {/* Pending Payment Alert */}
+        {user?.accountStatus === "payment_due" && (
+          <div className="glass-card border-red-500/30 bg-red-500/5 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top duration-500">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center shrink-0">
+                <ShieldAlert size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-(--text-main)">Payment Due: ₹{user.dueBalance}</p>
+                <p className="text-[11px] text-(--text-dim)">You have a pending cancellation penalty. Please clear it to book new rides.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => navigate("/passenger/dashboard/ride")}
+              className="px-6 py-2 bg-red-500 text-white text-xs font-black rounded-xl hover:bg-red-600 transition-all active:scale-95 shadow-lg shadow-red-500/20 uppercase tracking-widest"
+            >
+              Pay Now
+            </button>
+          </div>
+        )}
+
         {/* Hero Section */}
         <section className="glass-card group relative overflow-hidden rounded-4xl p-8 lg:p-10">
           <div className="bg-primary/5 group-hover:bg-primary/10 pointer-events-none absolute top-0 right-0 h-full w-[50%] rounded-full blur-3xl transition-all duration-700" />
@@ -708,7 +724,7 @@ const DashboardPage = () => {
                 </span>
               </h1>
               <p className="md:text-md max-w-md text-base leading-relaxed font-medium text-(--text-dim)">
-                {loading ? "Fetching latest platform updates..." : "Welcome back! Ready for your next journey today?"}
+                {loading ? "Fetching latest platform updates..." : `${t("welcomeBack")}! Ready for your next journey today?`}
               </p>
             </div>
 
@@ -839,9 +855,12 @@ const DashboardPage = () => {
         <section id="history" className="space-y-6 scroll-mt-24">
           <div className="flex items-center justify-between px-1">
             <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
-              Recent Activity <span className="bg-primary h-1.5 w-1.5 rounded-full"></span>
+              {t("recentActivity")} <span className="bg-primary h-1.5 w-1.5 rounded-full"></span>
             </h2>
-            <Link to={`/${user?.role}/dashboard/history`} className="text-primary text-xs font-bold hover:underline cursor-pointer">
+            <Link 
+              to={user?.role === "driver" ? "/driver/dashboard/manage-rides" : `/${user?.role}/dashboard/history`} 
+              className="text-primary text-xs font-bold hover:underline cursor-pointer"
+            >
               View All History
             </Link>
           </div>
@@ -858,25 +877,25 @@ const DashboardPage = () => {
                       key={item.id}
                       className="group flex items-start justify-between p-5 transition-colors hover:bg-black/5 dark:hover:bg-white/5"
                     >
-                      <div className="flex items-start gap-4 flex-1">
+                      <div className="flex items-start gap-4 flex-1 min-w-0">
                         <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-6 bg-white/10" />
-                        <div className="flex-1 space-y-1">
+                        <div className="flex-1 space-y-1 min-w-0">
                           <div className="flex items-center gap-2">
                              <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
-                             <p className="text-[17px] leading-none font-bold text-(--text-main) line-clamp-1">
+                             <p className="text-[17px] leading-none font-bold text-(--text-main) truncate">
                                {item.from}
                              </p>
                           </div>
                           <div className="flex items-center gap-2">
                              <MapPin size={14} className="text-red-500 flex-shrink-0" />
-                             <p className="text-sm font-medium text-(--text-dim) line-clamp-1">{item.to}</p>
+                             <p className="text-sm font-medium text-(--text-dim) truncate">{item.to}</p>
                           </div>
-                          <p className="text-[11px] font-bold text-(--text-dim) uppercase tracking-wider pl-6 pt-1">
+                          <p className="text-[11px] font-bold text-(--text-dim) uppercase tracking-wider pl-6 pt-1 truncate">
                             {item.date} • {item.type}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right flex flex-col justify-between h-full min-h-[60px] pl-4">
+                      <div className="text-right flex flex-col justify-between h-full min-h-[60px] pl-4 flex-shrink-0">
                         <p className="text-lg leading-none font-black text-(--text-main)">{item.amount || item.status}</p>
                         <span className={`inline-flex items-center justify-end gap-1.5 text-[11px] font-bold pt-2 ${
                           (item.status === 'Completed' || item.status === 'COMPLETED') ? 'text-emerald-500' : 
@@ -929,22 +948,23 @@ const DashboardPage = () => {
                           item.isLive ? "bg-emerald-500 animate-pulse" : "bg-white/20"
                         }`} />
                         <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-3">
-                             <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
-                               <Activity size={16} className="flex-shrink-0" />
-                             </div>
-                             <p className="text-base leading-none font-bold text-(--text-main) line-clamp-1">
-                               {configRole === "admin" ? item.action : (
-                                 <span className="flex items-center gap-2">
-                                   {item.from} <ChevronRight size={12} className="opacity-40" /> {item.to}
-                                 </span>
-                               )}
-                             </p>
+                          <div className="text-sm md:text-base font-bold text-(--text-main) truncate w-full min-w-0">
+                            {configRole === "admin" ? (
+                              <p className="truncate leading-none">{item.action}</p>
+                            ) : (
+                              <div className="flex items-center gap-2 truncate min-w-0">
+                                <span className="truncate">{item.from}</span>
+                                <ChevronRight size={12} className="opacity-40 flex-shrink-0" />
+                                <span className="truncate text-(--text-dim) font-medium">{item.to}</span>
+                              </div>
+                            )}
                           </div>
-                          <div className="flex flex-col gap-1 pl-10">
+                          <div className="flex flex-col">
                             <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">
                               {item.date} • {configRole === "admin" ? item.user : item.type}
-                              {item.subType && <span className="ml-1 opacity-60">• {item.subType}</span>}
+                              {item.subType && item.subType !== "Completed" && item.subType !== "Cancelled" && (
+                                <span className="ml-1 opacity-60">• {item.subType}</span>
+                              )}
                             </p>
                             {configRole === "admin" && item.role === "superadmin" && (
                               <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md w-fit">
@@ -958,7 +978,9 @@ const DashboardPage = () => {
                       <div className="text-right flex flex-col justify-between h-full min-h-[50px] flex-shrink-0">
                         <div className="text-sm font-black text-(--text-main) ml-auto">{item.amount || "—"}</div>
                         <span className={`inline-flex items-center justify-end gap-1 text-[10px] font-black uppercase tracking-widest pt-2 ${
-                          (item.status === "Completed" || item.status === "COMPLETED" || !item.status) ? "text-emerald-500/60" : "text-white/40"
+                          (item.status === "Completed" || item.status === "COMPLETED") ? "text-emerald-500" :
+                          (item.status === "Cancelled" || item.status === "CANCELLED" || item.status === "Rejected" || item.status === "REJECTED") ? "text-red-500" :
+                          "text-primary"
                         }`}>
                           <Circle size={4} fill="currentColor" className="opacity-50" /> {item.status || "Success"}
                         </span>

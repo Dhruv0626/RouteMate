@@ -33,7 +33,7 @@ const getImageUrl = (url) => {
 
 const DriverProfile = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -168,9 +168,22 @@ const DriverProfile = () => {
     setSaving(true);
 
     try {
-      // Update User profile using the new feature-based REST endpoint
+      let updatedUser = { ...user };
+
+      // 1. Update phone if changed
       const phoneResponse = await api.post("/users/update-mobile", { mobileNumber: formData.phone });
-      
+      if (phoneResponse.data.success) {
+        updatedUser = phoneResponse.data.user;
+      }
+
+      // 2. Update profile image if changed (if it's a data URL)
+      if (formData.profileImage && formData.profileImage !== user.profileImage && formData.profileImage.startsWith("data:")) {
+        const imageRes = await api.post("/users/update-profile-image", { imageUrl: formData.profileImage });
+        if (imageRes.data.success) {
+          updatedUser = imageRes.data.user;
+        }
+      }
+
       const response = await updateDriverProfile({
         licenseNumber: formData.licenseNumber.trim() || null,
         licenseImage: formData.licenseImage || null,
@@ -185,6 +198,7 @@ const DriverProfile = () => {
 
       if (response.data.success && phoneResponse.data.success) {
         setProfile(response.data.data);
+        setUser(updatedUser);
         setSuccess("Profile updated successfully!");
         setIsEditing(false);
       }

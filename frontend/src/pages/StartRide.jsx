@@ -159,9 +159,14 @@ const StartRide = () => {
     socket.on("location_update", (data) => setDriverLocation({ lat: data.lat, lng: data.lng }));
     socket.on("ride_status_update", (data) => {
       setRide(prev => { if (!prev) return null; return { ...prev, status: data.status }; });
-      if (data.status === "cancelled" && user.role !== "driver") {
-        showAlert("The driver has cancelled this ride.", "Ride Cancelled", "error");
-        setTimeout(() => navigate("/passenger/dashboard"), 3000);
+      if (data.status === "cancelled") {
+        if (user.role === "driver") {
+          showAlert("Trip cancelled by passenger", "Ride Cancelled", "info")
+            .then(() => navigate("/driver/dashboard"));
+        } else {
+          showAlert("This ride has been cancelled.", "Ride Cancelled", "error")
+            .then(() => navigate("/passenger/dashboard"));
+        }
       }
     });
 

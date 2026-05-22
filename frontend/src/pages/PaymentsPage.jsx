@@ -43,6 +43,7 @@ const PaymentsPage = () => {
   const [selectedAmt, setSelectedAmt] = useState(null);
   const [paying, setPaying]         = useState(false);
   const [toast, setToast]           = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -227,18 +228,32 @@ const PaymentsPage = () => {
             <h2 className="font-display text-lg font-black text-(--text-main) flex items-center gap-2">
               Transactions <span className="bg-primary h-1.5 w-1.5 rounded-full"/>
             </h2>
-            <div className="relative group/export">
-              <button className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/20 transition-all">
+            <div className="relative">
+              <button 
+                onClick={() => setShowExportMenu(prev => !prev)}
+                className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/20 transition-all"
+              >
                 <Download size={14} /> Export
               </button>
-              <div className="absolute right-0 top-full mt-2 w-32 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
-                <button onClick={() => handleExport('pdf')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all">
-                  PDF Statement
-                </button>
-                <button onClick={() => handleExport('csv')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all">
-                  CSV Export
-                </button>
-              </div>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-32 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1 shadow-xl z-50 animate-in zoom-in-95 duration-150">
+                    <button 
+                      onClick={() => { handleExport('pdf'); setShowExportMenu(false); }} 
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                    >
+                      PDF Statement
+                    </button>
+                    <button 
+                      onClick={() => { handleExport('csv'); setShowExportMenu(false); }} 
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                    >
+                      CSV Export
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

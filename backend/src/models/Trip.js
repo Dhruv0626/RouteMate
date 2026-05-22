@@ -87,6 +87,10 @@ const TripSchema = new Schema(
     // ── Cancellation ───────────────────────────────────────────────────────
     cancelledBy: { type: String, enum: ["passenger", "driver", "system"] },
     cancellationReason: { type: String, default: "" },
+    cancellationFee: { type: Number, default: 0 },
+    driverCompensation: { type: Number, default: 0 },
+    driverCompensationPaidAt: { type: Date },
+    passengerPenaltyPaid: { type: Boolean, default: false },
 
     // ── Phase Timestamps ───────────────────────────────────────────────────
     matchedAt: { type: Date },

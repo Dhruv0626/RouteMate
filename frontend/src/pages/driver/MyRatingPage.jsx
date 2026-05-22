@@ -164,11 +164,11 @@ const MyRatingPage = () => {
 
         {/* ── Filters & Reviews ── */}
         <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display flex items-center gap-2 text-sm font-black text-(--text-dim) uppercase tracking-widest">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="font-display flex items-center gap-2 text-sm font-black text-(--text-dim) uppercase tracking-widest shrink-0">
               Recent Reviews <span className="bg-primary h-1 w-1 rounded-full"></span>
             </h2>
-            <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/5">
+            <div className="flex items-center flex-wrap gap-1 sm:gap-2 bg-white/5 p-1 rounded-xl border border-white/5">
               {["all", "5", "4", "3", "2", "1"].map(f => (
                 <button 
                   key={f}

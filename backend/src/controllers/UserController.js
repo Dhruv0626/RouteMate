@@ -798,10 +798,15 @@ export const UpdateProfileImage = async (req, res) => {
         // 🧹 Invalidate Profile Cache
         await cacheService.del(`user:profile:${user._id}`);
 
+        const updatedUser = user.toObject();
+        delete updatedUser.password;
+        delete updatedUser.refreshToken;
+
         res.status(200).json({
             success: true,
             message: "Profile image updated successfully.",
-            profileImage: user.profileImage
+            profileImage: user.profileImage,
+            user: updatedUser
         });
     } catch (error) {
         console.error("Update Profile Image Error:", error.message);

@@ -9,6 +9,7 @@ import {
 import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { NotificationProvider } from "./context/NotificationContext";
+import { LanguageProvider } from "./context/LanguageContext";
 import api from "./services/api";
 import SignInPage from "./pages/auth/SignInPage";
 import SignupPage from "./pages/auth/SignupPage";
@@ -36,6 +37,7 @@ import MyRatingPage from "./pages/driver/MyRatingPage";
 import PayoutsPage from "./pages/driver/PayoutsPage";
 import GoOnlinePage from "./pages/driver/GoOnlinePage";
 import DriverBookingsPage from "./pages/driver/DriverBookingsPage";
+import ManageRidesPage from "./pages/driver/ManageRidesPage";
 import RideRequestDetailsPage from "./pages/driver/RideRequestDetailsPage";
 import PayoutRequestPage from "./pages/driver/PayoutRequestPage";
 import RateCardPage from "./pages/driver/RateCardPage";
@@ -56,6 +58,9 @@ import PaymentsPage from "./pages/PaymentsPage";
 import ReferralPage from "./pages/ReferralPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import SettingsPage from "./pages/SettingsPage";
+
+import FAQPage from "./pages/FAQPage";
+import ContactUsPage from "./pages/ContactUsPage";
 import EmergencyPage from "./pages/EmergencyPage";
 import AdminSOSPage from "./pages/admin/AdminSOSPage";
 import ReviewSubmissionPage from "./pages/ReviewSubmissionPage";
@@ -539,6 +544,23 @@ function AppContent() {
           }
         />
 
+        <Route
+          path="/passenger/dashboard/faq"
+          element={
+            <ProtectedRoute>
+              <FAQPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/passenger/dashboard/contact-us"
+          element={
+            <ProtectedRoute>
+              <ContactUsPage />
+            </ProtectedRoute>
+          }
+        />
+
         {/* ── Passenger: Find & Book Rides ── */}
         <Route
           path="/passenger/dashboard/find-rides"
@@ -657,6 +679,14 @@ function AppContent() {
           }
         />
         <Route
+          path="/driver/dashboard/manage-rides"
+          element={
+            <DriverProtectedRoute>
+              <ManageRidesPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
           path="/driver/dashboard/notifications"
           element={
             <DriverProtectedRoute>
@@ -677,6 +707,23 @@ function AppContent() {
           element={
             <DriverProtectedRoute>
               <SettingsPage />
+            </DriverProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/driver/dashboard/faq"
+          element={
+            <DriverProtectedRoute>
+              <FAQPage />
+            </DriverProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver/dashboard/contact-us"
+          element={
+            <DriverProtectedRoute>
+              <ContactUsPage />
             </DriverProtectedRoute>
           }
         />
@@ -758,17 +805,19 @@ function InternalAppInitializer({ children }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <DialogProvider>
-        <ToastProvider>
-          <NotificationProvider>
-            <InternalAppInitializer>
-              <AppRoutes />
-            </InternalAppInitializer>
-          </NotificationProvider>
-        </ToastProvider>
-      </DialogProvider>
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <DialogProvider>
+          <ToastProvider>
+            <NotificationProvider>
+              <InternalAppInitializer>
+                <AppRoutes />
+              </InternalAppInitializer>
+            </NotificationProvider>
+          </ToastProvider>
+        </DialogProvider>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
 

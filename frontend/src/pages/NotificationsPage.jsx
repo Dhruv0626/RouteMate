@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Bell, Zap, AlertCircle, CheckCircle,
   Clock, Settings, X, Info, Navigation,
-  UserCheck, ShieldAlert, CheckCheck, Sparkles, Inbox
+  UserCheck, ShieldAlert, CheckCheck, Sparkles, Inbox,
+  ChevronDown, ChevronUp
 } from "lucide-react";
 import { useNotifications } from "../context/NotificationContext";
 import ThemeToggle from "../components/ui/ThemeToggle";
@@ -149,6 +150,8 @@ const NotifCard = ({ notification, onAction, onDelete }) => {
   const cfg = TYPE_CONFIG[notification.type] || DEFAULT_CONFIG;
   const Icon = cfg.icon;
   const isUnread = !notification.isRead;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isLong = notification.message && notification.message.length > 120;
 
   return (
     <div
@@ -198,9 +201,29 @@ const NotifCard = ({ notification, onAction, onDelete }) => {
           </div>
         </div>
 
-        <p className={`text-xs leading-relaxed font-medium ${isUnread ? "text-(--text-dim)" : "text-(--text-dim)/60"}`}>
-          {notification.message}
+        <p className={`text-xs leading-relaxed font-medium break-words ${isUnread ? "text-(--text-dim)" : "text-(--text-dim)/60"}`}>
+          {isLong && !isExpanded ? `${notification.message.slice(0, 120)}...` : notification.message}
         </p>
+
+        {isLong && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+            }}
+            className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-primary hover:text-primary-dark transition-colors focus:outline-none"
+          >
+            {isExpanded ? (
+              <>
+                Show Less <ChevronUp size={11} className="stroke-[2.5]" />
+              </>
+            ) : (
+              <>
+                Read More <ChevronDown size={11} className="stroke-[2.5]" />
+              </>
+            )}
+          </button>
+        )}
 
         {notification.link && (
           <p className="mt-1.5 text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wider">
@@ -239,7 +262,13 @@ const NotificationsPage = () => {
 
   const handleAction = (notification) => {
     if (!notification.isRead) markAsRead(notification._id);
-    if (notification.link) navigate(notification.link);
+    
+    // Explicit redirect for passenger booking confirmation notification to upcoming rides page
+    if (notification.type === "booking_confirmed" || notification.title?.includes("Booking Confirmed")) {
+      navigate("/passenger/dashboard/my-rides");
+    } else if (notification.link) {
+      navigate(notification.link);
+    }
   };
 
   const readCount = notifications.filter((n) => n.isRead).length;

@@ -122,16 +122,12 @@ const GoOnlinePage = () => {
             const historyStats = historyRes.data.data.stats;
             const liveRides = liveRes.data?.data || [];
             
-            const activePublished = liveRides.filter(r => r.status !== 'completed' && r.status !== 'cancelled').length;
-            const completedRides = historyStats.completedRides || 0;
-            const realTotal = completedRides + activePublished;
-            
             setProfile(prev => ({
               ...prev,
               stats: {
                 ...prev.stats,
-                totalRides: realTotal,
-                completedRides: completedRides
+                totalRides: liveRides.length || historyStats.totalRides || 0,
+                completedRides: historyStats.completedRides || 0
               }
             }));
           }
@@ -286,7 +282,6 @@ const GoOnlinePage = () => {
     setPublishError(""); setPublishSuccess("");
     if (!sourcePin) return setPublishError("Please pick a pickup point on the map.");
     if (!destPin) return setPublishError("Please pick a drop-off point on the map.");
-    if (!rideForm.departureTime) return setPublishError("Please select a departure date & time.");
 
     setPublishing(true);
     try {
@@ -303,7 +298,7 @@ const GoOnlinePage = () => {
           address: destPin.address,
           location: { type: "Point", coordinates: [destPin.lng, destPin.lat] },
         },
-        departureTime: new Date(rideForm.departureTime).toISOString(),
+        departureTime: new Date().toISOString(),
         routeCoords: finalCoords, // Save full path for proximity matching
       });
 
@@ -593,17 +588,7 @@ const GoOnlinePage = () => {
                 </div>
               )}
 
-              {/* Departure Time */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-(--text-dim) uppercase tracking-wider flex items-center gap-1.5">
-                  <Calendar size={12} /> Departure Date & Time
-                </label>
-                <input type="datetime-local" min={nowIso} value={rideForm.departureTime}
-                  onChange={(e) => setRideForm({ ...rideForm, departureTime: e.target.value })}
-                  required
-                  className="w-full px-4 py-3 bg-(--bg-main) border border-(--card-border) rounded-xl text-sm focus:border-primary/60 outline-none transition-all"
-                />
-              </div>
+
 
               {/* Fare info */}
               <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">

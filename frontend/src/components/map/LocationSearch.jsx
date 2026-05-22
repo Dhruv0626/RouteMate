@@ -77,6 +77,7 @@ const LocationSearch = ({
   showCurrentLocation = false,
   currentLocation = null,
   value = "",
+  disabled = false,
 }) => {
   const [query, setQuery]             = useState(value || "");
   const [results, setResults]         = useState([]);
@@ -258,11 +259,13 @@ const LocationSearch = ({
         position: "relative",
         display: "flex",
         alignItems: "center",
-        background: "var(--card-bg)",
-        border: `1px solid ${isFocused ? "rgba(99,102,241,0.5)" : "var(--card-border)"}`,
+        background: disabled ? "rgba(255,255,255,0.03)" : "var(--card-bg)",
+        border: `1px solid ${disabled ? "rgba(255,255,255,0.08)" : isFocused ? "rgba(99,102,241,0.5)" : "var(--card-border)"}`,
         borderRadius: "12px",
         transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-        boxShadow: isFocused ? "0 0 0 3px rgba(99,102,241,0.12)" : "none",
+        boxShadow: isFocused && !disabled ? "0 0 0 3px rgba(99,102,241,0.12)" : "none",
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? "not-allowed" : "auto",
       }}>
         {/* Left icon */}
         <span style={{
@@ -277,12 +280,14 @@ const LocationSearch = ({
           ref={inputRef}
           type="text"
           value={query}
+          disabled={disabled}
           onChange={(e) => {
+            if (disabled) return;
             setQuery(e.target.value);
             setSelectedName(""); // clear lock so re-search can trigger
           }}
-          onFocus={handleFocus}
-          placeholder={gpsLoading ? "Getting your location…" : placeholder}
+          onFocus={disabled ? undefined : handleFocus}
+          placeholder={disabled ? "Locked — clear due balance to search" : gpsLoading ? "Getting your location…" : placeholder}
           autoComplete="off"
           style={{
             width: "100%",
@@ -295,6 +300,7 @@ const LocationSearch = ({
             color: "var(--text-main)",
             fontFamily: "'Inter', sans-serif",
             borderRadius: "12px",
+            cursor: disabled ? "not-allowed" : "text",
           }}
         />
 

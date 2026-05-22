@@ -14,6 +14,11 @@ const UserSchema = new Schema(
     // ── Account Status ─────────────────────────────────────────────────────
     isVerified: { type: Boolean, default: false },
     isBlocked: { type: Boolean, default: false },
+    accountStatus: { 
+      type: String, 
+      enum: ["active", "payment_due", "suspended"], 
+      default: "active" 
+    },
     fcmToken: { type: String, default: "" },               // push notification token
     isFlagged: { type: Boolean, default: false },
     blockReviewPending: { type: Boolean, default: false },
@@ -26,6 +31,7 @@ const UserSchema = new Schema(
       totalRatingsReceived: { type: Number, default: 0 },
       trustScore: { type: Number, default: 0 },  // 0–100
       cancellationRate: { type: Number, default: 0 },
+      noShowCount: { type: Number, default: 0 },
       totalTagsReceived: { type: Number, default: 0 },
       positiveTagCount: { type: Number, default: 0 },
     },
@@ -51,6 +57,7 @@ const UserSchema = new Schema(
     },
 
     walletBalance: { type: Number, default: 0 },
+    dueBalance: { type: Number, default: 0 },
 
     // ── Referral (Passenger) ─────────────────────────────────────────────────────
     referralCode: { type: String, unique: true, sparse: true },  // e.g. "RAHUL50"

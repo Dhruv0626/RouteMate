@@ -39,6 +39,7 @@ const BookingSchema = new Schema({
     paymentMethod: { type: String, enum: ["cash", "wallet", "upi"], default: "cash" },
     status: { type: String, enum: ["pending", "confirmed", "cancelled"], default: "pending" },
     bookedAt: { type: Date, default: Date.now },
+    confirmedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null }
 });
 
@@ -76,6 +77,7 @@ const PublishedRideSchema = new Schema(
         lateReason: { type: String, enum: ["traffic", "vehicle_issue", "personal", "other", null], default: null },
         lateMinutes: { type: Number, default: 0 },         // filled by cron automatically
         newDepartureTime: { type: Date, default: null },    // driver-set updated time (Zone 2+)
+        pickupEtaMins: { type: Number, default: 0 },        // driving time from driver's source → passenger pickup (in minutes)
         zone1AlertSentAt: { type: Date, default: null },   // 1-min silent reminder timestamp
         zone1PassengerSentAt: { type: Date, default: null }, // 5-min passenger ETA notification
         zone2AlertSentAt: { type: Date, default: null },

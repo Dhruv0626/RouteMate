@@ -173,11 +173,11 @@ export const PublishRide = async (req, res) => {
 // ─── Passenger: Get Available Rides ───────────────────────────────────────────
 export const GetAvailableRides = async (req, res) => {
     try {
-        const { sourceCity, destinationCity, date, srcLat, srcLng, dstLat, dstLng, distanceKm: passedDist } = req.query;
+        const { sourceCity, destinationCity, srcLat, srcLng, dstLat, dstLng, distanceKm: passedDist } = req.query;
 
         const filter = {
             status: "open",
-            departureTime: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+            createdAt: { $gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
             // Mandatory Ahmedabad restriction
             $or: [
                 { "source.address": { $regex: "Ahmedabad", $options: "i" } },
@@ -189,14 +189,6 @@ export const GetAvailableRides = async (req, res) => {
             filter["source.address"] = { $regex: sourceCity, $options: "i" };
         }
         if (destinationCity) filter["destination.address"] = { $regex: destinationCity, $options: "i" };
-        if (date) {
-            // date is YYYY-MM-DD
-            const d = new Date(date);
-            // Calculate IST midnight in UTC
-            const startDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0) - (5.5 * 60 * 60 * 1000));
-            const endDate = new Date(startDate.getTime() + (24 * 60 * 60 * 1000) - 1);
-            filter.departureTime = { $gte: startDate, $lte: endDate };
-        }
 
         const rides = await PublishedRideModel.find(filter)
             .populate("driver", "name email Mobile_no profileImage")
@@ -375,6 +367,7 @@ export const BookRide = async (req, res) => {
             return res.status(400).json({ success: false, message: "Drivers cannot book their own ride" });
         }
 
+
         // ── Fare calculated from PASSENGER's actual travel distance ───────────
         let distanceKm = parseFloat(passedDist);
 
@@ -481,6 +474,7 @@ export const RespondToBooking = async (req, res) => {
 
         if (action === "confirm") {
             booking.status = "confirmed";
+            booking.confirmedAt = new Date();
             ride.status = "active";
 
             // ── CREATE TRIP FOR LIVE TRACKING ──────────────────────────────────
@@ -520,6 +514,24 @@ export const RespondToBooking = async (req, res) => {
                 otp: Math.floor(1000 + Math.random() * 9000).toString(), // Generate 4-digit OTP
                 paymentStatus: "pending"
             });
+
+            // ── Calculate pickupEtaMins: OSRM drive time from driver's source → passenger pickup ──
+            // Used by DriverLateCron to compute the TRUE expected arrival time at pickup.
+            // Lateness = now - (departureTime + pickupEtaMins), NOT just now - departureTime.
+            try {
+                const driverSrc = ride.source.location.coordinates; // [lng, lat]
+                const paxSrc = booking.passengerSource?.location?.coordinates; // [lng, lat]
+                if (driverSrc && paxSrc && (driverSrc[0] !== paxSrc[0] || driverSrc[1] !== paxSrc[1])) {
+                    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${driverSrc[0]},${driverSrc[1]};${paxSrc[0]},${paxSrc[1]}?overview=false`;
+                    const osrmRes = await fetch(osrmUrl, { signal: AbortSignal.timeout(5000) });
+                    const osrmData = await osrmRes.json();
+                    if (osrmData.code === "Ok" && osrmData.routes?.[0]) {
+                        ride.pickupEtaMins = Math.ceil(osrmData.routes[0].duration / 60); // seconds → mins
+                    }
+                }
+            } catch {
+                // Non-blocking — cron will fall back to departureTime if pickupEtaMins stays 0
+            }
         } else {
             // Updated: Set status to cancelled instead of deleting
             // This allows the passenger to see the "REJECTED" status in their dashboard
@@ -571,7 +583,7 @@ export const GetMyPublishedRides = async (req, res) => {
         const rides = await PublishedRideModel.find({ driver: req.user.id })
             .populate({
                 path: "bookings.passenger",
-                select: "name email Mobile_no profileImage"
+                select: "name email Mobile_no profileImage passengerStats"
             })
             .sort({ departureTime: -1 })
             .lean(); // Use lean for performance and to avoid Mongoose doc issues on live
@@ -707,6 +719,7 @@ export const UpdateRideStatus = async (req, res) => {
 
             if (status === "cancelled") {
                 trip.cancelledAt = new Date();
+                trip.cancellationReason = "Driver Cancelled";
 
                 const booking = ride.bookings.find(b => b.passenger.toString() === trip.passenger.toString());
                 if (booking) booking.status = "cancelled";
@@ -802,7 +815,7 @@ export const UpdateRideStatus = async (req, res) => {
                     title: "Destination Reached! 📍",
                     message: "You have reached your destination. Please complete the payment to finish the trip.",
                     type: "payment_request",
-                    link: `/passenger/dashboard/my-rides`,
+                    link: `/passenger/live-tracking/${rideId}`,
                     metadata: {
                         rideId,
                         tripId: trip._id,
@@ -828,7 +841,7 @@ export const UpdateRideStatus = async (req, res) => {
                     title: "Driver Arrived! 🚗",
                     message: "Your driver has arrived at the pickup location. Please meet your driver to start the trip.",
                     type: "driver_arrived",
-                    link: "/passenger/dashboard/my-rides",
+                    link: `/passenger/live-tracking/${rideId}`,
                     metadata: {
                         rideId,
                         platformFeePercentage: platformCommission,
@@ -854,14 +867,14 @@ export const GetSingleRide = async (req, res) => {
         const { rideId } = req.params;
         let ride = await PublishedRideModel.findById(rideId)
             .populate("driver", "name email Mobile_no profileImage")
-            .populate("bookings.passenger", "name email Mobile_no profileImage");
+            .populate("bookings.passenger", "name email Mobile_no profileImage passengerStats");
 
         if (!ride) {
             // Check if it's a Trip ID
             const TripModel = (await import("../models/Trip.js")).default;
             const trip = await TripModel.findById(rideId)
                 .populate("driver", "name email Mobile_no profileImage")
-                .populate("passenger", "name email Mobile_no profileImage");
+                .populate("passenger", "name email Mobile_no profileImage passengerStats");
 
             if (!trip) {
                 return res.status(404).json({ success: false, message: "Ride/Trip not found" });
@@ -883,7 +896,14 @@ export const GetSingleRide = async (req, res) => {
 
         // Find associated trip to get OTP if user is the passenger
         const TripModel = (await import("../models/Trip.js")).default;
-        const trip = await TripModel.findOne({ publishedRide: rideId, passenger: req.user.id });
+        const trip = await TripModel.findOne({
+            publishedRide: rideId,
+            passenger: req.user.id,
+            phase: { $ne: "cancelled" }
+        }).sort({ createdAt: -1 }) || await TripModel.findOne({
+            publishedRide: rideId,
+            passenger: req.user.id
+        }).sort({ createdAt: -1 });
 
         if (trip) {
             rideObj.otp = trip.otp;
@@ -908,14 +928,41 @@ export const GetMyBookedRides = async (req, res) => {
             .populate("driver", "name email Mobile_no profileImage")
             .sort({ departureTime: -1 });
 
+        // Find associated trips to check for any cancelled/completed trips
+        const trips = await TripModel.find({ passenger: req.user.id });
+        const tripMap = new Map();
+        trips.forEach(t => {
+            if (t.publishedRide) {
+                tripMap.set(t.publishedRide.toString(), t.phase);
+            }
+        });
+
         const mappedRides = rides.map(ride => {
             const rideObj = ride.toObject();
+            const rideIdStr = rideObj._id.toString();
+            const tripPhase = tripMap.get(rideIdStr);
+
             rideObj.myBookings = rideObj.bookings.filter(b => b.passenger.toString() === req.user.id);
+
+            // Sync legacy or missed status changes from the trip phase
+            if (tripPhase === "cancelled") {
+                rideObj.myBookings.forEach(b => { b.status = "cancelled"; });
+                rideObj.bookings.forEach(b => {
+                    if (b.passenger.toString() === req.user.id) b.status = "cancelled";
+                });
+            } else if (tripPhase === "completed") {
+                rideObj.myBookings.forEach(b => { b.status = "completed"; });
+                rideObj.bookings.forEach(b => {
+                    if (b.passenger.toString() === req.user.id) b.status = "completed";
+                });
+            }
+
             return rideObj;
         });
 
         res.status(200).json({ success: true, data: mappedRides });
     } catch (error) {
+        console.error("GetMyBookedRides Error:", error);
         res.status(500).json({ success: false, message: "Error fetching booked rides" });
     }
 };
@@ -927,6 +974,8 @@ export const GetMyBookedRides = async (req, res) => {
  *
  * Driver provides a reason for their delay and optionally a new departure time.
  * All confirmed passengers receive an updated ETA notification.
+ * 
+ * when passenger cancle a ride than payment distributed perefctly but a pop up not showed in driver pickup map as trip cancelled and a button go to dashboard page 
  */
 export const SubmitLateReason = async (req, res) => {
     try {
@@ -964,12 +1013,36 @@ export const SubmitLateReason = async (req, res) => {
 
         let updatedETA = null;
         if (newDepartureTime) {
-            const parsedTime = new Date(newDepartureTime);
+            let parsedTime = new Date(newDepartureTime);
+            // If newDepartureTime is a time string like "HH:MM", parse it relative to ride.departureTime in IST
+            if (isNaN(parsedTime.getTime()) && typeof newDepartureTime === 'string' && /^\d{2}:\d{2}$/.test(newDepartureTime)) {
+                const [hStr, mStr] = newDepartureTime.split(":");
+                const hours = parseInt(hStr, 10);
+                const minutes = parseInt(mStr, 10);
+                
+                // Get ride departure date in IST
+                const baseDate = new Date(ride.departureTime);
+                const baseIST = new Date(baseDate.getTime() + 5.5 * 60 * 60 * 1000);
+                
+                // Set hours and minutes in UTC on baseIST (which is shifted)
+                baseIST.setUTCHours(hours, minutes, 0, 0);
+                
+                // Shift back to UTC
+                parsedTime = new Date(baseIST.getTime() - 5.5 * 60 * 60 * 1000);
+            }
+
             if (!isNaN(parsedTime.getTime())) {
                 ride.newDepartureTime = parsedTime;
-                updatedETA = parsedTime.toLocaleTimeString("en-IN", {
-                    hour: "2-digit", minute: "2-digit", hour12: true
-                });
+                
+                // Format using manual IST helper to avoid system ICU/timezone settings discrepancy
+                const istDate = new Date(parsedTime.getTime() + 5.5 * 60 * 60 * 1000);
+                let hours = istDate.getUTCHours();
+                const minutes = istDate.getUTCMinutes();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12;
+                hours = hours ? hours : 12; // the hour '0' should be '12'
+                const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+                updatedETA = `${hours}:${minutesStr} ${ampm}`;
             }
         }
 
@@ -1025,6 +1098,111 @@ export const SubmitLateReason = async (req, res) => {
     } catch (error) {
         console.error("SubmitLateReason Error:", error);
         res.status(500).json({ success: false, message: "Failed to submit late reason" });
+    }
+};
+
+// ─── Driver: Delete / Cancel Published Ride ──────────────────────────────────
+export const DeletePublishedRide = async (req, res) => {
+    try {
+        const driverId = req.user.id;
+        const { rideId } = req.params;
+
+        const ride = await PublishedRideModel.findOne({ _id: rideId, driver: driverId });
+        if (!ride) {
+            return res.status(404).json({ success: false, message: "Ride not found or unauthorized" });
+        }
+
+        // If the ride is already completed, it cannot be deleted/cancelled
+        if (ride.status === "completed") {
+            return res.status(400).json({ success: false, message: "Cannot delete a completed ride" });
+        }
+
+        const activeBookings = (ride.bookings || []).filter(b => b.status === "confirmed" || b.status === "pending");
+
+        // If there are absolutely no bookings, we can completely remove the ride from the database
+        if ((ride.bookings || []).length === 0) {
+            await PublishedRideModel.findByIdAndDelete(rideId);
+            return res.status(200).json({
+                success: true,
+                message: "Published ride deleted successfully."
+            });
+        }
+
+        // If there are bookings but none are active (e.g. all bookings are already cancelled):
+        // We do NOT delete the ride from the database to preserve history and trip references.
+        // We just mark it as cancelled without penalizing the driver.
+        if (activeBookings.length === 0) {
+            ride.status = "cancelled";
+            await ride.save();
+            return res.status(200).json({
+                success: true,
+                message: "Published ride cancelled successfully."
+            });
+        }
+
+        // If there are active/pending bookings, we must cancel the ride and notify passengers
+        await DriverProfileModel.findOneAndUpdate(
+            { user: driverId },
+            { $inc: { "stats.cancelledRides": 1 } }
+        );
+
+        ride.status = "cancelled";
+        
+        // Mark all bookings as cancelled
+        if (ride.bookings && ride.bookings.length > 0) {
+            ride.bookings.forEach(b => {
+                if (b.status === "pending" || b.status === "confirmed") {
+                    b.status = "cancelled";
+                    b.rejectedAt = new Date();
+                }
+            });
+        }
+        await ride.save();
+
+        // Cancel associated trips and notify passengers
+        const TripModel = (await import("../models/Trip.js")).default;
+        const trips = await TripModel.find({ publishedRide: rideId, phase: { $ne: "cancelled" } });
+
+        for (const trip of trips) {
+            trip.phase = "cancelled";
+            trip.cancelledAt = new Date();
+            trip.cancellationReason = "Driver Cancelled";
+            await trip.save();
+
+            await NotificationModel.create({
+                recipient: trip.passenger,
+                sender: driverId,
+                title: "Ride Cancelled ❌",
+                message: "The driver has cancelled the ride.",
+                type: "ride_cancelled",
+                link: "/passenger/dashboard/my-rides",
+                metadata: {
+                    rideId,
+                    motive: "ride_cancelled"
+                }
+            });
+        }
+
+        // Emit socket status update
+        const io = getIO();
+        if (io) {
+            io.to(rideId).emit("ride_status_update", { rideId, status: "cancelled" });
+
+            if (ride.bookings && ride.bookings.length > 0) {
+                ride.bookings.forEach(b => {
+                    io.to(b.passenger.toString()).emit("ride_status_update", { rideId, status: "cancelled" });
+                });
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Ride cancelled successfully. Passengers have been notified."
+        });
+
+    } catch (error) {
+        console.error("Delete Published Ride Error:", error);
+        res.status(500).json({ success: false, message: "Failed to delete/cancel published ride" });
     }
 };
 

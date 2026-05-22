@@ -196,3 +196,22 @@ textarea,
   user-select: text !important;
   -webkit-user-select: text !important;
 }
+
+/* ─── Google Translate UI Sleek Overrides ───────────────────────────────── */
+.goog-te-banner-frame.skiptranslate,
+.goog-te-banner-frame,
+.goog-te-balloon-frame {
+  display: none !important;
+}
+body {
+  top: 0px !important;
+}
+.skiptranslate > iframe {
+  display: none !important;
+}
+#goog-gt-tt,
+.goog-te-gadget-simple,
+.goog-te-menu-value,
+.goog-te-spinner-pos {
+  display: none !important;
+}

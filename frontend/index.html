@@ -7,13 +7,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Inter:wght@100..900&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Inter:wght@100..900&family=Hind:wght@300;400;500;600;700&family=Noto+Sans+Gujarati:wght@300;400;500;600;700;800;900&display=swap"
     rel="stylesheet" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <title>RouteMate - Smart Ride Booking and Route Management System </title>
+  
+  <!-- Early Cookie Setting to prevent flash of English on load -->
+  <script type="text/javascript">
+    (function() {
+      try {
+        const lang = localStorage.getItem("appLanguage") || "en";
+        if (lang !== "en") {
+          const cookieVal = "/en/" + lang;
+          document.cookie = "googtrans=" + cookieVal + "; path=/;";
+          document.cookie = "googtrans=" + cookieVal + "; path=/; domain=" + window.location.hostname + ";";
+          if (window.location.hostname.includes(".")) {
+            document.cookie = "googtrans=" + cookieVal + "; path=/; domain=." + window.location.hostname + ";";
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  </script>
+  
+  <script type="text/javascript">
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        includedLanguages: 'en,hi,gu',
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+        autoDisplay: false
+      }, 'google_translate_element');
+    }
+  </script>
+  <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async defer></script>
 </head>
 
 <body>
+  <!-- Hidden Google Translate Container -->
+  <div id="google_translate_element" style="display: none;"></div>
+  
   <div id="root"></div>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script type="module" src="/src/main.jsx"></script>

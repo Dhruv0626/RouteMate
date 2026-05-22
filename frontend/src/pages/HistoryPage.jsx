@@ -34,6 +34,7 @@ const HistoryPage = () => {
   const [activeFilter, setActiveFilter] = useState("all");
   const [expandedRide, setExpandedRide] = useState(null);
   const [dateRange, setDateRange] = useState("all");
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [rideHistory, setRideHistory] = useState(null);
   const [stats, setStats] = useState({
@@ -241,29 +242,34 @@ const HistoryPage = () => {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <div className="relative group/export">
+            <div className="relative">
               <button
+                onClick={() => setShowExportMenu(prev => !prev)}
                 className="rounded-xl bg-primary px-4 py-2 text-sm font-black text-black transition-all hover:scale-105 shadow-md shadow-primary/10 flex items-center gap-2"
               >
                 <Download size={16} />
                 <span className="hidden sm:inline">Export</span>
               </button>
               
-              {/* Export Dropdown */}
-              <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
-                <button
-                  onClick={() => handleExport('pdf')}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
-                >
-                  Download PDF
-                </button>
-                <button
-                  onClick={() => handleExport('csv')}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
-                >
-                  Download CSV
-                </button>
-              </div>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl z-50 animate-in zoom-in-95 duration-150">
+                    <button
+                      onClick={() => { handleExport('pdf'); setShowExportMenu(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                    >
+                      Download PDF
+                    </button>
+                    <button
+                      onClick={() => { handleExport('csv'); setShowExportMenu(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                    >
+                      Download CSV
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -322,7 +328,7 @@ const HistoryPage = () => {
               className="w-full bg-(--card-bg) border border-(--card-border) rounded-2xl pl-12 pr-4 py-3 text-(--text-main) placeholder:text-(--text-dim) focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+          <div className="flex flex-wrap gap-2 pb-2">
             {filters.map((filter) => {
               const FilterIcon = filter.icon;
               return (
@@ -341,7 +347,7 @@ const HistoryPage = () => {
               );
             })}
           </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+          <div className="flex flex-wrap gap-2 pb-2">
             {dateFilters.map((filter) => (
               <button
                 key={filter.id}
@@ -375,7 +381,7 @@ const HistoryPage = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start gap-4 flex-1">
                     <div className="flex-shrink-0">
-                      {ride.photo && (ride.photo.startsWith('http') || ride.photo.startsWith('/')) ? (
+                      {ride.photo && (ride.photo.startsWith('http') || ride.photo.startsWith('/') || ride.photo.startsWith('data:image')) ? (
                          <img src={ride.photo} alt={ride.name} className="w-12 h-12 rounded-xl object-cover border border-(--card-border)" />
                       ) : (role === "passenger" && ride.photo === "🚕") ? (
                         <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
@@ -389,7 +395,7 @@ const HistoryPage = () => {
                         <div className="flex flex-col gap-1 mb-1">
                           <h3 className="font-display font-bold text-(--text-main)">{ride.name}</h3>
                           <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest flex items-center gap-1">
-                            {ride.pickup.split(',').slice(0, 2).join(',')} <ChevronRight size={10} className="opacity-40" /> {ride.dropoff.split(',').slice(0, 2).join(',')}
+                             <ChevronRight size={10} className="opacity-40" />
                           </p>
                         </div>
                       <div className="flex gap-4 mb-4 relative">
@@ -454,11 +460,11 @@ const HistoryPage = () => {
                       </div>
                     </div>
 
-                    {(ride.publishedPickup || ride.publishedDropoff) && (
+                    {role !== "passenger" && (ride.publishedPickup || ride.publishedDropoff) && (
                       <div className="bg-black/5 dark:bg-white/5 rounded-xl p-4 border border-(--card-border) mt-4">
                         <h4 className="font-bold text-[11px] uppercase tracking-wider text-(--text-dim) mb-3 flex items-center gap-2">
                            <Navigation size={14} className="text-primary" />
-                           {role === "driver" ? "Driver's Published Route" : "Driver's Published Route"}
+                           {role === "driver" ? "Your Published Route" : "Driver's Published Route"}
                         </h4>
                         <div className="flex flex-col gap-3">
                            <div className="flex items-start gap-3">
@@ -576,19 +582,6 @@ const HistoryPage = () => {
                       <div className="bg-(--card-bg) rounded-xl p-4 border border-(--card-border)">
                         <h4 className="font-semibold text-(--text-main) mb-2 text-sm">Notes</h4>
                         <p className="text-xs text-(--text-dim)">{ride.notes}</p>
-                      </div>
-                    )}
-
-                    {role === "passenger" && ride.status === "completed" && (
-                      <div className="flex gap-3 flex-wrap">
-                        <button className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-black text-black hover:scale-105 transition-all shadow-md shadow-primary/10">
-                          <RefreshCw size={14} />
-                          Book Again
-                        </button>
-                        <button className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-4 py-2 text-xs font-black text-primary hover:bg-primary/20 transition-all">
-                          <Headphones size={14} />
-                          Support
-                        </button>
                       </div>
                     )}
                   </div>

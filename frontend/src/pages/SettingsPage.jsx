@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
+import { useLanguage } from "../context/LanguageContext";
 import {
   ArrowLeft,
   Bell,
@@ -10,7 +11,7 @@ import {
   Shield,
   Smartphone,
   Globe,
-  HelpCircle,
+
   LogOut,
   ChevronRight,
   Trash2,
@@ -24,7 +25,9 @@ const SettingsPage = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { showConfirm, showAlert } = useDialog();
+  const { currentLanguage, setLanguage, t } = useLanguage();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLanguageOpen, setIsLanguageOpen] = useState(false);
   
   // Local state for toggles
   const defaultSettings = JSON.parse(localStorage.getItem("appSettings") || '{"pushNotifs":false,"emailNotifs":false,"locationTracking":false}');
@@ -48,7 +51,7 @@ const SettingsPage = () => {
       </div>
       <button 
         onClick={() => onChange(!enabled)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${enabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none ${enabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-700'}`}
       >
         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
       </button>
@@ -69,8 +72,8 @@ const SettingsPage = () => {
               <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
             </button>
             <div>
-              <h1 className="font-display text-2xl font-black text-(--text-main)">Settings</h1>
-              <p className="text-xs font-semibold text-(--text-dim)">Preferences & Configurations</p>
+              <h1 className="font-display text-2xl font-black text-(--text-main)">{t("settings")}</h1>
+              <p className="text-xs font-semibold text-(--text-dim)">{t("preferences")}</p>
             </div>
           </div>
         </header>
@@ -81,13 +84,13 @@ const SettingsPage = () => {
           {/* Appearance Section */}
           <section className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest text-primary uppercase ml-2 flex items-center gap-2">
-              <Sun size={14} /> Appearance
+              <Sun size={14} /> {t("appearance")}
             </h2>
             <div className="glass-card rounded-3xl border-(--card-border) p-2">
               <div className="flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl">
                 <div>
-                  <p className="font-bold text-sm text-(--text-main)">Dark Mode</p>
-                  <p className="text-[10px] text-(--text-dim) mt-0.5">Toggle app visual theme</p>
+                  <p className="font-bold text-sm text-(--text-main)">{t("darkMode")}</p>
+                  <p className="text-[10px] text-(--text-dim) mt-0.5">{t("toggleTheme")}</p>
                 </div>
                 <div className="pointer-events-auto">
                     <ThemeToggle />
@@ -99,18 +102,18 @@ const SettingsPage = () => {
           {/* Notifications Section */}
           <section className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest text-primary uppercase ml-2 flex items-center gap-2">
-              <Bell size={14} /> Notifications
+              <Bell size={14} /> {t("notifications")}
             </h2>
             <div className="glass-card rounded-3xl border-(--card-border) p-2 space-y-2">
               <Toggle 
-                label="Push Notifications" 
-                description="Receive updates on rides and promotions"
+                label={t("pushNotifications")} 
+                description={t("pushDesc")}
                 enabled={pushNotifs} 
                 onChange={(val) => updateSetting("pushNotifs", val, setPushNotifs)} 
               />
               <Toggle 
-                label="Email Alerts" 
-                description="Crucial trip alerts and OTP verification"
+                label={t("emailAlerts")} 
+                description={t("emailDesc")}
                 enabled={emailNotifs} 
                 onChange={(val) => updateSetting("emailNotifs", val, setEmailNotifs)} 
               />
@@ -120,37 +123,64 @@ const SettingsPage = () => {
           {/* Privacy & App Section */}
           <section className="space-y-4">
             <h2 className="text-xs font-bold tracking-widest text-primary uppercase ml-2 flex items-center gap-2">
-              <Shield size={14} /> Privacy & Settings
+              <Shield size={14} /> {t("privacySettings")}
             </h2>
             <div className="glass-card rounded-3xl border-(--card-border) p-2 space-y-2">
               <Toggle 
-                label="Location Services" 
-                description="Allow RouteMate to access your live location"
+                label={t("locationServices")} 
+                description={t("locationDesc")}
                 enabled={locationTracking} 
                 onChange={(val) => updateSetting("locationTracking", val, setLocationTracking)} 
               />
               
-              <button className="w-full flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-left">
-                <div className="flex items-center gap-3">
-                  <Globe size={18} className="text-(--text-dim)" />
-                  <div>
-                    <p className="font-bold text-sm text-(--text-main)">Language</p>
-                    <p className="text-[10px] text-(--text-dim) mt-0.5">English (US)</p>
+              <div className="space-y-2">
+                <button 
+                  onClick={() => setIsLanguageOpen(!isLanguageOpen)}
+                  className="w-full flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <Globe size={18} className="text-(--text-dim)" />
+                    <div>
+                      <p className="font-bold text-sm text-(--text-main)">{t("language")}</p>
+                      <p className="text-[10px] text-(--text-dim) mt-0.5">
+                        {currentLanguage === "en" ? "English" : currentLanguage === "hi" ? "Hindi (हिन्दी)" : "Gujarati (ગુજરાતી)"}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight size={18} className="text-(--text-dim)" />
-              </button>
+                  <ChevronRight size={18} className={`text-(--text-dim) transition-transform duration-200 ${isLanguageOpen ? "rotate-90" : ""}`} />
+                </button>
 
-              <button className="w-full flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-left">
-                <div className="flex items-center gap-3">
-                  <HelpCircle size={18} className="text-(--text-dim)" />
-                  <div>
-                    <p className="font-bold text-sm text-(--text-main)">Help & Support</p>
-                    <p className="text-[10px] text-(--text-dim) mt-0.5">Contact us, FAQ, and resources</p>
+                {isLanguageOpen && (
+                  <div className="grid grid-cols-1 gap-2 p-2 bg-black/5 dark:bg-white/5 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                    {[
+                      { code: "en", name: "English", local: "English" },
+                      { code: "hi", name: "Hindi", local: "हिन्दी" },
+                      { code: "gu", name: "Gujarati", local: "ગુજરાતી" }
+                    ].map((lang) => (
+                      <button
+                        key={lang.code}
+                        onClick={() => {
+                          setLanguage(lang.code);
+                          setIsLanguageOpen(false);
+                        }}
+                        className={`flex items-center justify-between p-3 rounded-xl transition-all ${
+                          currentLanguage === lang.code
+                            ? "bg-primary text-black font-black"
+                            : "hover:bg-black/10 dark:hover:bg-white/10 text-(--text-main)"
+                        }`}
+                      >
+                        <div className="flex flex-col items-start">
+                          <span className="text-sm">{lang.name}</span>
+                          <span className={`text-[9px] ${currentLanguage === lang.code ? "text-black/60" : "text-(--text-dim)"}`}>{lang.local}</span>
+                        </div>
+                        {currentLanguage === lang.code && <Check size={16} />}
+                      </button>
+                    ))}
                   </div>
-                </div>
-                <ChevronRight size={18} className="text-(--text-dim)" />
-              </button>
+                )}
+              </div>
+
+
             </div>
           </section>
 
@@ -166,7 +196,7 @@ const SettingsPage = () => {
               >
                 <div className="flex items-center gap-3">
                   <LogOut size={18} />
-                  <p className="font-black text-sm uppercase tracking-widest">Sign Out</p>
+                  <p className="font-black text-sm uppercase tracking-widest">{t("signOut")}</p>
                 </div>
               </button>
               
@@ -196,7 +226,7 @@ const SettingsPage = () => {
               >
                 <div className="flex items-center gap-3">
                   <Trash2 size={18} />
-                  <p className="font-black text-sm uppercase tracking-widest">{isDeleting ? "Deleting..." : "Delete Account"}</p>
+                  <p className="font-black text-sm uppercase tracking-widest">{isDeleting ? t("deleting") : t("deleteAccount")}</p>
                 </div>
               </button>
             </div>

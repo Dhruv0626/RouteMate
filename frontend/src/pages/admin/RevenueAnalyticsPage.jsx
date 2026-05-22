@@ -18,6 +18,7 @@ const RevenueAnalyticsPage = () => {
   const [loading, setLoading] = useState(true);
   const [revenueData, setRevenueData] = useState({ dailyIncome: [], trips: [] });
   const [filters, setFilters] = useState({ startDate: "", endDate: "" });
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   useEffect(() => {
     fetchRevenue();
@@ -142,28 +143,34 @@ const RevenueAnalyticsPage = () => {
                 Apply Filters
               </button>
            </div>
-           <div className="relative group/export">
+           
+           <div className="relative">
               <button 
+                onClick={() => setShowExportMenu(prev => !prev)}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border border-(--card-border) text-xs font-bold hover:bg-(--card-bg) transition-all"
               >
                  <Download size={14} /> Export Data
               </button>
               
-              {/* Export Dropdown */}
-              <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
-                <button
-                  onClick={() => handleExport('pdf')}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
-                >
-                  Download PDF
-                </button>
-                <button
-                  onClick={() => handleExport('csv')}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
-                >
-                  Download CSV
-                </button>
-              </div>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl z-50 animate-in zoom-in-95 duration-150">
+                    <button
+                      onClick={() => { handleExport('pdf'); setShowExportMenu(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                    >
+                      Download PDF
+                    </button>
+                    <button
+                      onClick={() => { handleExport('csv'); setShowExportMenu(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                    >
+                      Download CSV
+                    </button>
+                  </div>
+                </>
+              )}
            </div>
         </div>
 

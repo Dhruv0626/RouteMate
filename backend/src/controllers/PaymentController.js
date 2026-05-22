@@ -10,6 +10,7 @@ import PublishedRideModel from "../models/PublishedRide.js";
 import PaymentModel from "../models/Payment.js";
 import { notifyUser } from "../utils/NotifyUtil.js";
 import { getIO } from "../utils/SocketManager.js";
+import cacheService from "../utils/redis.js";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -259,8 +260,18 @@ export const createOrder = async (req, res) => {
     if (purpose === "upi_trip") {
       if (!tripId && !rideId) return res.status(400).json({ success: false, message: "tripId or rideId required" });
       let trip;
-      if (tripId) trip = await TripModel.findById(tripId).lean();
-      else trip = await TripModel.findOne({ publishedRide: rideId, passenger: req.user.id }).lean();
+      if (tripId) {
+        trip = await TripModel.findById(tripId).lean();
+      } else {
+        trip = await TripModel.findOne({
+          publishedRide: rideId,
+          passenger: req.user.id,
+          phase: { $ne: "cancelled" }
+        }).sort({ createdAt: -1 }).lean() || await TripModel.findOne({
+          publishedRide: rideId,
+          passenger: req.user.id
+        }).sort({ createdAt: -1 }).lean();
+      }
 
       if (!trip) return res.status(404).json({ success: false, message: "Trip not found" });
       notes.tripId = trip._id.toString();
@@ -362,6 +373,74 @@ export const verifyPayment = async (req, res) => {
 
         notifyUser({ userId: finalUserId, title: "✅ Commission Wallet Topped Up", message: `₹${amountRupees} credited. Balance: ₹${newBalance}`, type: "success" }).catch(() => { });
         return res.status(200).json({ success: true, message: "Commission wallet topup successful", newBalance });
+
+      } else if (purpose === "penalty_payment") {
+        const desc = `Cleared pending cancellation penalty #${razorpay_payment_id}`;
+        const existingTx = await WalletTransaction.findOne({ description: desc });
+        if (existingTx) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({ success: true, message: "Already processed" });
+        }
+
+        const user = await UserModel.findById(finalUserId).session(session);
+        if (!user) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const payAmount = amountRupees || user.dueBalance;
+
+        // Update User
+        user.dueBalance = Math.max(0, user.dueBalance - payAmount);
+        if (user.dueBalance === 0) {
+          user.accountStatus = "active";
+        }
+        await user.save({ session });
+
+        // Record Transaction
+        await createUserWalletTx(session, {
+          userId: finalUserId,
+          type: "debit",
+          amount: payAmount,
+          affectsBalance: false,
+          reference: "penalty_payment",
+          description: desc,
+        });
+
+        // Credit Platform (SuperAdmin)
+        const superAdmin = await UserModel.findOne({ role: "superadmin" }).session(session);
+        if (superAdmin) {
+          await createUserWalletTx(session, {
+            userId: superAdmin._id,
+            type: "credit",
+            amount: payAmount,
+            affectsBalance: true,
+            reference: "penalty_payment",
+            description: `Credit: Received penalty payment from user ${user.name}`,
+          });
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        // Invalidate Redis profile cache
+        await cacheService.del(`user:profile:${finalUserId}`);
+
+        notifyUser({ 
+          userId: finalUserId, 
+          title: "✅ Penalty Paid Successfully", 
+          message: `Your payment of ₹${payAmount} has been processed. Account is now active!`, 
+          type: "success" 
+        }).catch(() => { });
+
+        return res.status(200).json({ 
+          success: true, 
+          message: "Penalty paid successfully", 
+          newDueBalance: user.dueBalance,
+          accountStatus: user.accountStatus 
+        });
 
       } else if (purpose === "upi_trip") {
         // ── UPI Trip Payment: credit driver + platform, log info tx for passenger ──
@@ -470,6 +549,49 @@ export const razorpayWebhook = async (req, res) => {
         });
         await session.commitTransaction();
         notifyUser({ userId, title: "💰 Wallet Credited", message: `₹${amountRupees} added to your wallet. Balance: ₹${newBalance}`, type: "success" }).catch(() => { });
+      }
+      else if (finalPurpose === "penalty_payment") {
+        const desc = `Cleared pending cancellation penalty #${payment.id}`;
+        const existingTx = await WalletTransaction.findOne({ description: desc });
+        if (existingTx) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(200).json({ received: true });
+        }
+
+        const user = await UserModel.findById(userId).session(session);
+        if (user) {
+          const payAmount = amountRupees || user.dueBalance;
+          user.dueBalance = Math.max(0, user.dueBalance - payAmount);
+          if (user.dueBalance === 0) {
+            user.accountStatus = "active";
+          }
+          await user.save({ session });
+
+          await createUserWalletTx(session, {
+            userId,
+            type: "debit",
+            amount: payAmount,
+            affectsBalance: false,
+            reference: "penalty_payment",
+            description: desc,
+          });
+
+          const superAdmin = await UserModel.findOne({ role: "superadmin" }).session(session);
+          if (superAdmin) {
+            await createUserWalletTx(session, {
+              userId: superAdmin._id,
+              type: "credit",
+              amount: payAmount,
+              affectsBalance: true,
+              reference: "penalty_payment",
+              description: `Credit: Received penalty payment from user ${user.name}`,
+            });
+          }
+        }
+        await session.commitTransaction();
+        await cacheService.del(`user:profile:${userId}`);
+        notifyUser({ userId, title: "✅ Penalty Paid Successfully", message: `Your payment of ₹${amountRupees} has been processed. Account is now active!`, type: "success" }).catch(() => { });
       }
       else if (finalPurpose === "commission_topup") {
         const desc = `Commission wallet topup #${payment.id}`;
@@ -619,8 +741,18 @@ export const walletPayment = async (req, res) => {
     const passengerId = req.user.id;
 
     let trip;
-    if (tripId) trip = await TripModel.findById(tripId).lean();
-    else trip = await TripModel.findOne({ publishedRide: rideId, passenger: passengerId }).lean();
+    if (tripId) {
+      trip = await TripModel.findById(tripId).lean();
+    } else {
+      trip = await TripModel.findOne({
+        publishedRide: rideId,
+        passenger: passengerId,
+        phase: { $ne: "cancelled" }
+      }).sort({ createdAt: -1 }).lean() || await TripModel.findOne({
+        publishedRide: rideId,
+        passenger: passengerId
+      }).sort({ createdAt: -1 }).lean();
+    }
 
     if (!trip) return res.status(404).json({ success: false, message: "Trip not found" });
     if (trip.passenger.toString() !== passengerId)
@@ -663,8 +795,18 @@ export const cashReceived = async (req, res) => {
     const driverUserId = req.user.id;
 
     let trip;
-    if (tripId) trip = await TripModel.findById(tripId).lean();
-    else trip = await TripModel.findOne({ publishedRide: rideId, driver: driverUserId }).lean();
+    if (tripId) {
+      trip = await TripModel.findById(tripId).lean();
+    } else {
+      trip = await TripModel.findOne({
+        publishedRide: rideId,
+        driver: driverUserId,
+        phase: { $ne: "cancelled" }
+      }).sort({ createdAt: -1 }).lean() || await TripModel.findOne({
+        publishedRide: rideId,
+        driver: driverUserId
+      }).sort({ createdAt: -1 }).lean();
+    }
 
     if (!trip) return res.status(404).json({ success: false, message: "Trip not found" });
     if (trip.driver?.toString() !== driverUserId)

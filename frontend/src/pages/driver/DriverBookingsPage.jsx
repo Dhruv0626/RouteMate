@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, CheckCircle, XCircle, Clock, MapPin,
   Users, IndianRupee, Car, Navigation, AlertCircle,
-  RefreshCw, Lock, Share2, Loader2,
+  RefreshCw, Lock, Share2, Loader2, Trash2,
 } from "lucide-react";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import { useDialog } from "../../context/DialogContext";
@@ -77,6 +77,10 @@ const DriverBookingsPage = () => {
                 {pendingCount} pending
               </span>
             )}
+            <button onClick={() => navigate("/driver/dashboard/manage-rides")}
+              className="px-3 py-1.5 text-xs font-bold rounded-lg border border-red-500/20 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center gap-1.5 shadow-sm">
+              <Trash2 size={13} /> Manage/Cancel Ride
+            </button>
             <button onClick={fetchRides} disabled={loading}
               className="p-2 rounded-lg border border-(--card-border) bg-(--card-bg) text-(--text-dim) hover:text-(--text-main) transition-all disabled:opacity-50">
               <RefreshCw size={18} className={loading ? "animate-spin" : ""} />

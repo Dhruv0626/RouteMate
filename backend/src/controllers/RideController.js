@@ -3,7 +3,12 @@ import TripModel from "../models/Trip.js";
 import SystemConfig from "../models/SystemConfig.js";
 import DriverProfileModel from "../models/DriverProfile.js";
 import PublishedRideModel from "../models/PublishedRide.js";
+import UserModel from "../models/User.js";
+import WalletTransaction from "../models/WalletTransaction.js";
+import { notifyUser } from "../utils/NotifyUtil.js";
+import { getIO } from "../utils/SocketManager.js";
 import { calculateFareDetails } from "../utils/PriceEngine.js";
+import cacheService from "../utils/redis.js";
 
 /**
  * Helper to calculate fare based on distance and vehicle type using RouteMAte Price Engine
@@ -50,6 +55,19 @@ const calculateFare = async (distanceKm, vehicleType) => {
   });
 
   return fareData.final_price || 150;
+};
+
+// ─── Haversine Distance (km) ─────────────────────────────────────────────────
+const haversineKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
 // ─── Get Passenger History ────────────────────────────────────────────────────
@@ -103,7 +121,7 @@ export const GetDriverHistory = async (req, res) => {
     const trips = await TripModel.find(filter)
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .populate("passenger", "name email profileImage Mobile_no")
+      .populate("passenger", "name email profileImage Mobile_no passengerStats")
       .populate("publishedRide");
 
     const nowIST = new Date(Date.now() + (5.5 * 60 * 60 * 1000));
@@ -407,5 +425,316 @@ export const CreateDemoRide = async (req, res) => {
   } catch (error) {
     console.error("Create Demo Ride Error:", error.message);
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Passenger Cancels a Matched/Arrived Ride
+ */
+export const CancelRideByPassenger = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { tripId, reason } = req.body;
+    const passengerId = req.user.id;
+
+    const trip = await TripModel.findById(tripId).session(session);
+    if (!trip) return res.status(404).json({ success: false, message: "Trip not found" });
+
+    if (trip.passenger.toString() !== passengerId) {
+      return res.status(403).json({ success: false, message: "Unauthorized to cancel this trip" });
+    }
+
+    if (!["matched", "arrived"].includes(trip.phase)) {
+      return res.status(400).json({ success: false, message: `Cannot cancel trip in ${trip.phase} phase` });
+    }
+
+    let penalty = 0;
+    const now = new Date();
+
+    if (trip.phase === "matched") {
+      const matchedAt = trip.matchedAt || trip.createdAt;
+      const diffMin = (now - new Date(matchedAt)) / (1000 * 60);
+
+      if (diffMin > 3) {
+        // Calculate driver distance to pickup
+        const driverProfile = await DriverProfileModel.findOne({ user: trip.driver }).session(session);
+        const driverLoc = driverProfile?.currentLocation?.coordinates; // [lng, lat]
+        const pickupLoc = trip.source.location.coordinates;
+
+        if (driverLoc && pickupLoc) {
+          const distKm = haversineKm(driverLoc[1], driverLoc[0], pickupLoc[1], pickupLoc[0]);
+          penalty = distKm >= 0.5 ? 30 : 50;
+        } else {
+          penalty = 30; // Fallback
+        }
+      }
+    } else if (trip.phase === "arrived") {
+      const arrivedAt = trip.driverArrivedAt;
+      const diffMin = arrivedAt ? (now - new Date(arrivedAt)) / (1000 * 60) : 2; // Assume >1 if timestamp missing
+
+      penalty = diffMin < 1 ? 30 : 50;
+    }
+
+    // 1. Update Trip
+    trip.phase = "cancelled";
+    trip.cancelledBy = "passenger";
+    trip.cancelledAt = now;
+    trip.cancellationReason = "Passenger Cancelled";
+    trip.cancellationFee = penalty;
+    
+    const driverComp = penalty === 50 ? 35 : (penalty === 30 ? 20 : 0);
+    trip.driverCompensation = driverComp;
+    if (driverComp > 0) trip.driverCompensationPaidAt = now;
+
+    await trip.save({ session });
+
+    // 2. Update Passenger Account (Auto-deduct from wallet if balance is sufficient)
+    let penaltyDeductedFromWallet = false;
+    let passengerNewWalletBalance = 0;
+    let passengerNewDueBalance = 0;
+    let passengerNewAccountStatus = "active";
+
+    if (penalty > 0) {
+      const passenger = await UserModel.findById(passengerId).session(session);
+      if (!passenger) throw new Error("Passenger not found");
+
+      if ((passenger.walletBalance || 0) >= penalty) {
+        // Direct cut from wallet balance
+        passenger.walletBalance = (passenger.walletBalance || 0) - penalty;
+        passenger.dueBalance = 0;
+        passenger.accountStatus = "active";
+        await passenger.save({ session });
+
+        penaltyDeductedFromWallet = true;
+        passengerNewWalletBalance = passenger.walletBalance;
+        passengerNewDueBalance = passenger.dueBalance;
+        passengerNewAccountStatus = passenger.accountStatus;
+
+        // Record Debit WalletTransaction for Passenger
+        await WalletTransaction.create([{
+          user: passengerId,
+          type: "debit",
+          amount: penalty,
+          balanceAfter: passenger.walletBalance,
+          affectsBalance: true,
+          reference: "penalty_payment",
+          description: `Auto-deducted cancellation penalty of ₹${penalty} from wallet`
+        }], { session });
+
+        // Credit SuperAdmin (Platform)
+        const superAdmin = await UserModel.findOne({ role: "superadmin" }).session(session);
+        if (superAdmin) {
+          superAdmin.walletBalance = (superAdmin.walletBalance || 0) + penalty;
+          await superAdmin.save({ session });
+
+          await WalletTransaction.create([{
+            user: superAdmin._id,
+            type: "credit",
+            amount: penalty,
+            balanceAfter: superAdmin.walletBalance,
+            affectsBalance: true,
+            reference: "penalty_payment",
+            description: `Credit: Received cancellation penalty of ₹${penalty} from passenger ${passenger.name}`
+          }], { session });
+        }
+      } else {
+        // Insufficient balance, set due balance & restrict account
+        passenger.dueBalance = (passenger.dueBalance || 0) + penalty;
+        passenger.accountStatus = "payment_due";
+        await passenger.save({ session });
+
+        passengerNewWalletBalance = passenger.walletBalance;
+        passengerNewDueBalance = passenger.dueBalance;
+        passengerNewAccountStatus = passenger.accountStatus;
+      }
+    }
+
+    // 3. Compensate Driver (Platform pays driver immediately)
+    if (driverComp > 0) {
+      const superAdmin = await UserModel.findOne({ role: "superadmin" }).session(session);
+      if (superAdmin) {
+        // Platform Debit
+        superAdmin.walletBalance = (superAdmin.walletBalance || 0) - driverComp;
+        await superAdmin.save({ session });
+
+        await WalletTransaction.create([{
+          user: superAdmin._id,
+          type: "debit",
+          amount: driverComp,
+          balanceAfter: superAdmin.walletBalance,
+          affectsBalance: true,
+          reference: "penalty_compensation",
+          referenceId: trip._id,
+          description: `Debit: Driver compensation for passenger cancellation (Trip: ${trip._id})`
+        }], { session });
+
+        // Driver Credit
+        const driver = await UserModel.findById(trip.driver).session(session);
+        if (driver) {
+          driver.walletBalance = (driver.walletBalance || 0) + driverComp;
+          await driver.save({ session });
+
+          await WalletTransaction.create([{
+            user: trip.driver,
+            type: "credit",
+            amount: driverComp,
+            balanceAfter: driver.walletBalance,
+            affectsBalance: true,
+            reference: "penalty_compensation",
+            referenceId: trip._id,
+            description: `Credit: Cancellation compensation from passenger (Trip: ${trip._id})`
+          }], { session });
+        }
+      }
+    }
+
+    // 4. Update Published Ride bookings
+    await PublishedRideModel.updateOne(
+      { 
+        _id: new mongoose.Types.ObjectId(trip.publishedRide), 
+        "bookings.passenger": new mongoose.Types.ObjectId(passengerId) 
+      },
+      { 
+        $set: { 
+          "bookings.$.status": "cancelled", 
+          "bookings.$.rejectedAt": now,
+          status: "open"
+        } 
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    // Invalidate Redis profile cache
+    await cacheService.del(`user:profile:${passengerId}`);
+
+    // 5. Notifications & Sockets
+    const io = getIO();
+    if (io) {
+      io.to(trip.driver.toString()).emit("ride_cancelled", { tripId: trip._id, penalty: driverComp });
+      io.to(trip.passenger.toString()).emit("ride_cancelled", { tripId: trip._id, penalty });
+      io.to(trip._id.toString()).emit("ride_status_update", { status: "cancelled", tripId: trip._id });
+    }
+
+    await notifyUser({
+      userId: trip.driver,
+      title: "Trip Cancelled 🚫",
+      message: driverComp > 0 
+        ? `Passenger cancelled the trip. ₹${driverComp} has been credited to your wallet as compensation.`
+        : `Passenger cancelled the trip.`,
+      type: "info"
+    });
+
+    if (penalty > 0) {
+      if (penaltyDeductedFromWallet) {
+        await notifyUser({
+          userId: passengerId,
+          title: "Cancellation Penalty Paid ✅",
+          message: `A cancellation fee of ₹${penalty} has been auto-deducted from your wallet. Your rides continue unrestricted.`,
+          type: "success"
+        });
+      } else {
+        await notifyUser({
+          userId: passengerId,
+          title: "Cancellation Penalty ⚠️",
+          message: `You have been charged a ₹${penalty} cancellation fee. Your wallet balance was insufficient. Please pay manually to resume booking.`,
+          type: "error"
+        });
+      }
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Trip cancelled", 
+      penalty,
+      penaltyDeductedFromWallet,
+      newDueBalance: passengerNewDueBalance,
+      newWalletBalance: passengerNewWalletBalance,
+      accountStatus: passengerNewAccountStatus
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("CancelRideByPassenger Error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+/**
+ * Pay Pending Penalty
+ */
+export const PayPenalty = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const userId = req.user.id;
+    const { amount } = req.body || {}; // In a real app, this might come from a payment gateway callback
+
+    const user = await UserModel.findById(userId).session(session);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    if (user.dueBalance <= 0) {
+      return res.status(400).json({ success: false, message: "No pending balance due" });
+    }
+
+    const payAmount = amount || user.dueBalance;
+
+    // Record Transaction
+    await WalletTransaction.create([{
+      user: userId,
+      type: "debit",
+      amount: payAmount,
+      balanceAfter: user.walletBalance,
+      affectsBalance: false,
+      reference: "penalty_payment",
+      description: `Payment: Cleared pending cancellation penalty of ₹${payAmount}`
+    }], { session });
+
+    // Update User
+    user.dueBalance = Math.max(0, user.dueBalance - payAmount);
+    if (user.dueBalance === 0) {
+      user.accountStatus = "active";
+    }
+    await user.save({ session });
+
+    // Credit Platform (SuperAdmin)
+    const superAdmin = await UserModel.findOne({ role: "superadmin" }).session(session);
+    if (superAdmin) {
+      superAdmin.walletBalance = (superAdmin.walletBalance || 0) + payAmount;
+      await superAdmin.save({ session });
+
+      await WalletTransaction.create([{
+        user: superAdmin._id,
+        type: "credit",
+        amount: payAmount,
+        balanceAfter: superAdmin.walletBalance,
+        affectsBalance: true,
+        reference: "penalty_payment",
+        description: `Credit: Received penalty payment from user ${user.name}`
+      }], { session });
+    }
+
+    await session.commitTransaction();
+
+    // Invalidate Redis profile cache
+    await cacheService.del(`user:profile:${req.user.id}`);
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Penalty paid successfully", 
+      newDueBalance: user.dueBalance,
+      accountStatus: user.accountStatus 
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("PayPenalty Error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
+  } finally {
+    session.endSession();
   }
 };

@@ -58,6 +58,7 @@ const DriverWalletPage = () => {
   const [customWithdrawAmt, setCustomWithdrawAmt]     = useState("");
   const [busy, setBusy]         = useState(false);
   const [toast, setToast]       = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -281,7 +282,7 @@ const DriverWalletPage = () => {
         </div>
 
         {/* ── Quick Stats ── */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: "Total Earned(All methods earnings)", value: fmt(stats.totalEarned) },
             { label: "Withdrawn",    value: fmt(stats.totalWithdrawn) },
@@ -300,18 +301,32 @@ const DriverWalletPage = () => {
             <h2 className="font-display text-lg font-black text-(--text-main) flex items-center gap-2">
               Transactions <span className="bg-primary h-1.5 w-1.5 rounded-full"/>
             </h2>
-            <div className="relative group/export">
-              <button className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/20 transition-all">
+            <div className="relative">
+              <button 
+                onClick={() => setShowExportMenu(prev => !prev)}
+                className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/20 transition-all"
+              >
                 <Download size={14} /> Export
               </button>
-              <div className="absolute right-0 top-full mt-2 w-32 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
-                <button onClick={() => handleExport('pdf')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all">
-                  PDF Statement
-                </button>
-                <button onClick={() => handleExport('csv')} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all">
-                  CSV Export
-                </button>
-              </div>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-32 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1 shadow-xl z-50 animate-in zoom-in-95 duration-150">
+                    <button 
+                      onClick={() => { handleExport('pdf'); setShowExportMenu(false); }} 
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                    >
+                      PDF Statement
+                    </button>
+                    <button 
+                      onClick={() => { handleExport('csv'); setShowExportMenu(false); }} 
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                    >
+                      CSV Export
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           {txns.length === 0 ? (
@@ -324,19 +339,19 @@ const DriverWalletPage = () => {
               <div className="divide-y divide-(--card-border)">
                 {txns.map((tx) => (
                   <div key={tx._id} className="flex items-center justify-between p-5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className={`shrink-0 h-11 w-11 rounded-xl flex items-center justify-center ${
                         tx.type === "debit" ? "bg-rose-500/10 text-rose-400" : "bg-emerald-500/10 text-emerald-400"
                       }`}>
                         {tx.type === "debit" ? <ArrowUpRight size={20}/> : <ArrowDownLeft size={20}/>}
                       </div>
-                      <div>
-                        <p className="text-sm font-black text-(--text-main)">{tx.description || tx.reference}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black text-(--text-main) truncate">{tx.description || tx.reference}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${refColor[tx.reference] || "bg-white/5 text-(--text-dim) border-white/10"}`}>
+                          <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${refColor[tx.reference] || "bg-white/5 text-(--text-dim) border-white/10"}`}>
                             {tx.reference}
                           </span>
-                          <span className="text-[10px] text-(--text-dim)">{dtFmt(tx.createdAt)}</span>
+                          <span className="text-[10px] text-(--text-dim) truncate">{dtFmt(tx.createdAt)}</span>
                         </div>
                       </div>
                     </div>

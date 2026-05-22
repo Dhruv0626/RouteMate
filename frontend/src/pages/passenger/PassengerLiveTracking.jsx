@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, Loader2, User as UserIcon, IndianRupee, Phone, RefreshCw, Navigation, ChevronDown, ChevronUp, MapPin
+  ArrowLeft, Loader2, User as UserIcon, IndianRupee, Phone, RefreshCw, Navigation, ChevronDown, ChevronUp, MapPin, X
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, ZoomControl } from "react-leaflet";
 import L from "leaflet";
@@ -29,8 +29,8 @@ const redPin   = makePin("#ef4444", "DROP");
 const PassengerLiveTracking = () => {
   const { rideId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { showAlert } = useDialog();
+  const { user, setUser } = useAuth();
+  const { showAlert, showConfirm } = useDialog();
 
   const [ride, setRide] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
@@ -49,16 +49,17 @@ const PassengerLiveTracking = () => {
   const [liveEtaMins, setLiveEtaMins] = useState(null);
   const [destEtaMins, setDestEtaMins] = useState(null);
 
-  // Live clock — ticks every 30s so ETA arrival time stays accurate without reloading
+  // Live clock — ticks every 5s so ETA arrival time stays accurate without reloading
   const [nowTs, setNowTs] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNowTs(Date.now()), 30_000);
+    const id = setInterval(() => setNowTs(Date.now()), 5_000);
     return () => clearInterval(id);
   }, []);
 
   // Late departure alert state
   const [lateAlert, setLateAlert] = useState(null); // { zone, message, lateMinutes, canCancel }
   const [cancellingRide, setCancellingRide] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
 
   // Live wallet balance (fetched fresh from server when payment panel shows)
   const [liveWalletBalance, setLiveWalletBalance] = useState(null);
@@ -113,6 +114,38 @@ const PassengerLiveTracking = () => {
   }, [rideId]);
 
   useEffect(() => {
+    if (!ride) return;
+
+    if (ride.status === "completed") {
+      showAlert("This ride has been completed successfully. We hope you had a great journey!", "Ride Completed 🎉", "success")
+        .then(() => navigate("/passenger/dashboard"));
+      return;
+    }
+
+    if (ride.status === "cancelled") {
+      showAlert("This ride has been cancelled.", "Ride Cancelled", "error")
+        .then(() => navigate("/passenger/dashboard"));
+      return;
+    }
+
+    const pId = user?.id || user?._id;
+    if (!pId) return;
+
+    const myBookings = ride.bookings?.filter(b => 
+      (b.passenger?._id || b.passenger || b.passenger?.id)?.toString() === pId.toString()
+    ) || [];
+
+    // If they have bookings, but NONE of them are confirmed or pending, then they are cancelled
+    if (myBookings.length > 0) {
+      const hasActive = myBookings.some(b => b.status === "confirmed" || b.status === "pending");
+      if (!hasActive) {
+        showAlert("Your booking request has been cancelled.", "Ride Cancelled", "error")
+          .then(() => navigate("/passenger/dashboard"));
+      }
+    }
+  }, [ride, user, navigate]);
+
+  useEffect(() => {
     if (!rideId) return;
     socket.connect();
     
@@ -129,9 +162,15 @@ const PassengerLiveTracking = () => {
 
     const onStatusUpdate = (data) => {
       console.log("Ride status update received:", data);
-      if (data.rideId === rideId || data.rideId === ride?._id) {
+      const isMatchingId = data.rideId === rideId || 
+                           data.rideId === ride?._id || 
+                           data.tripId === rideId || 
+                           data.tripId === ride?.tripId || 
+                           data.tripId === ride?._id;
+
+      if (isMatchingId) {
         if (data.status === "cancelled") {
-          showAlert("This ride has been cancelled by the driver or system.", "Ride Cancelled", "error")
+          showAlert("This ride has been cancelled.", "Ride Cancelled", "error")
             .then(() => navigate("/passenger/dashboard"));
           return;
         }
@@ -264,10 +303,27 @@ const PassengerLiveTracking = () => {
 
   const firstPassenger = useMemo(() => {
     if (!ride) return null;
-    return ride.bookings
-      ? ride.bookings.find(b => b.passenger === user?.id) || ride.bookings.find(b => b.status === "confirmed" || b.status === "pending")
-      : null;
-  }, [ride, user?.id]);
+    if (!ride.bookings) return null;
+
+    const pId = user?.id || user?._id;
+    if (!pId) return null;
+
+    // 1. Find active booking (pending/confirmed) for this passenger
+    const activeBooking = ride.bookings.find(b => 
+      (b.passenger?._id || b.passenger || b.passenger?.id)?.toString() === pId.toString() &&
+      b.status !== "cancelled" && b.status !== "rejected"
+    );
+    if (activeBooking) return activeBooking;
+
+    // 2. Fallback to any booking for this passenger
+    const anyBooking = ride.bookings.find(b => 
+      (b.passenger?._id || b.passenger || b.passenger?.id)?.toString() === pId.toString()
+    );
+    if (anyBooking) return anyBooking;
+
+    // 3. Fallback to any active booking
+    return ride.bookings.find(b => b.status === "confirmed" || b.status === "pending");
+  }, [ride, user?.id, user?._id]);
 
   const pickupCoords = useMemo(() => {
     const raw = firstPassenger?.passengerSource?.location?.coordinates;
@@ -361,7 +417,7 @@ const PassengerLiveTracking = () => {
                setDisplayRoute(result.path);
                lastFetchedRouteKeyRef.current = routeKey;
                if (isPickup) {
-                 setLiveEtaMins(Math.round(result.distanceKm * 2));
+                 setLiveEtaMins(result.durationMin);
                }
             }
           } catch (err) {
@@ -376,7 +432,7 @@ const PassengerLiveTracking = () => {
           const info = await routingFetchInfo(
             effectiveDriverLocation.lat, effectiveDriverLocation.lng, destCoords[0], destCoords[1]
           );
-          if (info) setDestEtaMins(Math.round(info.distanceKm * 2));
+          if (info) setDestEtaMins(info.durationMin);
         } catch (err) {
           console.error("Failed to fetch live ETA", err);
         }
@@ -385,7 +441,7 @@ const PassengerLiveTracking = () => {
           const info = await routingFetchInfo(
             effectiveDriverLocation.lat, effectiveDriverLocation.lng, routeEnd[0], routeEnd[1]
           );
-          if (info) setLiveEtaMins(Math.round(info.distanceKm * 2));
+          if (info) setLiveEtaMins(info.durationMin);
         } catch (err) {
           console.error("Failed to fetch live ETA", err);
         }
@@ -401,22 +457,84 @@ const PassengerLiveTracking = () => {
   
   const amountPaid = firstPassenger?.amountPaid || ride.fare?.totalWithTax || ride.fare?.total || 0;
 
-  // ── Cancel this ride (passenger-initiated during late zone 2/3) ─────────────
   const handleCancelDueToDelay = async () => {
-    setCancellingRide(true);
+    const confirm = await showConfirm(
+      "Your driver is significantly late. You can cancel this ride for free. Would you like to cancel?",
+      "Cancel Ride",
+      "warning"
+    );
+    if (confirm) {
+      setLoading(true);
+      try {
+        await api.post("/rides/cancel-passenger", { 
+          tripId: ride.tripId || ride._id, 
+          reason: "Driver delay" 
+        });
+        showAlert("Your booking has been cancelled. No penalty applied due to driver delay.", "Cancelled", "success");
+        navigate("/passenger/dashboard");
+      } catch (err) {
+        showAlert(err.response?.data?.message || "Cancellation failed", "Error", "error");
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleCancelGeneral = async () => {
+    const isActive = ride.status === "active" || ride.status === "matched"; // booking confirmed, driver heading to pickup
+    const isArrived = ride.status === "arrived"; // driver at pickup, ride not started
+    
+    if (!isActive && !isArrived) {
+        showAlert("Cancellation is only available before the ride starts.", "Action Blocked", "info");
+        return;
+    }
+
+    setIsCancelModalOpen(true);
+  };
+
+  const submitCancellation = async () => {
+    setIsCancelModalOpen(false);
+    setLoading(true);
     try {
-      await api.post(`/published-rides/${rideId}/late-reason`, { reason: "other" }).catch(() => {});
-      // Navigate away — backend will handle booking cancellation when driver auto-cancels or passenger refreshes
-      await showAlert(
-        "Your booking has been marked for cancellation. If you paid via wallet, you will receive a full refund instantly.",
-        "Booking Cancelled",
-        "info"
-      );
-      navigate("/passenger/dashboard");
+      const res = await api.post("/rides/cancel-passenger", { 
+        tripId: ride.tripId || ride._id, 
+        reason: "User cancelled" 
+      });
+      if (res.data.success) {
+        if (res.data.penalty > 0) {
+          if (res.data.penaltyDeductedFromWallet) {
+            showAlert(
+              `Ride cancelled. A cancellation penalty of ₹${res.data.penalty} has been auto-deducted from your wallet. Your rides continue unrestricted.`,
+              "Ride Cancelled",
+              "success"
+            );
+          } else {
+            showAlert(
+              `Ride cancelled. Your wallet balance was insufficient. A penalty of ₹${res.data.penalty} has been added to your dues. Please pay manually to resume booking.`,
+              "Ride Cancelled",
+              "error"
+            );
+          }
+        } else {
+          showAlert("Ride cancelled successfully. No penalty applied.", "Ride Cancelled", "success");
+        }
+
+        // Sync newest user balance/status to local state
+        if (res.data.newDueBalance !== undefined || res.data.newWalletBalance !== undefined) {
+          setUser({
+            ...user,
+            walletBalance: res.data.newWalletBalance !== undefined ? res.data.newWalletBalance : user.walletBalance,
+            dueBalance: res.data.newDueBalance !== undefined ? res.data.newDueBalance : user.dueBalance,
+            accountStatus: res.data.accountStatus !== undefined ? res.data.accountStatus : user.accountStatus
+          });
+        }
+
+        navigate("/passenger/dashboard");
+      }
     } catch (err) {
-      console.error("Cancel error:", err);
+      showAlert(err.response?.data?.message || "Cancellation failed", "Error", "error");
     } finally {
-      setCancellingRide(false);
+      setLoading(false);
     }
   };
 
@@ -729,91 +847,123 @@ const PassengerLiveTracking = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           {/* ETA headline */}
-                          <p className={`text-sm font-black ${
-                            liveEtaMins !== null
-                              ? liveEtaMins === 0 ? "text-emerald-400"
-                              : liveEtaMins <= 3 ? "text-emerald-400"
-                              : "text-white"
-                              : "text-white/60"
-                          }`}>
-                            {liveEtaMins !== null
-                              ? liveEtaMins === 0
-                                ? "🟢 Driver is arriving now!"
-                                : `🚗 ~${liveEtaMins} min away`
-                              : effectiveDriverLocation
-                              ? "⏳ Calculating ETA…"
-                              : "📡 Waiting for driver GPS signal"}
-                          </p>
-
-                          {/* Delay Info */}
-                          {ride.departureTime && (() => {
-                            const scheduledTime = new Date(ride.departureTime);
-                            const etaDate = liveEtaMins !== null ? new Date(nowTs + liveEtaMins * 60000) : null;
-                            const delayMinutes = etaDate ? Math.max(0, Math.round((etaDate - scheduledTime) / 60000)) : 0;
+                          {(() => {
+                            const displayLiveEtaMins = (() => {
+                              if (liveEtaMins === null) return null;
+                              let totalEta = liveEtaMins;
+                              const baseTime = firstPassenger?.confirmedAt || firstPassenger?.bookedAt || ride.createdAt;
+                              if (baseTime) {
+                                const depTime = new Date(baseTime).getTime();
+                                const now = nowTs;
+                                if (depTime > now) {
+                                  const pendingMins = Math.round((depTime - now) / 60000);
+                                  totalEta += Math.max(0, pendingMins);
+                                }
+                              }
+                              return totalEta;
+                            })();
 
                             return (
-                              <div className="mt-1 flex flex-col gap-0.5">
-                                <p className="text-[10px] text-white/40 flex items-center gap-1 font-bold uppercase tracking-widest">
-                                   Scheduled: <span className="text-white/60">{scheduledTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                              <>
+                                <p className={`text-sm font-black ${
+                                  displayLiveEtaMins !== null
+                                    ? displayLiveEtaMins === 0 ? "text-emerald-400"
+                                    : displayLiveEtaMins <= 3 ? "text-emerald-400"
+                                    : "text-white"
+                                    : "text-white/60"
+                                }`}>
+                                  {displayLiveEtaMins !== null
+                                    ? displayLiveEtaMins === 0
+                                      ? "🟢 Driver is arriving now!"
+                                      : `🚗 ~${displayLiveEtaMins} min away`
+                                    : effectiveDriverLocation
+                                    ? "⏳ Calculating ETA…"
+                                    : "📡 Waiting for driver GPS signal"}
                                 </p>
-                                {delayMinutes > 0 && (
-                                  <p className="text-[11px] text-red-400 font-black flex items-center gap-1">
-                                     ⚠️ Expected Delay: {delayMinutes} min
-                                  </p>
+
+                                {/* Delay Info — uses pickupEtaMins so delay is from expected PICKUP time */}
+                                {(() => {
+                                  // expectedPickupTime = when driver was supposed to arrive at pickup
+                                  // = confirmation/booking time + travel time from driver's location to pickup point
+                                  const pickupEtaMins = ride.pickupEtaMins || 10;
+                                  const baseTime = firstPassenger?.confirmedAt || firstPassenger?.bookedAt || ride.createdAt;
+                                  const expectedPickupTs = new Date(baseTime).getTime() + pickupEtaMins * 60000;
+                                  const expectedPickupTime = new Date(expectedPickupTs);
+
+                                  // Determine system-calculated delay minutes
+                                  let delayMinutes = ride.lateMinutes || lateAlert?.lateMinutes || 0;
+                                  
+                                  // Fallback to live ETA comparison if no official delay is registered but driver is overdue
+                                  if (delayMinutes === 0 && displayLiveEtaMins !== null && nowTs > expectedPickupTs) {
+                                    delayMinutes = Math.max(0, Math.round((nowTs + displayLiveEtaMins * 60000 - expectedPickupTs) / 60000));
+                                  }
+
+                                  return (
+                                    <div className="mt-1 flex flex-col gap-0.5">
+                                      <p className="text-[10px] text-white/40 flex items-center gap-1 font-bold uppercase tracking-widest flex-wrap">
+                                         Expected Pickup: <span className="text-white/60">
+                                           {expectedPickupTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                           {delayMinutes > 0 && ` (Revised: ${new Date(expectedPickupTs + delayMinutes * 60000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })})`}
+                                         </span>
+                                      </p>
+                                      {delayMinutes > 0 && (
+                                        <p className="text-[11px] text-red-400 font-black flex items-center gap-1">
+                                           ⚠️ Expected Delay: {delayMinutes} min
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* Sub-label */}
+                                <p className="text-[10px] text-white/40 mt-1">
+                                  {displayLiveEtaMins !== null
+                                    ? "Live ETA · Updates as driver moves"
+                                    : effectiveDriverLocation
+                                    ? "Updates live as driver moves"
+                                    : "Driver location will appear once GPS connects"}
+                                </p>
+
+                                {/* Progress bar — fills as driver gets closer (max 20 min reference) */}
+                                {displayLiveEtaMins !== null && (
+                                  <div className="mt-2 h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full transition-all duration-1000"
+                                      style={{
+                                        width: `${Math.min(100, Math.max(4, ((20 - displayLiveEtaMins) / 20) * 100))}%`,
+                                        background: displayLiveEtaMins <= 2
+                                          ? "linear-gradient(to right, #10b981, #4ade80)"
+                                          : displayLiveEtaMins <= 5
+                                          ? "linear-gradient(to right, #f59e0b, #fcd34d)"
+                                          : "linear-gradient(to right, #6366f1, #818cf8)"
+                                      }}
+                                    />
+                                  </div>
                                 )}
-                              </div>
+                              </>
                             );
                           })()}
-
-                          {/* Clock time estimate — uses nowTs so it auto-updates every 30s */}
-                          {liveEtaMins !== null && liveEtaMins > 0 && (() => {
-                            const etaDate = new Date(nowTs + liveEtaMins * 60000);
-                            const etaTime = etaDate.toLocaleTimeString("en-IN", {
-                              hour: "2-digit", minute: "2-digit", hour12: true
-                            });
-                            return (
-                              <p className="text-[11px] text-emerald-400 font-black mt-1.5 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 w-fit">
-                                <span className="text-white/30 text-xs">🏁</span>
-                                ETA: <span className="text-emerald-400">{etaTime}</span>
-                              </p>
-                            );
-                          })()}
-
-                          {/* Sub-label */}
-                          <p className="text-[10px] text-white/40 mt-1">
-                            {liveEtaMins !== null
-                              ? "Live ETA · Updates as driver moves"
-                              : effectiveDriverLocation
-                              ? "Updates live as driver moves"
-                              : "Driver location will appear once GPS connects"}
-                          </p>
-
-                          {/* Progress bar — fills as driver gets closer (max 20 min reference) */}
-                          {liveEtaMins !== null && (
-                            <div className="mt-2 h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-1000"
-                                style={{
-                                  width: `${Math.min(100, Math.max(4, ((20 - liveEtaMins) / 20) * 100))}%`,
-                                  background: liveEtaMins <= 2
-                                    ? "linear-gradient(to right, #10b981, #4ade80)"
-                                    : liveEtaMins <= 5
-                                    ? "linear-gradient(to right, #f59e0b, #fcd34d)"
-                                    : "linear-gradient(to right, #6366f1, #818cf8)"
-                                }}
-                              />
-                            </div>
-                          )}
                         </div>
 
-                        {ride.driver?.Mobile_no && (
-                          <a
-                            href={`tel:${ride.driver.Mobile_no}`}
-                            className="bg-primary text-black p-2.5 rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all flex-shrink-0 ml-3"
-                          >
-                            <Phone size={16} />
-                          </a>
-                        )}
+                        <div className="flex items-center gap-2">
+                           {ride.driver?.Mobile_no && (
+                             <a
+                               href={`tel:${ride.driver.Mobile_no}`}
+                               className="bg-emerald-500/10 text-emerald-500 p-2.5 rounded-xl border border-emerald-500/20 active:scale-95 transition-all"
+                             >
+                               <Phone size={16} />
+                             </a>
+                           )}
+                           {(ride.status === "active" || ride.status === "matched" || ride.status === "arrived") && (
+                             <button
+                               onClick={handleCancelGeneral}
+                               className="bg-red-500/10 hover:bg-red-500/20 text-red-500 px-4 py-2.5 rounded-xl border border-red-500/20 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all duration-350 shrink-0"
+                               title="Cancel Ride"
+                             >
+                               Cancel Ride
+                             </button>
+                           )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -948,6 +1098,78 @@ const PassengerLiveTracking = () => {
           </div>
         </div>
       </div>
+      {/* ── Cancellation Terms & Conditions Modal ── */}
+      {isCancelModalOpen && (
+        <div className="absolute inset-0 z-[4000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-neutral-900 border border-white/10 rounded-[28px] p-6 max-w-sm w-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] transform animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="text-center mb-5">
+              <span className="text-4xl">⚠️</span>
+              <h3 className="text-lg font-black text-white mt-2 uppercase tracking-wide">Cancellation Policy</h3>
+              <p className="text-xs text-white/50 mt-1">Please review the RouteMate terms before cancelling</p>
+            </div>
+
+            {/* Terms List */}
+            <div className="space-y-4 mb-6">
+              <div className="flex gap-3">
+                <span className="text-emerald-400 text-sm shrink-0">⚡</span>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">Free Cancellation</p>
+                  <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">No charges apply if cancelled within <span className="font-bold text-white">3 minutes</span> of booking confirmation.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <span className="text-amber-400 text-sm shrink-0">🚗</span>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">Standard Fee (₹30)</p>
+                  <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">Applies after <span className="font-bold text-white">3 minutes</span> if the driver is more than <span className="font-bold text-white">0.5 km</span> away from pickup.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <span className="text-red-400 text-sm shrink-0">🎯</span>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">Proximity Fee (₹50)</p>
+                  <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">Applies after <span className="font-bold text-white">3 minutes</span> if the driver is within <span className="font-bold text-white">0.5 km</span> of your pickup location.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <span className="text-rose-400 text-sm shrink-0">📍</span>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">Driver Waiting Fee (₹30 / ₹50)</p>
+                  <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">If the driver has arrived at pickup: <span className="font-bold text-white">₹30</span> fee applies within 1 minute of arrival, <span className="font-bold text-white">₹50</span> after 1 minute.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <span className="text-violet-400 text-sm shrink-0">🔒</span>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">Account Restrictions</p>
+                  <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">Any charged cancellation fee is added to your account dues. Account is <span className="font-bold text-white">blocked</span> from new bookings until settled.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setIsCancelModalOpen(false)}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-black py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-lg shadow-emerald-500/10"
+              >
+                Keep Booking ✅
+              </button>
+              <button
+                onClick={submitCancellation}
+                className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+              >
+                Confirm Cancel 🚫
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

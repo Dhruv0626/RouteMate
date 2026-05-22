@@ -124,8 +124,13 @@ const PickupMap = () => {
         setTimeout(() => navigate("/passenger/dashboard"), 3500);
       }
       if (data.status === "cancelled") {
-        showAlert("The driver has cancelled this ride.", "Ride Cancelled", "error");
-        setTimeout(() => navigate("/passenger/dashboard"), 3000);
+        if (user.role === "driver") {
+          showAlert("Trip cancelled by passenger", "Ride Cancelled", "info")
+            .then(() => navigate("/driver/dashboard"));
+        } else {
+          showAlert("This ride has been cancelled.", "Ride Cancelled", "error")
+            .then(() => navigate("/passenger/dashboard"));
+        }
       }
     });
 

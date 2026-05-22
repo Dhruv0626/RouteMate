@@ -2,7 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
   Navigation, User as UserIcon, Loader2,
   Play, Square, AlertCircle, CheckCircle2, Shuffle, MapPinOff, ChevronRight,
-  Gift, Ticket
+  Gift, Ticket, Lock, IndianRupee
 } from "lucide-react";
 import { useAuth }          from "../context/AuthContext";
 import { useDialog }        from "../context/DialogContext";
@@ -12,6 +12,7 @@ import LocationSearch       from "../components/map/LocationSearch";
 import { getMultipleRoutes, getTrafficCondition } from "../utils/geocode";
 import { useGeoNavigation } from "../hooks/useGeoNavigation";
 import api from "../services/api";
+import { openRazorpayCheckout } from "../services/paymentService";
 
 const VEHICLE_METADATA = {
   MOTO: { name: "Bike", desc: "Affordable bike rides", image: "/images/Moto.png", tag: "" },
@@ -131,57 +132,35 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
     return () => { cancelled = true; };
   }, [ride._id, passengerPickup?.lat, passengerPickup?.lng, ride.departureTime]);
 
-  // ── Derived timing values with smart delay detection ──
+  // ── Derived timing values based entirely on live driver position to pickup ──
   const { pickupEstText, dropEstText, minsUntilPickup, delayMins } = (() => {
-    const dep = ride.departureTime ? new Date(ride.departureTime) : null;
-    if (!dep) return { pickupEstText: null, dropEstText: null, minsUntilPickup: null, delayMins: 0 };
-
     const now = Date.now();
     const fmtTime = (d) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
-    // Pickup estimated time = departure + OSRM travel to pickup
-    const pickupArrival = travelToPickupMins !== null
-      ? new Date(dep.getTime() + travelToPickupMins * 60000)
-      : null;
+    if (travelToPickupMins === null) {
+      return { pickupEstText: null, dropEstText: null, minsUntilPickup: null, delayMins: 0 };
+    }
 
-    // Raw signed mins until pickup (can be negative if overdue)
-    const rawMinsLeft = pickupArrival
-      ? Math.round((pickupArrival.getTime() - now) / 60000)
-      : null;
+    // Dynamic pickup time = current timestamp + live driving duration to pickup
+    const pickupArrival = new Date(now + travelToPickupMins * 60000);
 
-    // If departure has passed and driver is overdue by >3 min, estimate a delay
-    const isOverdue = rawMinsLeft !== null && rawMinsLeft < -3;
-
-    // Revised pickup: if overdue, assume 3-5 min avg delay from original pickup time
-    const estimatedDelay = isOverdue
-      ? Math.min(Math.abs(rawMinsLeft) + 3, 10) // cap delay at 10 mins
-      : 0;
-
-    const revisedPickupArrival = isOverdue && pickupArrival
-      ? new Date(pickupArrival.getTime() + estimatedDelay * 60000)
-      : pickupArrival;
-
-    // Drop time based on revised pickup
-    const dropArrival = revisedPickupArrival && durationMin
-      ? new Date(revisedPickupArrival.getTime() + durationMin * 60000)
-      : (dep && durationMin ? new Date(dep.getTime() + durationMin * 60000) : null);
+    // Dynamic drop time = pickup time + duration of the ride category path itself
+    const dropArrival = new Date(pickupArrival.getTime() + durationMin * 60000);
 
     return {
-      pickupEstText: revisedPickupArrival ? fmtTime(revisedPickupArrival) : null,
-      dropEstText: dropArrival ? fmtTime(dropArrival) : null,
-      minsUntilPickup: rawMinsLeft,
-      delayMins: estimatedDelay,
+      pickupEstText: fmtTime(pickupArrival),
+      dropEstText: fmtTime(dropArrival),
+      minsUntilPickup: travelToPickupMins,
+      delayMins: 0
     };
   })();
 
-  // ── Arrival chip text (handles delays) ──
+  // ── Arrival chip text (handles live tracking duration) ──
   const arrivalText = travelToPickupMins === null
     ? "Calculating…"
-    : minsUntilPickup === null ? `~${travelToPickupMins} min${travelToPickupMins > 1 ? "s" : ""} from departure`
-    : minsUntilPickup <= 0 && delayMins === 0 ? "Arriving now"
-    : minsUntilPickup > 0 ? `~${minsUntilPickup} min${minsUntilPickup > 1 ? "s" : ""} away`
-    : delayMins > 0 ? `~${delayMins} min delay expected`
-    : "Arriving soon";
+    : minsUntilPickup <= 0
+      ? "Arriving now"
+      : `~${minsUntilPickup} min${minsUntilPickup > 1 ? "s" : ""} away`;
 
   return (
     <button onClick={onClick} style={{
@@ -285,7 +264,7 @@ function Dot({ color }) {
 
 // ─── RideMapPage ──────────────────────────────────────────────────────────────
 const RideMapPage = () => {
-  const { user }   = useAuth();
+  const { user, setUser } = useAuth();
   const { showAlert } = useDialog();
   const navigate   = useNavigate();
   const location   = useLocation();
@@ -334,6 +313,33 @@ const RideMapPage = () => {
   const [bookingSuccess, setBookingSuccess] = useState(null);
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
 
+  const [payingPenalty, setPayingPenalty] = useState(false);
+  const handlePayPenalty = async () => {
+    if (!user?.dueBalance || user.dueBalance <= 0) return;
+    setPayingPenalty(true);
+    try {
+      const response = await openRazorpayCheckout({
+        amount: user.dueBalance,
+        purpose: "penalty_payment",
+        name: user.name || "",
+        email: user.email || "",
+        description: `Clear cancellation penalty of ₹${user.dueBalance}`,
+      });
+      if (response && response.success) {
+        showAlert("Payment successful! Your account is now active.", "Success", "success");
+        setUser({ 
+          ...user, 
+          dueBalance: response.newDueBalance, 
+          accountStatus: response.accountStatus 
+        });
+      }
+    } catch (err) {
+      showAlert(err.message || "Payment failed", "Error", "error");
+    } finally {
+      setPayingPenalty(false);
+    }
+  };
+
   const [referralInput, setReferralInput] = useState("");
   const [applyingReferral, setApplyingReferral] = useState(false);
   const [referralStatus, setReferralStatus] = useState(null);
@@ -362,10 +368,15 @@ const RideMapPage = () => {
         const { data } = await api.get("/users/system-settings");
         if (data.success) setSystemConfig(data.settings);
 
-        // Check for active rides to redirect
-        const liveRes = await api.get("/published-rides/my-booked");
-        if (liveRes.data.success && liveRes.data.data.length > 0) {
-           const activeRide = liveRes.data.data.find(r => r.status !== 'completed' && r.status !== 'cancelled');
+         // Check for active rides to redirect
+         const liveRes = await api.get("/published-rides/my-booked");
+         if (liveRes.data.success && liveRes.data.data.length > 0) {
+            const activeRide = liveRes.data.data.find(r => {
+              if (r.status === 'completed' || r.status === 'cancelled') return false;
+              const pId = user?.id || user?._id;
+              const myBookings = r.myBookings || r.bookings?.filter(b => (b.passenger?._id || b.passenger || b.passenger?.id)?.toString() === pId?.toString()) || [];
+              return myBookings.some(b => b.status === 'confirmed' || b.status === 'pending');
+            });
            if (activeRide) {
              // Redirect passengers to their dedicated live tracking page
              if (activeRide.status === "in_progress" || activeRide.status === "reached") {
@@ -624,8 +635,43 @@ const RideMapPage = () => {
       <main className="relative z-10 flex flex-1 flex-col lg:flex-row overflow-hidden" style={{ minHeight: "calc(100vh - 73px)" }}>
 
         {/* ── Sidebar ── */}
-        <aside className="flex flex-col gap-4 p-4 sm:p-5 md:w-[390px] md:min-w-[350px] overflow-y-auto"
-          style={{ borderRight: "1px solid var(--card-border)" }}>
+        {user?.accountStatus === "payment_due" ? (
+          <aside className="flex flex-col gap-4 p-4 sm:p-5 md:w-[390px] md:min-w-[350px] overflow-y-auto"
+            style={{ borderRight: "1px solid var(--card-border)" }}>
+            <div className="flex flex-col items-center justify-start pt-10 px-4 text-center h-full animate-in zoom-in-95 duration-300">
+              <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-500/10">
+                <Lock size={32} />
+              </div>
+              <h2 className="text-2xl font-black text-(--text-main) mb-2">Booking Restricted</h2>
+              <p className="text-sm text-(--text-dim) mb-6">
+                You have a pending cancellation penalty of <span className="text-red-500 font-bold">₹{user.dueBalance}</span>. 
+                Please clear this balance to resume booking rides.
+              </p>
+              
+              <div className="space-y-3 w-full">
+                <button 
+                  onClick={handlePayPenalty}
+                  disabled={payingPenalty}
+                  className="w-full py-4 bg-primary text-black font-black rounded-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2"
+                >
+                  Pay ₹{user.dueBalance} Now
+                </button>
+                <button 
+                  onClick={() => navigate("/passenger/dashboard")}
+                  className="w-full py-3 bg-white/5 text-(--text-dim) font-bold rounded-2xl hover:bg-white/10 transition-all text-xs uppercase tracking-widest"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+              
+              <p className="mt-8 text-[10px] text-(--text-dim) uppercase tracking-tighter opacity-50">
+                Secured by RouteMate Payment Engine
+              </p>
+            </div>
+          </aside>
+        ) : (
+          <aside className="flex flex-col gap-4 p-4 sm:p-5 md:w-[390px] md:min-w-[350px] overflow-y-auto"
+            style={{ borderRight: "1px solid var(--card-border)" }}>
 
           {/* Greeting */}
           <div>
@@ -854,6 +900,7 @@ const RideMapPage = () => {
             </div>
           )}
         </aside>
+        )}
 
         {/* ── Map area ── */}
         <section className="relative flex-1 order-first lg:order-none" style={{ minHeight: "450px" }}>

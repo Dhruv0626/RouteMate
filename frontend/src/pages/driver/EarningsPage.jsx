@@ -26,6 +26,7 @@ const EarningsPage = () => {
   const [timeFilter, setTimeFilter] = useState("week");
   const [expandedRide, setExpandedRide] = useState(null);
   const [showNotification, setShowNotification] = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -205,29 +206,34 @@ const EarningsPage = () => {
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <div className="relative group/export">
+            <div className="relative">
               <button
+                onClick={() => setShowExportMenu(prev => !prev)}
                 className="rounded-xl border border-(--card-border) bg-(--card-bg) px-4 py-2 text-sm font-semibold text-(--text-main) transition-all hover:border-primary/40 hover:bg-primary/5 flex items-center gap-2"
               >
                 <Download size={16} />
                 <span className="hidden sm:inline">Export</span>
               </button>
               
-              {/* Export Dropdown */}
-              <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all duration-200 z-50">
-                <button
-                  onClick={() => handleExport('pdf')}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
-                >
-                  Download PDF
-                </button>
-                <button
-                  onClick={() => handleExport('csv')}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
-                >
-                  Download CSV
-                </button>
-              </div>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-40 origin-top-right rounded-xl border border-(--card-border) bg-(--bg-main) p-1.5 shadow-xl z-50 animate-in zoom-in-95 duration-150">
+                    <button
+                      onClick={() => { handleExport('pdf'); setShowExportMenu(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-primary/10 hover:text-primary transition-all"
+                    >
+                      Download PDF
+                    </button>
+                    <button
+                      onClick={() => { handleExport('csv'); setShowExportMenu(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-(--text-dim) hover:bg-emerald-500/10 hover:text-emerald-500 transition-all"
+                    >
+                      Download CSV
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -380,17 +386,19 @@ const EarningsPage = () => {
                     key={idx}
                     className="group relative flex flex-1 flex-col items-center gap-3"
                   >
-                    {day.amount > 0 && (
-                      <span className="text-sm font-black text-primary transition-transform group-hover:scale-110 mb-1">
+                    {day.trips > 0 ? (
+                      <span className="text-xs font-black text-primary transition-transform group-hover:scale-110 h-4 flex items-center justify-center">
                         {day.trips}
                       </span>
+                    ) : (
+                      <div className="h-4" />
                     )}
-                    <div className="w-full bg-primary/5 rounded-full h-full relative group/pillar overflow-hidden border border-(--card-border)/20">
+                    <div className="w-3 md:w-4 bg-primary/5 rounded-full h-40 relative group/pillar overflow-hidden border border-(--card-border)/20">
                        <div
                           className="absolute bottom-0 left-0 w-full bg-primary rounded-full transition-all duration-700 ease-out group-hover/pillar:brightness-110 shadow-[0_0_15px_rgba(255,204,0,0.3)]"
                           style={{
                             height: `${day.trips > 0 ? Math.max((day.trips / maxTrips) * 100, 15) : 0}%`,
-                            minHeight: day.trips > 0 ? '16px' : '0'
+                            minHeight: day.trips > 0 ? '12px' : '0'
                           }}
                         >
                           <div className="absolute top-0 left-0 w-full h-1/2 bg-white/20 rounded-full blur-[2px]" />
@@ -529,60 +537,6 @@ const EarningsPage = () => {
                   <p className="text-(--text-dim) font-medium text-sm">No recent ride activity found.</p>
                 </div>
             )}
-          </div>
-        </section>
-
-        {/* ── Account & Payouts ── */}
-        <section>
-          <div className="mb-4 px-1">
-            <h2 className="font-display flex items-center gap-2 text-lg font-black text-(--text-main)">
-              Account & Payouts <span className="bg-primary h-1.5 w-1.5 rounded-full"></span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="glass-card relative overflow-hidden rounded-3xl border border-(--card-border) p-8 shadow-sm">
-              <div className="from-primary/20 to-primary/5 absolute right-0 top-0 h-32 w-32 rounded-full blur-3xl" />
-              <div className="relative space-y-6">
-                <div>
-                  <p className="mb-2 text-xs font-bold tracking-wider text-(--text-dim) uppercase">
-                    Available Balance
-                  </p>
-                  <p className="text-4xl font-black text-(--text-main)">
-                    ₹0
-                  </p>
-                </div>
-
-                <div className="space-y-3 border-t border-(--card-border) pt-6">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium text-(--text-dim)">
-                      Lifetime Earnings
-                    </span>
-                    <span className="font-bold text-(--text-main)">
-                      ₹0
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium text-(--text-dim)">
-                      Total Trips
-                    </span>
-                    <span className="font-bold text-(--text-main)">
-                      {earningsStats.totalRides || 0}
-                    </span>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleRequestPayout}
-                  variant="primary"
-                  fullWidth
-                  icon={Send}
-                  className="mt-2"
-                >
-                  Request Payout
-                </Button>
-              </div>
-            </div>
           </div>
         </section>
 

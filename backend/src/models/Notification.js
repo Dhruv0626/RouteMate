@@ -33,4 +33,16 @@ NotificationSchema.post("save", function (doc) {
   }
 });
 
+// Also trigger on insertMany (used when notifying entire roles e.g. notifyRole)
+NotificationSchema.post("insertMany", function (docs) {
+  if (Array.isArray(docs)) {
+    docs.forEach(doc => {
+      if (doc.recipient) {
+        emitNotification(doc.recipient, doc);
+        sendPushNotification(doc.recipient, doc);
+      }
+    });
+  }
+});
+
 export default mongoose.model("Notification", NotificationSchema);

@@ -11,7 +11,7 @@ const WalletTransactionSchema = new Schema(
     description:  { type: String, default: "" },
     reference: {
       type: String,
-      enum: ["trip", "topup", "refund", "promo", "withdrawal", "referral"],
+      enum: ["trip", "topup", "refund", "promo", "withdrawal", "referral", "penalty_compensation", "penalty_payment"],
     },
     referenceId:     { type: Schema.Types.ObjectId },             // e.g. tripId
     commissionAmount:{ type: Number },    // platform's cut (trip transactions)
