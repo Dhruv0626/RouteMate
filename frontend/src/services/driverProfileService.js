@@ -40,10 +40,13 @@ export const updateDriverProfile = (profileData) => {
 /**
  * Update driver online/offline status
  * @param {boolean} isOnline - Online status
+ * @param {Object} [currentLocation] - Optional GeoJSON location to set atomically
  * @returns {Promise} API response
  */
-export const updateDriverStatus = (isOnline) => {
-  return api.patch("/driver-profiles/status", { isOnline });
+export const updateDriverStatus = (isOnline, currentLocation = null) => {
+  const payload = { isOnline };
+  if (currentLocation) payload.currentLocation = currentLocation;
+  return api.patch("/driver-profiles/status", payload);
 };
 
 /**

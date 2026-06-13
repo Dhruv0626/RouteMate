@@ -786,40 +786,114 @@ function InternalAppInitializer({ children }) {
   }, []);
 
   // 4. Global Background Location Sync (Drivers Only)
+  // Uses watchPosition for continuous, reliable GPS tracking.
+  // Also runs a 10s heartbeat to push the latest known position to the server.
   useEffect(() => {
     if (user?.role !== "driver" || !navigator.geolocation) return;
 
-    const syncLocation = () => {
-      // 1. Check if they have explicitly disabled Location Services in Settings
+    let watchId = null;
+    let heartbeatInterval = null;
+    // Stores the latest known position from watchPosition
+    let latestCoords = null;
+
+    const isTrackingEnabled = () => {
       const storedSettings = JSON.parse(localStorage.getItem("appSettings") || "{}");
-      if (storedSettings.locationTracking === false) return;
-
-      // 2. Only track if the driver is actively marked as Online.
+      if (storedSettings.locationTracking === false) return false;
       const isOnline = localStorage.getItem("driverIsOnline") === "true";
-      if (!isOnline) return;
-
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          try {
-            await api.put("/driver-profiles/update", {
-              currentLocation: {
-                type: "Point",
-                coordinates: [pos.coords.longitude, pos.coords.latitude]
-              }
-            });
-          } catch (err) {
-            console.error("Global GPS Sync failed:", err);
-          }
-        },
-        (err) => console.warn("Global GPS skipped:", err.message),
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
-      );
+      return isOnline;
     };
 
-    // Sync immediately, then every 15s
-    syncLocation();
-    const interval = setInterval(syncLocation, 15000);
-    return () => clearInterval(interval);
+    const pushLocationToServer = async (lng, lat) => {
+      try {
+        await api.put("/driver-profiles/update", {
+          currentLocation: {
+            type: "Point",
+            coordinates: [lng, lat]
+          }
+        });
+      } catch (err) {
+        console.error("Global GPS Sync failed:", err);
+      }
+    };
+
+    const startTracking = () => {
+      // Start continuous GPS watcher
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          latestCoords = { lng: pos.coords.longitude, lat: pos.coords.latitude };
+          // Push immediately on every significant position change
+          if (isTrackingEnabled()) {
+            pushLocationToServer(latestCoords.lng, latestCoords.lat);
+          }
+        },
+        (err) => {
+          console.warn("GPS watcher error:", err.message);
+          // Fallback: try getCurrentPosition as a one-shot retry
+          if (isTrackingEnabled()) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                latestCoords = { lng: pos.coords.longitude, lat: pos.coords.latitude };
+                pushLocationToServer(latestCoords.lng, latestCoords.lat);
+              },
+              () => {},
+              { enableHighAccuracy: false, maximumAge: 30000, timeout: 15000 }
+            );
+          }
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 }
+      );
+
+      // Heartbeat: push last known position every 10s even if GPS hasn't fired
+      heartbeatInterval = setInterval(() => {
+        if (isTrackingEnabled() && latestCoords) {
+          pushLocationToServer(latestCoords.lng, latestCoords.lat);
+        }
+      }, 10000);
+    };
+
+    const stopTracking = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+    };
+
+    // Start tracking immediately
+    startTracking();
+
+    // Also do an immediate one-shot to get first fix fast
+    if (isTrackingEnabled()) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          latestCoords = { lng: pos.coords.longitude, lat: pos.coords.latitude };
+          pushLocationToServer(latestCoords.lng, latestCoords.lat);
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      );
+    }
+
+    // Listen for localStorage changes (driver goes online/offline from another tab/component)
+    const handleStorageChange = (e) => {
+      if (e.key === "driverIsOnline") {
+        if (e.newValue === "true") {
+          stopTracking();
+          startTracking();
+        } else {
+          stopTracking();
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      stopTracking();
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, [user?.role]);
 
   if (globalSuspended) {

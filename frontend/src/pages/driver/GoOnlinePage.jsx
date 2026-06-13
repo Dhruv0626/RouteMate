@@ -280,7 +280,27 @@ const GoOnlinePage = () => {
       }
     }
     try {
-      const res = await updateDriverStatus(!isOnline);
+      // When going ONLINE: get GPS first, then send status + location together
+      let locationPayload = null;
+      if (!isOnline && navigator.geolocation) {
+        try {
+          const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true, maximumAge: 0, timeout: 8000
+            });
+          });
+          locationPayload = {
+            type: "Point",
+            coordinates: [pos.coords.longitude, pos.coords.latitude]
+          };
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        } catch (gpsErr) {
+          // GPS failed — still toggle online, background tracker will catch up
+          console.warn("Quick GPS for online toggle failed:", gpsErr.message);
+        }
+      }
+
+      const res = await updateDriverStatus(!isOnline, locationPayload);
       if (res.data.success) { 
         setIsOnline(!isOnline); 
         localStorage.setItem("driverIsOnline", (!isOnline).toString());

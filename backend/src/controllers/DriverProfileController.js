@@ -288,7 +288,7 @@ export const UpdateDriverProfile = async (req, res) => {
 export const UpdateDriverStatus = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { isOnline } = req.body;
+        const { isOnline, currentLocation } = req.body;
 
         if (typeof isOnline !== "boolean") {
             return res.status(400).json({
@@ -314,6 +314,17 @@ export const UpdateDriverStatus = async (req, res) => {
         }
 
         driverProfile.isOnline = isOnline;
+
+        // If location is provided (e.g. when going online), save it atomically
+        if (currentLocation && currentLocation.coordinates) {
+            driverProfile.currentLocation = currentLocation;
+        }
+
+        // If going offline, reset location to null island so fleet shows "No GPS"
+        if (!isOnline) {
+            driverProfile.currentLocation = { type: "Point", coordinates: [0, 0] };
+        }
+
         await driverProfile.save();
 
         const populatedProfile = await DriverProfileModel.findById(driverProfile._id).populate("user", "name email Mobile_no profileImage");

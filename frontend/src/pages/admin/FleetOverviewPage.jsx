@@ -10,6 +10,7 @@ import ThemeToggle from "../../components/ui/ThemeToggle";
 import Loader from "../../components/ui/Loader";
 import FleetMap from "../../components/map/FleetMap";
 import api from "../../services/api";
+import { reverseGeocode } from "../../utils/geocode";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const VEHICLE_STATUSES = {
@@ -28,6 +29,24 @@ const FleetOverviewPage = () => {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [viewMode, setViewMode] = useState("list"); // "list" or "map"
+  const [zoneCache, setZoneCache] = useState({});
+
+  useEffect(() => {
+    vehicles.forEach(async (v) => {
+      if (v.hasLocation && v.lat && v.lng) {
+        const cacheKey = `${v.lat.toFixed(3)}_${v.lng.toFixed(3)}`;
+        if (!zoneCache[cacheKey]) {
+          setZoneCache(prev => ({ ...prev, [cacheKey]: "Locating..." }));
+          const res = await reverseGeocode(v.lat, v.lng);
+          if (res && res.specificName) {
+            setZoneCache(prev => ({ ...prev, [cacheKey]: res.specificName }));
+          } else {
+            setZoneCache(prev => ({ ...prev, [cacheKey]: "Unknown Zone" }));
+          }
+        }
+      }
+    });
+  }, [vehicles]);
 
   const fetchVehicles = async (initialLoad = false) => {
     try {
@@ -212,9 +231,7 @@ const FleetOverviewPage = () => {
                     <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Vehicle & Driver</th>
                     <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Type</th>
                     <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Current Zone</th>
-                    <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Fuel/Charge</th>
                     <th className="px-6 py-5 text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Status</th>
-                    <th className="px-6 py-5 text-right text-[10px] font-black tracking-widest text-(--text-dim) uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-(--card-border)">
@@ -241,7 +258,7 @@ const FleetOverviewPage = () => {
                         <td className="px-6 py-4">
                            {v.hasLocation ? (
                              <div className="flex items-center gap-1.5 text-xs font-bold text-(--text-main)">
-                               <MapPin size={12} className="text-primary" /> {v.area}
+                               <MapPin size={12} className="text-primary" /> {zoneCache[`${v.lat.toFixed(3)}_${v.lng.toFixed(3)}`] || "Locating..."}
                              </div>
                            ) : (
                              <div className="flex items-center gap-1.5">
@@ -253,22 +270,9 @@ const FleetOverviewPage = () => {
                            )}
                         </td>
                         <td className="px-6 py-4">
-                           <div className="w-32 flex items-center gap-3">
-                             <div className="flex-1 h-1.5 bg-(--card-border) rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${parseInt(v.fuel) < 20 ? 'bg-rose-500' : 'bg-primary'}`} style={{ width: v.fuel }} />
-                             </div>
-                             <span className="text-[10px] font-black text-(--text-main)">{v.fuel}</span>
-                           </div>
-                        </td>
-                        <td className="px-6 py-4">
                            <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest ${s.color}`}>
                              <Circle size={6} fill="currentColor" /> {s.label}
                            </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                           <button className="p-2.5 rounded-xl border border-(--card-border) hover:bg-primary hover:text-black transition-all">
-                             <ArrowRightLeft size={16} />
-                           </button>
                         </td>
                       </tr>
                     )
