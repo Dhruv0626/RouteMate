@@ -2,8 +2,23 @@ import mongoose from "mongoose";
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI);
-        
+        await mongoose.connect(process.env.MONGODB_URI, {
+            // ─── Connection Pool ─────────────────────────────────────────────
+            // Keep up to 20 persistent connections — avoids reconnecting on
+            // every request which is the main source of 4-5s delays.
+            maxPoolSize: 20,
+            minPoolSize: 5,
+
+            // ─── Timeouts ────────────────────────────────────────────────────
+            serverSelectionTimeoutMS: 5000,  // fail fast if Atlas unreachable
+            socketTimeoutMS: 30000,          // don't hang on slow queries
+            connectTimeoutMS: 10000,         // max time to establish connection
+
+            // ─── Misc ────────────────────────────────────────────────────────
+            // Don't queue operations when connection is down — fail immediately
+            bufferCommands: false,
+        });
+
         // 🚨 ONE-TIME INDEX DROP: Remove the old unique index that was clashing with registrations
         try {
             const db = mongoose.connection.db;

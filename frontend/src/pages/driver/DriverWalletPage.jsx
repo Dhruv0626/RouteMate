@@ -9,6 +9,7 @@ import ThemeToggle from "../../components/ui/ThemeToggle";
 import { useAuth } from "../../context/AuthContext";
 import { getMyWallet, openRazorpayCheckout, driverWithdrawal } from "../../services/paymentService";
 import { exportWalletToCSV, exportWalletStatementToPDF } from "../../utils/exportUtils";
+import Loader from "../../components/ui/Loader";
 
 const COMMISSION_TOPUP_AMOUNTS = [50, 100, 200, 500];
 const WITHDRAWAL_AMOUNTS       = [100, 500, 1000, 2000];
@@ -156,11 +157,7 @@ const DriverWalletPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center mesh-bg">
-        <Loader2 className="animate-spin text-primary w-8 h-8" />
-      </div>
-    );
+    return <Loader fullPage text="Fetching your Driver Wallet..." />;
   }
 
   const earningsBalance  = wallet?.walletBalance    ?? 0;

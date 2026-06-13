@@ -11,6 +11,7 @@ import {
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import socket from "../../services/socket";
 import { useAuth } from "../../context/AuthContext";
+import Loader from "../../components/ui/Loader";
 
 const ActiveRidesPage = () => {
   const navigate = useNavigate();
@@ -187,6 +188,8 @@ const ActiveRidesPage = () => {
   const calculateProgress = (elapsed, total) => {
     return (elapsed / total) * 100;
   };
+
+  if(loading) return <Loader fullPage text="Fetching active rides..." />;
 
   return (
     <div className="min-h-screen bg-(--bg-main) pb-20 transition-colors duration-500">

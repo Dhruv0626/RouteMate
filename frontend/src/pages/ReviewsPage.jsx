@@ -17,6 +17,72 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import ReviewCard from "../components/ReviewCard";
+import Loader from "../components/ui/Loader";
+
+/* ── Partial Star Rating Component ─────────────────────────────────────────
+   Renders 5 stars. Each star can be:
+   - Fully filled  (index < Math.floor(rating))
+   - Partially filled (index === Math.floor(rating), filled by decimal fraction)
+   - Empty          (index > Math.floor(rating))
+   Uses an SVG clipPath so the partial fill is pixel-perfect.
+─────────────────────────────────────────────────────────────────────────── */
+const PartialStarRating = ({ rating, size = 28 }) => {
+  const total = 5;
+  const fullStars = Math.floor(rating);
+  const fraction = rating - fullStars; // e.g. 0.8 for 4.8
+
+  return (
+    <div className="flex items-center gap-1" aria-label={`Rating: ${rating} out of 5`}>
+      {Array.from({ length: total }).map((_, i) => {
+        const isFull    = i < fullStars;
+        const isPartial = i === fullStars && fraction > 0;
+        const clipId    = `star-clip-${i}-${rating}`;
+
+        return (
+          <svg
+            key={i}
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ display: "block", flexShrink: 0 }}
+          >
+            {isPartial && (
+              <defs>
+                <clipPath id={clipId}>
+                  {/* Clip rect width = fraction * 24 (the star viewBox width) */}
+                  <rect x="0" y="0" width={fraction * 24} height="24" />
+                </clipPath>
+              </defs>
+            )}
+
+            {/* Background (empty) star */}
+            <polygon
+              points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+              fill="none"
+              stroke="#FFB800"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              opacity={isFull ? 0 : 0.35}
+            />
+
+            {/* Filled star — full or partial via clipPath */}
+            {(isFull || isPartial) && (
+              <polygon
+                points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+                fill="#FFB800"
+                stroke="#FFB800"
+                strokeWidth="1"
+                strokeLinejoin="round"
+                clipPath={isPartial ? `url(#${clipId})` : undefined}
+              />
+            )}
+          </svg>
+        );
+      })}
+    </div>
+  );
+};
 
 const ReviewsPage = () => {
   const navigate = useNavigate();
@@ -55,6 +121,10 @@ const ReviewsPage = () => {
     return true;
   });
 
+  if (loading) {
+    return <Loader fullPage text="Fetching your Reviews..." />;
+  }
+
   return (
     <div className="mesh-bg min-h-screen font-sans text-(--text-main)">
       {/* Header */}
@@ -82,26 +152,32 @@ const ReviewsPage = () => {
         
         {/* Stats Section */}
         {!loading && (
-          <section className="grid grid-cols-2 gap-4">
-            <div className="glass-card rounded-3xl border border-(--card-border) p-5 flex flex-col gap-1">
-              <span className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Trust Score</span>
-              <div className="flex items-center gap-2">
-                 <ThumbsUp size={18} className="text-primary" />
-                 <span className="text-2xl font-black">{stats.trustScore?.toFixed(0) || "0"}</span>
-                 {stats.trustBadge && (
-                   <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ml-auto bg-${stats.trustBadge.color}-500/10 text-${stats.trustBadge.color}-400`}>
-                     {stats.trustBadge.badge}
-                   </span>
-                 )}
+          <section className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="glass-card rounded-3xl border border-(--card-border) p-5 flex flex-col gap-1">
+                <span className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Trust Score</span>
+                <div className="flex items-center gap-2">
+                   <ThumbsUp size={18} className="text-primary" />
+                   <span className="text-2xl font-black">{stats.trustScore?.toFixed(0) || "0"}</span>
+                   {stats.trustBadge && (
+                     <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-tighter ml-auto bg-${stats.trustBadge.color}-500/10 text-${stats.trustBadge.color}-400`}>
+                       {stats.trustBadge.badge}
+                     </span>
+                   )}
+                </div>
               </div>
-            </div>
-            <div className="glass-card rounded-3xl border border-(--card-border) p-5 flex flex-col gap-1">
-              <span className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Avg Rating</span>
-              <div className="flex items-center gap-2">
-                 <Star size={18} className="text-[#FFB800]" fill="#FFB800" />
-                 <span className="text-2xl font-black">
-                   {stats.averageRating ? stats.averageRating.toFixed(1) : (stats.newDriver ? "NEW" : "5.0")}
-                 </span>
+              <div className="glass-card rounded-3xl border border-(--card-border) p-5 flex flex-col gap-2">
+                <span className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest">Avg Rating</span>
+                <div className="flex items-center gap-2">
+                   <span className="text-2xl font-black">
+                     {stats.averageRating ? stats.averageRating.toFixed(1) : (stats.newDriver ? "NEW" : "5.0")}
+                   </span>
+                   <span className="text-xs text-(--text-dim) font-bold">/ 5.0</span>
+                </div>
+                <PartialStarRating
+                  rating={stats.averageRating ?? (stats.newDriver ? 0 : 5)}
+                  size={22}
+                />
               </div>
             </div>
           </section>

@@ -9,7 +9,8 @@ import {
 import { useNotifications } from "../context/NotificationContext";
 import ThemeToggle from "../components/ui/ThemeToggle";
 
-// ─── Type Config ──────────────────────────────────────────────────────────────
+// ─── Type Config ─────────
+// ─────────────────────────────────────────────────────
 const TYPE_CONFIG = {
   ride_request: {
     icon: Zap,
@@ -234,6 +235,9 @@ const NotifCard = ({ notification, onAction, onDelete }) => {
     </div>
   );
 };
+
+
+
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const NotificationsPage = () => {

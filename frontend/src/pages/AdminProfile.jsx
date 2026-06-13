@@ -17,6 +17,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ui/ThemeToggle";
+import Loader from "../components/ui/Loader";
 import api from "../services/api";
 
 const AdminProfile = () => {
@@ -80,7 +81,7 @@ const AdminProfile = () => {
       .slice(0, 2);
   };
 
-  if (loading) return null;
+  if (loading) return <Loader fullPage text="Fetching your Admin Profile..." />;
 
   const adminStats = [
     { label: "Identity", value: "Super Admin", icon: Shield, color: "text-violet-400", bg: "bg-violet-500/10" },

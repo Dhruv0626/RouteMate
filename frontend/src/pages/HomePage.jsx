@@ -49,7 +49,7 @@ const HomePage = () => {
           {[
             {
               title: "Passengers",
-              desc: "Find reliable rides and track your journey with real-time AI mapping.",
+              desc: "Find reliable rides and track your journey with real-time mapping.",
               icon: Navigation,
             },
             {

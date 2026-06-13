@@ -4,6 +4,7 @@ import { ArrowLeft, Clock, MapPin, Users, IndianRupee, Car, Navigation, RefreshC
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import { useNotifications } from "../../context/NotificationContext";
 import api from "../../services/api";
+import  Loader from "../../components/ui/Loader";
 
 const PassengerBookingsPage = () => {
   const navigate = useNavigate();
@@ -30,6 +31,9 @@ const PassengerBookingsPage = () => {
 
   useEffect(() => { fetchRides(); }, [unreadCount]);
 
+  if (loading) return <Loader fullPage text="Fetching your rides..." />;
+  
+
   return (
     <div className="mesh-bg min-h-screen pb-16 font-sans text-(--text-main) transition-colors duration-500">
       <header className="sticky top-0 z-50 border-b border-(--card-border) bg-(--bg-main)/80 backdrop-blur-md">
@@ -55,11 +59,6 @@ const PassengerBookingsPage = () => {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-8 space-y-5">
-        {loading && (
-          <div className="flex flex-col items-center py-20">
-            <Loader2 size={36} className="text-primary animate-spin" />
-          </div>
-        )}
 
         {!loading && rides !== null && rides.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-20 text-(--text-dim)">

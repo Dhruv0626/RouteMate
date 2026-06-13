@@ -21,6 +21,7 @@ import ThemeToggle from "../../components/ui/ThemeToggle";
 import { useDialog } from "../../context/DialogContext";
 import { useNotifications } from "../../context/NotificationContext";
 import api from "../../services/api";
+import Loader from "../../components/ui/Loader";
 
 const statusStyles = {
   open: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
@@ -161,6 +162,8 @@ const ManageRidesPage = () => {
   const activeCount = activeRides.length;
   const completedCount = rides.filter((r) => r.status === "completed").length;
   const cancelledCount = rides.filter((r) => r.status === "cancelled" || r.status === "expired").length;
+
+  if(loading) return <Loader fullPage text="Fetching your rides..." />;
 
   return (
     <div className="mesh-bg min-h-screen pb-16 font-sans text-(--text-main) transition-colors duration-500">

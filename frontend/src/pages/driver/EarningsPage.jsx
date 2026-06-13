@@ -20,6 +20,7 @@ import ThemeToggle from "../../components/ui/ThemeToggle";
 import Button from "../../components/ui/Button";
 import { exportEarningsToCSV, exportEarningsToPDF } from "../../utils/exportUtils";
 import { getDriverHistory } from "../../services/rideService";
+import Loader from "../../components/ui/Loader";
 
 const EarningsPage = () => {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ const EarningsPage = () => {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [earningsStats, setEarningsStats] = useState({
     totalEarnings: 0,
@@ -181,6 +182,8 @@ const EarningsPage = () => {
       </div>
     );
   }
+
+  if (loading) return <Loader fullPage text="Fetching your earnings..." />;
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">

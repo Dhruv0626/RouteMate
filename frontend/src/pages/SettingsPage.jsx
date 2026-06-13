@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import Loader from "../components/ui/Loader";
 import { useDialog } from "../context/DialogContext";
 import { useLanguage } from "../context/LanguageContext";
 import {
@@ -28,13 +29,19 @@ const SettingsPage = () => {
   const { currentLanguage, setLanguage, t } = useLanguage();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
-  
-  // Local state for toggles
+  const [pageLoading, setPageLoading] = useState(true);
+
+  // Local state for toggles — all hooks must be declared before any conditional return
   const defaultSettings = JSON.parse(localStorage.getItem("appSettings") || '{"pushNotifs":false,"emailNotifs":false,"locationTracking":false}');
-  
   const [pushNotifs, setPushNotifs] = useState(defaultSettings.pushNotifs);
   const [emailNotifs, setEmailNotifs] = useState(defaultSettings.emailNotifs);
   const [locationTracking, setLocationTracking] = useState(defaultSettings.locationTracking);
+
+  // Show loader until settings are ready (guarantees loader shows on every mount)
+  useEffect(() => {
+    const timer = setTimeout(() => setPageLoading(false), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   const updateSetting = (key, value, setter) => {
     setter(value);
@@ -57,6 +64,10 @@ const SettingsPage = () => {
       </button>
     </div>
   );
+
+  if (pageLoading) {
+    return <Loader fullPage text="Loading your settings..." />;
+  }
 
   return (
     <div className="mesh-bg flex min-h-screen justify-center p-4 transition-colors duration-500">

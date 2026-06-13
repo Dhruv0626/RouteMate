@@ -40,18 +40,29 @@ const FleetOverviewPage = () => {
             let status = "online_only"; // just online, no ride issued
             if (d.activeRide) status = "active";
             else if (d.onlineRide) status = "idle"; // published but not booked/active
-            
+
+            // ── Real GPS only — no fake fallback ────────────────────────────
+            // coordinates is [lng, lat] in GeoJSON. Only use if both are
+            // non-zero (0,0 = null island — driver hasn't shared location yet)
+            const coords = d.currentLocation?.coordinates;
+            const hasRealGps =
+              Array.isArray(coords) &&
+              coords.length === 2 &&
+              (coords[0] !== 0 || coords[1] !== 0);
+
             return {
               id: d._id,
               driver: d.user?.name || "Unknown",
               type: d.vehicle?.type || "Sedan",
               plate: d.vehicle?.number || "—",
-              status: status,
-              fuel: "High", 
+              status,
+              fuel: "High",
               area: d.activeRide ? "In Trip" : d.onlineRide ? "Published" : "Online Only",
               trips: d.stats?.totalRides || 0,
-              lat: d.currentLocation?.coordinates?.[1] || 23.0338,
-              lng: d.currentLocation?.coordinates?.[0] || 72.5850,
+              // null when no GPS — FleetMap skips null-position markers
+              lat: hasRealGps ? coords[1] : null,
+              lng: hasRealGps ? coords[0] : null,
+              hasLocation: hasRealGps,
               activeRide: d.activeRide
             };
           });
@@ -86,7 +97,7 @@ const FleetOverviewPage = () => {
     warning: vehicles.filter(v => v.status === "maint").length,
   };
 
-  if (loading) return <Loader fullPage text="Scanning fleet transponders..." />;
+  if (loading) return <Loader fullPage text="Scanning fleet transponts..." />;
 
   return (
     <div className="mesh-bg min-h-screen relative font-sans text-(--text-main)">
@@ -228,9 +239,18 @@ const FleetOverviewPage = () => {
                            </span>
                         </td>
                         <td className="px-6 py-4">
-                           <div className="flex items-center gap-1.5 text-xs font-bold text-(--text-main)">
-                              <MapPin size={12} className="text-primary" /> {v.area}
-                           </div>
+                           {v.hasLocation ? (
+                             <div className="flex items-center gap-1.5 text-xs font-bold text-(--text-main)">
+                               <MapPin size={12} className="text-primary" /> {v.area}
+                             </div>
+                           ) : (
+                             <div className="flex items-center gap-1.5">
+                               <span className="flex items-center gap-1 text-[9px] font-black text-rose-400 uppercase tracking-wider bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full">
+                                 <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse inline-block" />
+                                 No GPS Signal
+                               </span>
+                             </div>
+                           )}
                         </td>
                         <td className="px-6 py-4">
                            <div className="w-32 flex items-center gap-3">

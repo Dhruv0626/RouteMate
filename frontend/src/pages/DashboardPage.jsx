@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useNotifications } from "../context/NotificationContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useDialog } from "../context/DialogContext";
 
 const getImageUrl = (url) => {
   if (!url) return null;
@@ -42,6 +43,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import ThemeToggle from "../components/ui/ThemeToggle";
+import Loader from "../components/ui/Loader";
 
 // ─── Role-specific configs ───────────────────────────────────────────────────
 const ROLE_CARDS = {
@@ -329,6 +331,8 @@ const DashboardPage = () => {
   const [stats, setStats] = useState(defaultStats[configRole] || defaultStats.passenger);
   const [activities, setActivities] = useState(null);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const { showAlert } = useDialog();
+  const [hasLocationPermission, setHasLocationPermission] = useState(true);
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [modalSettings, setModalSettings] = useState({
@@ -342,8 +346,15 @@ const DashboardPage = () => {
     const stored = localStorage.getItem("appSettings");
     if (!stored) {
       setShowSettingsModal(true);
+    } else {
+      const appSettings = JSON.parse(stored);
+      if (appSettings.locationTracking === false) {
+        setHasLocationPermission(false);
+        // Add a slight delay to ensure the UI is mounted before firing the toast
+        setTimeout(() => showAlert("You need to enable location for live tracking", "Location Disabled", "error"), 500);
+      }
     }
-  }, []);
+  }, [showAlert]);
 
   const saveModalSettings = () => {
     const freshSettings = { ...modalSettings, hasConfigured: true };
@@ -577,6 +588,8 @@ const DashboardPage = () => {
   const roleInfo = ROLE_LABELS[role] || ROLE_LABELS.passenger;
   const firstName = user?.name?.split(" ")[0] || "there";
 
+  if (loading) return <Loader fullPage text="Navigate to your Dashboard..." />;
+
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">
       {/* ── Header ── */}
@@ -660,6 +673,27 @@ const DashboardPage = () => {
 
       {/* ── Content ── */}
       <main className="relative z-10 mx-auto max-w-6xl space-y-8 px-6 py-8">
+        {/* Missing Location Warning Banner */}
+        {!hasLocationPermission && (
+          <div className="glass-card border-primary bg-white p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top duration-500">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <ShieldAlert size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-black text-(--text-main)">Location Tracking Disabled</p>
+                <p className="text-[11px] text-(--text-dim)">You need to enable location for live tracking.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => navigate(`/${pathRole}/dashboard/settings`)}
+              className="px-6 py-2 bg-primary text-black text-xs font-black rounded-xl hover:bg-primary transition-all active:scale-95 shadow-lg shadow-amber-500/20 uppercase tracking-widest whitespace-nowrap"
+            >
+              Go to Settings
+            </button>
+          </div>
+        )}
+
         {/* Pending Payment Alert */}
         {user?.accountStatus === "payment_due" && (
           <div className="glass-card border-red-500/30 bg-red-500/5 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top duration-500">
@@ -899,7 +933,7 @@ const DashboardPage = () => {
                         <p className="text-lg leading-none font-black text-(--text-main)">{item.amount || item.status}</p>
                         <span className={`inline-flex items-center justify-end gap-1.5 text-[11px] font-bold pt-2 ${
                           (item.status === 'Completed' || item.status === 'COMPLETED') ? 'text-emerald-500' : 
-                          (item.status === 'REJECTED' || item.status === 'CANCELLED') ? 'text-red-500' : 'text-primary'
+                          (item.status === 'REJECTED' || item.status === 'CANCELLED') ? 'text-red-500' : 'text-red-500'
                         }`}>
                           <Circle size={5} fill="currentColor" /> {item.status || "Completed"}
                         </span>

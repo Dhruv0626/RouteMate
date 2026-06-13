@@ -21,6 +21,7 @@ import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import { getMyDriverProfile, updateDriverProfile } from "../services/driverProfileService";
 import api from "../services/api";
+import Loader from "../components/ui/Loader";
 
 const getImageUrl = (url) => {
   if (!url) return null;
@@ -230,16 +231,7 @@ const DriverProfile = () => {
   };
 
   if (loading) {
-    return (
-      <div className="mesh-bg flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/20 mb-4">
-            <Clock className="text-primary animate-spin" size={32} />
-          </div>
-          <p className="text-sm text-(--text-dim)">Loading your profile...</p>
-        </div>
-      </div>
-    );
+    return <Loader fullPage text="Fetching your Driver Profile..." />;
   }
 
   return (

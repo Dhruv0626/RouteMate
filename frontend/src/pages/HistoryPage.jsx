@@ -24,6 +24,7 @@ import { exportRideHistoryToCSV, exportRideHistoryToPDF } from "../utils/exportU
 import { getPassengerHistory, getDriverHistory } from "../services/rideService";
 import { useEffect } from "react";
 import { categoryLabels } from "../utils/vehicles";
+import Loader from "../components/ui/Loader";
 
 const HistoryPage = () => {
   const navigate = useNavigate();
@@ -218,6 +219,9 @@ const HistoryPage = () => {
       exportRideHistoryToPDF(filteredRides, filename);
     }
   };
+
+  if (role === "passenger" && loading) return <Loader fullPage text="fetching your ride history..." />;
+  if (role === "driver" && loading) return <Loader fullPage text="Fetching your Trip history..." />;
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">

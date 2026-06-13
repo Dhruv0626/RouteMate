@@ -21,6 +21,7 @@ import Input from "../components/ui/Input";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import api from "../services/api";
 import EmergencyContactsManager from "../components/passenger/EmergencyContactsManager";
+import Loader from "../components/ui/Loader";
 
 const getImageUrl = (url) => {
   if (!url) return null;
@@ -169,7 +170,7 @@ const PassengerProfile = () => {
     }
   };
 
-  if (loading) return null;
+  if (loading) return <Loader fullPage text="Retrieving your Passenger Profile..." />;
 
   return (
     <div className="mesh-bg min-h-screen font-sans text-(--text-main)">

@@ -1,10 +1,69 @@
 import React from "react";
 
+const getPageLoaderText = (path) => {
+  if (!path) return "Please wait...";
+
+  // Driver Dashboard Pages
+  if (path.includes("/driver/dashboard/settings")) return "Loading your settings...";
+  if (path.includes("/driver/dashboard/rate-card")) return "Fetching latest platform rates...";
+  if (path.includes("/driver/dashboard/go-online")) return "Go Online...";
+  if (path.includes("/driver/dashboard/earnings")) return "Fetching your earnings...";
+  if (path.includes("/driver/dashboard/history")) return "Fetching your Trip history...";
+  if (path.includes("/driver/dashboard/rating")) return "Fetching your rating...";
+  if (path.includes("/driver/dashboard/profile")) return "Fetching your Driver Profile...";
+  if (path.includes("/driver/dashboard/wallet")) return "Fetching your Driver Wallet...";
+  if (path.includes("/driver/dashboard/manage-rides")) return "Fetching your rides...";
+  if (path.includes("/driver/dashboard/active-rides")) return "Fetching active rides...";
+  if (path.includes("/driver/dashboard/bookings")) return "Loading your rides...";
+
+  // Passenger Dashboard Pages
+  if (path.includes("/passenger/dashboard/settings")) return "Loading your settings...";
+  if (path.includes("/passenger/dashboard/places")) return "Retrieving your Saved Places...";
+  if (path.includes("/passenger/dashboard/reviews")) return "Fetching your Reviews...";
+  if (path.includes("/passenger/dashboard/referral")) return "Synchronizing Referral Page...";
+  if (path.includes("/passenger/dashboard/payments")) return "Fetching your transaction records...";
+  if (path.includes("/passenger/dashboard/profile")) return "Retrieving your Passenger Profile...";
+  if (path.includes("/passenger/dashboard/my-rides")) return "Fetching your rides...";
+  if (path.includes("/passenger/dashboard/history")) return "fetching your ride history...";
+
+  // Generic settings (fallback for any role using /:role/dashboard/settings)
+  if (path.includes("/dashboard/settings")) return "Loading your settings...";
+
+  // General Dashboard Route
+  if (path.endsWith("/driver/dashboard") || path.endsWith("/driver/dashboard/")) return "Navigate to your Dashboard...";
+  if (path.endsWith("/passenger/dashboard") || path.endsWith("/passenger/dashboard/")) return "Navigate to your Dashboard...";
+  if (path.includes("/dashboard") && (path.includes("/driver/") || path.includes("/passenger/"))) return "Navigate to your Dashboard...";
+
+  // Admin Dashboard Pages
+  if (path.includes("/dashboard/manage-users")) return "Accessing User Data...";
+  if (path.includes("/dashboard/analytics")) return "Compiling platform metrics...";
+  if (path.includes("/dashboard/revenue")) return "Fetching platform Revenue...";
+  if (path.includes("/dashboard/driver-approvals")) return "Loading driver applications...";
+  if (path.includes("/dashboard/fleet")) return "Scanning fleet transports...";
+  if (path.includes("/dashboard/security")) return "Initializing cryptographic environment...";
+  if (path.includes("/dashboard/profile") && path.includes("/admin/")) return "Fetching your Admin Profile...";
+  if (path.includes("/dashboard/history") && path.includes("/admin/")) return "Retrieving Platform Audit Records...";
+    if (path.includes("/dashboard/sos") && path.includes("/admin/")) return "Retrieving Sos Alerts...";
+
+  // Public/Auth Routes
+  if (path.includes("/signin")) return "Preparing secure access...";
+  if (path.includes("/signup")) return "Building your ride profile...";
+  if (path.includes("/forgot-password")) return "Locating recovery protocols...";
+  if (path.includes("/home")) return "Initializing urban experience...";
+  if (path.includes("/complete-profile")) return "Verifying your session...";
+
+  // Fallbacks
+  if (path.includes("driver")) return "Synchronizing your driver status...";
+  if (path.includes("dashboard")) return "Navigate to your Dashboard...";
+  return "Please Wait, Loading...";
+};
+
 const Loader = ({
   fullPage = false,
   className = "",
-  text = "Please wait...",
+  text,
 }) => {
+  const resolvedText = text !== undefined ? text : getPageLoaderText(window.location.pathname);
   const containerClasses = fullPage
     ? "fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[var(--bg-main)] transition-colors duration-500"
     : `flex flex-col items-center justify-center p-8 ${className}`;
@@ -146,7 +205,7 @@ const Loader = ({
 
           <div className="flex flex-col items-center gap-2">
             <p className="text-[9px] font-black tracking-[0.6em] text-primary uppercase animate-pulse">
-              {text}
+              {resolvedText}
             </p>
             <div className="h-1 w-32 bg-white/5 rounded-full overflow-hidden">
                <div className="h-full bg-linear-to-r from-primary/20 via-primary to-primary/20 w-1/2 animate-shimmer" />

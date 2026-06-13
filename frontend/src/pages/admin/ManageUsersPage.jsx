@@ -281,12 +281,17 @@ const ManageUsersPage = () => {
                         )}
                         {u.role === "admin" && (
                           <span className="flex items-center gap-1 text-[9px] font-black text-violet-500 uppercase">
-                            <ShieldCheck size={10} /> System Authority
+                            <ShieldCheck size={10} /> System Admin
                           </span>
                         )}
                         {u.role === "passenger" && (
                           <span className="flex items-center gap-1 text-[9px] font-black text-primary uppercase">
-                            <UserCheck size={10} /> Active Member
+                            <UserCheck size={10} /> Passenger
+                          </span>
+                        )}
+                        {u.role === "superadmin" && (
+                          <span className="flex items-center gap-1 text-[9px] font-black text-amber-500 uppercase">
+                            <ShieldCheck size={10} /> System Owner
                           </span>
                         )}
                       </div>

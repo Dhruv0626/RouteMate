@@ -26,6 +26,7 @@ import LocationSearch from "../components/map/LocationSearch";
 import api from "../services/api";
 import { reverseGeocode } from "../utils/geocode";
 import { makeSimplePin } from "../utils/mapIcons";
+import Loader from "../components/ui/Loader";
 
 const redPinIcon = makeSimplePin("#ef4444");
 
@@ -163,6 +164,8 @@ const SavedPlacesPage = () => {
     return cat;
   };
 
+   if (loading) return <Loader fullPage text="Retrieving your Saved Places..." />;
+  
   return (
     <div className="mesh-bg min-h-screen font-sans text-(--text-main)">
       <header className="sticky top-0 z-50 border-b border-(--card-border) bg-(--bg-main)/80 backdrop-blur-md">

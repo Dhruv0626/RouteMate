@@ -15,6 +15,8 @@ import {
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import api from "../services/api";
+import Loader from "../components/ui/Loader";
+
 
 const ReferralPage = () => {
   const navigate = useNavigate();
@@ -67,14 +69,7 @@ const ReferralPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="mesh-bg min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-12 h-12 text-primary animate-spin" />
-          <p className="text-(--text-dim) font-black uppercase tracking-widest text-[10px]">Synchronizing Rewards...</p>
-        </div>
-      </div>
-    );
+    return <Loader fullPage text="Synchronizing Referral Page..." />
   }
 
   if (error) {

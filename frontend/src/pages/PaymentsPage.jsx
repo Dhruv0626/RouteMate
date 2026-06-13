@@ -9,6 +9,7 @@ import ThemeToggle from "../components/ui/ThemeToggle";
 import { useAuth } from "../context/AuthContext";
 import { getMyWallet, openRazorpayCheckout } from "../services/paymentService";
 import { exportWalletToCSV, exportWalletStatementToPDF } from "../utils/exportUtils";
+import Loader from "../components/ui/Loader";
 
 // ─── Amount Quick-Pick ────────────────────────────────────────────────────────
 const TOPUP_AMOUNTS = [50, 100, 200, 500];
@@ -119,11 +120,7 @@ const PaymentsPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center mesh-bg">
-        <Loader2 className="animate-spin text-primary w-8 h-8" />
-      </div>
-    );
+    return <Loader fullPage text="Fetching your transaction records..." />;
   }
 
   const balance = wallet?.walletBalance ?? 0;

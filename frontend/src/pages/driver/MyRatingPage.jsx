@@ -23,6 +23,70 @@ import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import ThemeToggle from "../../components/ui/ThemeToggle";
 import ReviewCard from "../../components/ReviewCard";
+import Loader from "../../components/ui/Loader";
+
+/* ── Partial Star Rating ───────────────────────────────────────────────────
+   SVG clipPath trick: each star is a 24×24 polygon.
+   - Full star  → rendered filled
+   - Partial star → filled polygon clipped to (fraction × 24)px width
+   - Empty star → outline only at 30% opacity
+   So 4.8 → 4 full + 5th star 80% filled
+─────────────────────────────────────────────────────────────────────────── */
+const PartialStarRating = ({ rating, size = 24 }) => {
+  const fullStars = Math.floor(rating);
+  const fraction  = parseFloat((rating - fullStars).toFixed(10));
+
+  return (
+    <div className="flex items-center gap-1">
+      {[0, 1, 2, 3, 4].map((i) => {
+        const isFull    = i < fullStars;
+        const isPartial = i === fullStars && fraction > 0;
+        const clipId    = `srclip-${i}-${rating}`;
+
+        return (
+          <svg
+            key={i}
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ display: "block", flexShrink: 0 }}
+          >
+            {isPartial && (
+              <defs>
+                <clipPath id={clipId}>
+                  <rect x="0" y="0" width={fraction * 24} height="24" />
+                </clipPath>
+              </defs>
+            )}
+
+            {/* Empty / outline star (always present as backdrop) */}
+            <polygon
+              points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+              fill="none"
+              stroke="#FBBF24"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              opacity={isFull ? 0 : 0.3}
+            />
+
+            {/* Filled polygon — full or partial via clipPath */}
+            {(isFull || isPartial) && (
+              <polygon
+                points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"
+                fill="#FBBF24"
+                stroke="#FBBF24"
+                strokeWidth="0.5"
+                strokeLinejoin="round"
+                clipPath={isPartial ? `url(#${clipId})` : undefined}
+              />
+            )}
+          </svg>
+        );
+      })}
+    </div>
+  );
+};
 
 const MyRatingPage = () => {
   const navigate = useNavigate();
@@ -69,9 +133,7 @@ const MyRatingPage = () => {
   const maxCount = Math.max(...ratingDistribution.map(r => r.count), 1);
 
   if (loading && !refreshing) return (
-    <div className="min-h-screen flex items-center justify-center mesh-bg">
-      <Loader2 className="animate-spin text-primary w-10 h-10" />
-    </div>
+    <Loader fullPage text="Fetching your rating..." />
   );
 
   return (
@@ -121,11 +183,10 @@ const MyRatingPage = () => {
                  </span>
                  <span className="text-xl text-amber-500 font-bold">/ 5.0</span>
                </div>
-               <div className="flex gap-1">
-                 {[1, 2, 3, 4, 5].map(i => (
-                   <Star key={i} size={20} fill={(stats.averageRating || 5) >= i ? "#FBBF24" : "none"} className={(stats.averageRating || 5) >= i ? "text-amber-400" : "text-(--text-dim)"} />
-                 ))}
-               </div>
+               <PartialStarRating
+                 rating={stats.averageRating ?? (stats.newDriver ? 0 : 5)}
+                 size={26}
+               />
             </div>
 
             <div className="grid grid-cols-2 gap-4 flex-1 max-w-xs">

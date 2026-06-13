@@ -38,6 +38,7 @@ import { makeVehicleIcon, makePin, makeSimplePin } from "../../utils/mapIcons";
 import { getMyDriverProfile, updateDriverStatus } from "../../services/driverProfileService";
 import api from "../../services/api";
 import { reverseGeocode } from "../../utils/geocode";
+import Loader from "../../components/ui/Loader";
 
 // ── Leaflet icons ────────────────────────────────────────────────────────────
 const greenIcon = makeSimplePin("#22c55e");
@@ -116,6 +117,7 @@ const GoOnlinePage = () => {
         if (profileRes.data.success) {
           setProfile(profileRes.data.data);
           setIsOnline(profileRes.data.data.isOnline);
+          localStorage.setItem("driverIsOnline", profileRes.data.data.isOnline?.toString() || "false");
           
           // Override stats with actual live history data for consistency (same as dashboard)
           if (historyRes.data.success) {
@@ -141,7 +143,8 @@ const GoOnlinePage = () => {
     fetchProfile();
 
     // Real geolocation
-    if (navigator.geolocation) {
+    const appSettings = JSON.parse(localStorage.getItem("appSettings") || "{}");
+    if (appSettings.locationTracking !== false && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => {}
@@ -246,6 +249,11 @@ const GoOnlinePage = () => {
   };
 
   const handleUseLocation = () => {
+    const appSettings = JSON.parse(localStorage.getItem("appSettings") || "{}");
+    if (appSettings.locationTracking === false) {
+      return showAlert("You need to enable the location in settings page", "Permission Required", "error");
+    }
+    
     if (!navigator.geolocation) return showAlert("Geolocation is not supported by your browser.", "Location Error", "error");
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
@@ -262,7 +270,10 @@ const GoOnlinePage = () => {
   const handleOnlineToggle = async () => {
     if (!isOnline) {
       const appSettings = JSON.parse(localStorage.getItem("appSettings") || "{}");
-      if (!appSettings.locationTracking) { setShowLocationPopup(true); return; }
+      if (appSettings.locationTracking === false) {
+        showAlert("You need to enable the location in settings page", "Permission Required", "error");
+        return;
+      }
       if (profile && !profile.isApproved) {
         // No red error here - user wants it removed. The amber message already shows the status.
         return;
@@ -270,7 +281,11 @@ const GoOnlinePage = () => {
     }
     try {
       const res = await updateDriverStatus(!isOnline);
-      if (res.data.success) { setIsOnline(!isOnline); setError(""); }
+      if (res.data.success) { 
+        setIsOnline(!isOnline); 
+        localStorage.setItem("driverIsOnline", (!isOnline).toString());
+        setError(""); 
+      }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update status");
     }
@@ -318,6 +333,8 @@ const GoOnlinePage = () => {
   const mapCenter = sourcePin ? [sourcePin.lat, sourcePin.lng]
     : destPin ? [destPin.lat, destPin.lng]
     : [userLocation.lat, userLocation.lng];
+
+     if (loading) return <Loader fullPage text="Go Online..." />;
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (

@@ -102,7 +102,7 @@ function SuspendedUI({ isSuspended = true }) {
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading)
-    return <Loader fullPage text="Synchronizing your account securely..." />; // Use our new premium loader
+    return <Loader fullPage />;
   
   if (!user) return <Navigate to="/signin" replace />;
 
@@ -112,8 +112,8 @@ function ProtectedRoute({ children }) {
 
   // Redirect to complete profile if mobile number is missing
   if (user.role !== "admin" && (!user.Mobile_no || user.Mobile_no === "0000000000")) {
-    const location = window.location.pathname;
-    if (location !== "/complete-profile") {
+    const loc = window.location.pathname;
+    if (loc !== "/complete-profile") {
       return <Navigate to="/complete-profile" replace />;
     }
   }
@@ -125,7 +125,7 @@ function ProtectedRoute({ children }) {
 function AdminProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading)
-    return <Loader fullPage text="Verifying administrative access..." />;
+    return <Loader fullPage />;
   
   if (!user) return <Navigate to="/signin" replace />;
   
@@ -160,6 +160,8 @@ function DriverProtectedRoute({ children }) {
         if (response.data.success) {
           if (response.data.data) {
             setHasProfile(true);
+            // Sync initial online state for the background tracker
+            localStorage.setItem("driverIsOnline", response.data.data.isOnline?.toString() || "false");
           } else {
             setHasProfile(false);
           }
@@ -183,7 +185,7 @@ function DriverProtectedRoute({ children }) {
 
   // 1. Still loading Auth/Profile?
   if (loading || profileLoading) {
-    return <Loader fullPage text="Synchronizing your driver status..." />;
+    return <Loader fullPage />;
   }
 
   // 2. Not authenticated?
@@ -203,8 +205,8 @@ function DriverProtectedRoute({ children }) {
 
   // 5. Driver HAS NO PROFILE RECORD - force them to fill it
   if (!hasProfile) {
-    const location = window.location.pathname;
-    if (location !== "/driver/dashboard/profile-form") {
+    const loc = window.location.pathname;
+    if (loc !== "/driver/dashboard/profile-form") {
       return <Navigate to="/driver/dashboard/profile-form" replace />;
     }
   }
@@ -213,8 +215,6 @@ function DriverProtectedRoute({ children }) {
   return children;
 }
 
-
-
 // ─── Dashboard Route Wrapper ─────────────────────────────────────────────────
 // Routes to appropriate protected route based on user role
 function DashboardRoute() {
@@ -222,7 +222,7 @@ function DashboardRoute() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <Loader fullPage text="Synchronizing your dashboard..." />;
+    return <Loader fullPage />;
   }
 
   if (!user) {
@@ -250,17 +250,6 @@ function PageTransition({ children }) {
   const location = useLocation();
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  const getLoadingMessage = (path) => {
-    if (path.includes("dashboard")) return "Synchronizing your dashboard...";
-    if (path.includes("signin")) return "Preparing secure access...";
-    if (path.includes("signup")) return "Building your ride profile...";
-    if (path.includes("driver/profile")) return "Setting up your driver credentials...";
-    if (path.includes("forgot-password"))
-      return "Locating recovery protocols...";
-    if (path.includes("home")) return "Initializing urban experience...";
-    return "Optimizing your route...";
-  };
-
   useEffect(() => {
     // Prevent transition if we are already going to the loader page
     if (location.pathname === "/loader") {
@@ -274,7 +263,7 @@ function PageTransition({ children }) {
   }, [location.pathname]);
 
   if (isTransitioning)
-    return <Loader fullPage text={getLoadingMessage(location.pathname)} />;
+    return <Loader fullPage />;
   return children;
 }
 
@@ -795,6 +784,43 @@ function InternalAppInitializer({ children }) {
 
     return () => api.interceptors.response.eject(interceptor);
   }, []);
+
+  // 4. Global Background Location Sync (Drivers Only)
+  useEffect(() => {
+    if (user?.role !== "driver" || !navigator.geolocation) return;
+
+    const syncLocation = () => {
+      // 1. Check if they have explicitly disabled Location Services in Settings
+      const storedSettings = JSON.parse(localStorage.getItem("appSettings") || "{}");
+      if (storedSettings.locationTracking === false) return;
+
+      // 2. Only track if the driver is actively marked as Online.
+      const isOnline = localStorage.getItem("driverIsOnline") === "true";
+      if (!isOnline) return;
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            await api.put("/driver-profiles/update", {
+              currentLocation: {
+                type: "Point",
+                coordinates: [pos.coords.longitude, pos.coords.latitude]
+              }
+            });
+          } catch (err) {
+            console.error("Global GPS Sync failed:", err);
+          }
+        },
+        (err) => console.warn("Global GPS skipped:", err.message),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+      );
+    };
+
+    // Sync immediately, then every 15s
+    syncLocation();
+    const interval = setInterval(syncLocation, 15000);
+    return () => clearInterval(interval);
+  }, [user?.role]);
 
   if (globalSuspended) {
     return <SuspendedUI isSuspended={true} />;
