@@ -177,7 +177,7 @@ const ManageUsersPage = () => {
             <h2 className="text-3xl font-display font-black tracking-tighter">Manage Accounts</h2>
             <p className="text-(--text-dim) text-sm max-w-md">
               Review platform participants, block suspicious activity, or permanently remove accounts. 
-              <span className="text-amber-500 ml-1 font-bold italic underline">Changes reflect instantly on user sessions.</span>
+              <span className="text-primary ml-1 font-bold underline">Changes reflect instantly on user sessions.</span>
             </p>
           </div>
 

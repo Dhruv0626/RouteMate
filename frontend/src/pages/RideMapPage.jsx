@@ -166,7 +166,7 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
       width: "100%", padding: "14px 16px", borderRadius: "20px",
-      border: `2px solid ${isSelected ? "#2563eb" : "var(--card-border)"}`,
+      border: `2px solid ${isSelected ? "black" : "grey"}`,
       background: isSelected ? "rgba(37,99,235,0.04)" : "var(--card-bg)",
       cursor: "pointer", textAlign: "left",
       transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -623,8 +623,7 @@ const RideMapPage = () => {
         <div className="flex items-center gap-3 rounded-2xl px-3 py-2"
           style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)", backdropFilter: "blur(12px)" }}>
           <ThemeToggle />
-          <div className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl"
-            style={{ background: "rgba(99,102,241,0.1)", color: "#6366f1" }}
+          <div className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl bg-primary/10 text-primary"
             onClick={() => navigate("/passenger/dashboard")} title="Dashboard">
             <UserIcon size={16} />
           </div>
@@ -676,23 +675,23 @@ const RideMapPage = () => {
           {/* Greeting */}
           <div>
             <h1 className="font-display text-2xl font-black tracking-tight" style={{ color: "var(--text-main)" }}>
-              Where to, <span style={{ color: "#6366f1" }}>{user?.name?.split(" ")[0] || "there"}?</span>
+              Where to, <span style={{ color: "#ffcc00" }}>{user?.name?.split(" ")[0] || "there"}?</span>
             </h1>
             <p className="mt-1 text-xs" style={{ color: "var(--text-dim)" }}>
-              The driver picks the route — you pick the vehicle and fare tier. 🚀
+              The driver picks the route — you pick the vehicle and fare tier. 
             </p>
           </div>
 
           {/* ── Referral Box (Only for first ride) ── */}
-          {user?.role === "passenger" && (user?.passengerStats?.totalTrips || 0) === 0 && !user?.referredBy && (
+          {user?.role === "passenger" && (user?.passengerStats?.totalTrips || 0) === 0  && !user?.referredBy && (
             <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 relative overflow-hidden group"
                  style={{ border: "1px solid var(--card-border)", background: "var(--card-bg)" }}>
               <div className="absolute -right-2 -top-2 opacity-5 group-hover:rotate-12 transition-transform duration-500">
-                 <Gift size={80} className="text-indigo-500" />
+                 <Gift size={80} className="text-primary" />
               </div>
               <div className="relative z-10 flex flex-col gap-3">
                 <div className="flex items-center gap-2">
-                  <Ticket size={16} className="text-indigo-500" />
+                  <Ticket size={16} className="text-primary mb-0.1" />
                   <span style={{ fontSize: "13px", fontWeight: 900, color: "var(--text-main)" }}>Referral Code?</span>
                 </div>
                 
@@ -708,7 +707,7 @@ const RideMapPage = () => {
                   <button 
                     onClick={handleApplyReferral}
                     disabled={applyingReferral || !referralInput}
-                    className="px-4 py-2 bg-indigo-600 text-white font-black rounded-xl text-xs hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                    className="px-4 py-2 bg-primary text-black font-black rounded-xl text-xs hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
                   >
                     {applyingReferral ? "..." : "Apply"}
                   </button>
@@ -776,9 +775,8 @@ const RideMapPage = () => {
             <div className="rounded-2xl p-4 flex flex-col gap-3"
               style={{ background: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
 
-              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em", margin: 0 }}>
-                🧾 Available Drivers
-              </p>
+              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em", marginLeft: "2.5%" }}>
+                 Available Rides              </p>
 
               {availableRides.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "10px 0", color: "var(--text-dim)", fontSize: "13px" }}>
@@ -809,7 +807,7 @@ const RideMapPage = () => {
               {selectedPublishedRide && (
                 <div style={{
                   borderRadius: "12px", padding: "11px 14px",
-                  background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)",
+                  background: "", border: "1px solid rgba(99,102,241,0.25)",
                   display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
                 }}>
                   <div style={{ flex: 1 }}>
@@ -831,7 +829,7 @@ const RideMapPage = () => {
                           <div className="w-16 h-8 bg-white/10 rounded-lg animate-pulse" />
                         ) : (
                           <>
-                            <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#a5b4fc", lineHeight: 1 }}>
+                            <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "black", lineHeight: 1 }}>
                                 ₹{Math.round(fareEstimate?.totalFare || 0)}
                             </p>
                             <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>final fare</p>
@@ -842,7 +840,7 @@ const RideMapPage = () => {
                         onClick={handleProceed}
                         disabled={bookingLoading || !!bookingSuccess}
                         style={{
-                        background: "var(--primary-color, #6366f1)", color: "#000", border: "none",
+                        background: "#ffcc00", color: "#000", border: "none",
                         padding: "10px 18px", borderRadius: "8px", fontSize: "13px", fontWeight: 800,
                         cursor: (bookingLoading || bookingSuccess) ? "not-allowed" : "pointer", 
                         transition: "all 0.15s ease",

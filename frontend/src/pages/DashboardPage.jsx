@@ -794,10 +794,10 @@ const DashboardPage = () => {
                 <button
                   key={i}
                   onClick={() => card.href !== "#" && navigate(card.href.replace(":role", pathRole))}
-                  className={`group glass-card relative cursor-pointer rounded-3xl p-6 text-left transition-all duration-300 hover:-translate-y-1 ${c.hover} border-(--card-border) shadow-sm`}
+                  className={`group glass-card relative cursor-pointer rounded-3xl p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:bg-primary/10 hover:border-primary border-(--card-border) shadow-sm`}
                 >
                   <div
-                    className={`h-12 w-12 ${c.bg} ${c.icon} mb-6 flex items-center justify-center rounded-xl transition-all duration-500`}
+                    className={`h-12 w-12 bg-primary text-black mb-6 flex items-center justify-center rounded-xl transition-all duration-500`}
                   >
                     <Icon size={24} />
                   </div>
@@ -1024,7 +1024,7 @@ const DashboardPage = () => {
                   {activities.length > 3 && (
                     <button 
                       onClick={() => setIsHistoryExpanded(!isHistoryExpanded)}
-                      className="w-full p-4 flex items-center rounded-b-3xl justify-center gap-2 text-(--text-main) font-bold text-xs uppercase tracking-widest bg-(--card-bg) hover:bg-primary/5 transition-colors border-t border-(--card-border)"
+                      className="w-full p-4 flex items-center rounded-b-3xl justify-center gap-2 text-(--text-main) font-bold text-xs uppercase tracking-widest bg-primary hover:bg-primary/5 transition-colors border-t border-(--card-border)"
                     >
                       {isHistoryExpanded ? "Hide Past Activity" : "View More Past Activity"}
                       <ChevronRight size={14} className={`transition-transform duration-300 ${isHistoryExpanded ? "-rotate-90" : "rotate-90"}`} />

@@ -158,14 +158,14 @@ const ReferralPage = () => {
               <h4 className="text-2xl font-black">{stats.joinedCount} Friends</h4>
            </div>
            <div className="glass-card rounded-[2rem] p-6 border border-(--card-border) text-center">
-              <div className="bg-emerald-500/10 text-emerald-400 mx-auto h-12 w-12 rounded-2xl flex items-center justify-center mb-4"><TrendingUp size={24} /></div>
+              <div className="bg-primary/10 text-primary mx-auto h-12 w-12 rounded-2xl flex items-center justify-center mb-4"><TrendingUp size={24} /></div>
               <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest mb-1">Successful</p>
               <h4 className="text-2xl font-black">{stats.joinedCount} Joined</h4>
            </div>
            <div className="glass-card rounded-[2rem] p-6 border border-(--card-border) text-center">
-              <div className="bg-violet-500/10 text-violet-400 mx-auto h-12 w-12 rounded-2xl flex items-center justify-center mb-4"><Gift size={24} /></div>
+              <div className="bg-primary/10 text-primary mx-auto h-12 w-12 rounded-2xl flex items-center justify-center mb-4"><Gift size={24} /></div>
               <p className="text-[10px] font-black text-(--text-dim) uppercase tracking-widest mb-1">Total Earned</p>
-              <h4 className="text-2xl font-black text-violet-400">₹{stats.totalEarned}</h4>
+              <h4 className="text-2xl font-black text-black-400">₹{stats.totalEarned}</h4>
            </div>
         </section>
 

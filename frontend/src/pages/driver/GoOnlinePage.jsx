@@ -81,6 +81,7 @@ const GoOnlinePage = () => {
   const [publishError, setPublishError] = useState("");
   const [showPublishForm, setShowPublishForm] = useState(false);
   const [showLocationPopup, setShowLocationPopup] = useState(false);
+  const [showMapGuide, setShowMapGuide] = useState(false);
 
   // Map picking state
   const [pickingMode, setPickingMode] = useState(null); // "source" | "destination" | null
@@ -235,6 +236,16 @@ const GoOnlinePage = () => {
       setRouteCoords([]);
     }
   }, [sourcePin, destPin]);
+
+  // ── Guide visibility ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    let timer;
+    if (showPublishForm) {
+      setShowMapGuide(true);
+      timer = setTimeout(() => setShowMapGuide(false), 12000);
+    }
+    return () => { if (timer) clearTimeout(timer); };
+  }, [showPublishForm]);
 
   // ── Map pick handler ─────────────────────────────────────────────────────────
   const handleMapPick = async (lat, lng) => {
@@ -493,22 +504,48 @@ const GoOnlinePage = () => {
                     <p className="text-xs font-bold text-(--text-dim) uppercase tracking-wider flex items-center gap-1.5">
                       <Navigation size={12} /> Search or Pick Route
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 relative">
                        <span className="hidden sm:inline text-(--text-dim) text-[10px] font-bold">Pick on map:</span>
                        <div className="flex gap-2">
-                        <button type="button"
-                          onClick={() => setPickingMode(pickingMode === "source" ? null : "source")}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border transition-all ${pickingMode === "source" ? "bg-primary text-black border-primary animate-pulse" : sourcePin ? "bg-primary/10 text-primary border-primary/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
-                          <div className={`w-2 h-2 rounded-full ${pickingMode === "source" ? "bg-black" : "bg-emerald-500"}`} />
-                          {pickingMode === "source" ? "Click map..." : sourcePin ? "Set Pickup ✓" : "Set Pickup"}
-                        </button>
-                        <button type="button"
-                          onClick={() => setPickingMode(pickingMode === "destination" ? null : "destination")}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border transition-all ${pickingMode === "destination" ? "bg-primary text-black border-primary animate-pulse" : destPin ? "bg-primary/10 text-primary border-primary/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
-                          <div className={`w-2 h-2 rounded-full ${pickingMode === "destination" ? "bg-black" : "bg-rose-500"}`} />
-                          {pickingMode === "destination" ? "Click map..." : destPin ? "Set Drop-off ✓" : "Set Drop-off"}
-                        </button>
+                        <div className="relative group">
+                          <button type="button"
+                            onClick={() => setPickingMode(pickingMode === "source" ? null : "source")}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border transition-all ${pickingMode === "source" ? "bg-primary text-black border-primary animate-pulse" : sourcePin ? "bg-primary/10 text-primary border-primary/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
+                            <div className={`w-2 h-2 rounded-full ${pickingMode === "source" ? "bg-black" : "bg-emerald-500"}`} />
+                            {pickingMode === "source" ? "Click map..." : sourcePin ? "Set Pickup ✓" : "Set Pickup"}
+                          </button>
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-40 p-2 bg-(--text-main) text-(--bg-main) text-[10px] leading-tight rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 hidden sm:block text-center shadow-xl">
+                            Click here, then tap anywhere on the map to set your pickup location.
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-(--text-main)"></div>
+                          </div>
+                        </div>
+
+                        <div className="relative group">
+                          <button type="button"
+                            onClick={() => setPickingMode(pickingMode === "destination" ? null : "destination")}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border transition-all ${pickingMode === "destination" ? "bg-primary text-black border-primary animate-pulse" : destPin ? "bg-primary/10 text-primary border-primary/30" : "bg-(--bg-main) border-(--card-border) text-(--text-dim)"}`}>
+                            <div className={`w-2 h-2 rounded-full ${pickingMode === "destination" ? "bg-black" : "bg-rose-500"}`} />
+                            {pickingMode === "destination" ? "Click map..." : destPin ? "Set Drop-off ✓" : "Set Drop-off"}
+                          </button>
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-40 p-2 bg-(--text-main) text-(--bg-main) text-[10px] leading-tight rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 hidden sm:block text-center shadow-xl">
+                            Click here, then tap anywhere on the map to set your drop-off location.
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-(--text-main)"></div>
+                          </div>
+                        </div>
                       </div>
+
+                      {showMapGuide && (
+                        <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-primary/10 backdrop-blur-md border border-primary/30 text-(--text-main) rounded-xl shadow-2xl z-20 flex items-start gap-2">
+                          <Info size={16} className="text-primary shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="text-xs font-bold mb-1">Fast Map Picking</p>
+                            <p className="text-[10px] text-(--text-dim) leading-relaxed">Click <strong>Set Pickup</strong> or <strong>Set Drop-off</strong> buttons, then tap anywhere on the map to quickly set your locations without typing.</p>
+                          </div>
+                          <button type="button" onClick={() => setShowMapGuide(false)} className="text-(--text-dim) hover:text-primary transition-colors">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -536,7 +573,6 @@ const GoOnlinePage = () => {
                     />
                   </div>
                 </div>
-
 
                 {/* Map */}
                 <div className={`rounded-2xl overflow-hidden border-2 transition-all ${pickingMode ? "border-primary shadow-lg shadow-primary/20 cursor-crosshair" : "border-(--card-border)"}`} style={{ height: 320 }}>
@@ -570,7 +606,7 @@ const GoOnlinePage = () => {
                     {routeCoords.length > 0 && (
                       <Polyline
                         positions={routeCoords}
-                        pathOptions={{ color: "#ffcc00", weight: 5, opacity: 0.9, dashArray: "10 6", lineCap: "round" }}
+                        pathOptions={{ color: "blue", weight: 5, opacity: 1, dashArray: "10 3", lineCap: "round" }}
                       />
                     )}
                   </MapContainer>
@@ -589,43 +625,18 @@ const GoOnlinePage = () => {
                 )}
               </div>
 
-              {/* Address summary + distance */}
-              {(sourcePin || destPin) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3">
-                    <div className="text-xs font-bold text-emerald-500 mb-1 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Pickup</div>
-                    <p className="text-xs text-(--text-main) leading-tight">{sourcePin ? sourcePin.address : <span className="text-(--text-dim) italic">Not set</span>}</p>
-                    {sourcePin && (
-                      <button type="button" onClick={() => { setSourcePin(null); setPickingMode("source"); }}
-                        className="mt-1.5 text-[10px] text-red-400 hover:underline">Clear & re-pick</button>
-                    )}
-                  </div>
-                  <div className="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3">
-                    <div className="text-xs font-bold text-rose-500 mb-1 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500" /> Drop-off</div>
-                    <p className="text-xs text-(--text-main) leading-tight">{destPin ? destPin.address : <span className="text-(--text-dim) italic">Not set</span>}</p>
-                    {destPin && (
-                      <button type="button" onClick={() => { setDestPin(null); setPickingMode("destination"); }}
-                        className="mt-1.5 text-[10px] text-red-400 hover:underline">Clear & re-pick</button>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Distance badge */}
               {distanceKm !== null && (
                 <div className="flex items-center justify-center gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
-                  <Navigation size={20} className="text-primary" />
+                  <Navigation size={20} className="text-primary mb-4" />
                   <div className="text-center">
                     <p className="text-2xl font-black text-primary">
                       {fetchingRoute ? "..." : `${distanceKm} km`}
                     </p>
                     <p className="text-xs text-(--text-dim)">Confirmed road distance</p>
                   </div>
-                  <Info size={16} className="text-(--text-dim)" title="Route calculated via real road paths" />
                 </div>
               )}
-
-
 
               {/* Fare info */}
               <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/5 border border-primary/20">
@@ -667,7 +678,7 @@ const GoOnlinePage = () => {
           <div className="rounded-xl border border-(--card-border) bg-(--card-bg) p-5 hover:border-primary/40 transition-all">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-orange-500/10 p-2"><BatteryCharging size={18} className="text-orange-500" /></div>
+                <div className="rounded-lg bg-primary/10 p-2"><BatteryCharging size={18} className="text-primary" /></div>
                 <h4 className="font-semibold text-(--text-main) text-sm">Battery</h4>
               </div>
               <span className="text-lg font-bold">{batteryLevel !== null ? `${batteryLevel}%` : "N/A"}</span>
@@ -682,7 +693,7 @@ const GoOnlinePage = () => {
           <div className="rounded-xl border border-(--card-border) bg-(--card-bg) p-5 hover:border-primary/40 transition-all">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-blue-500/10 p-2"><Wifi size={18} className="text-blue-500" /></div>
+                <div className="rounded-lg bg-primary/10 p-2"><Wifi size={18} className="text-primary" /></div>
                 <h4 className="font-semibold text-(--text-main) text-sm">Signal</h4>
               </div>
               <span className="text-lg font-bold">{signalStrength !== null ? `${signalStrength}/5` : "N/A"}</span>
@@ -715,8 +726,8 @@ const GoOnlinePage = () => {
           <div className="rounded-xl border border-(--card-border) bg-(--card-bg) p-5 hover:border-primary/40 transition-all">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className={`rounded-lg p-2 ${isOnlineNet ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
-                  <Zap size={18} className={isOnlineNet ? "text-emerald-500" : "text-red-500"} />
+                <div className={`rounded-lg p-2 ${isOnlineNet ? "bg-primary/10" : "bg-red-500/10"}`}>
+                  <Zap size={18} className={isOnlineNet ? "text-primary" : "text-red-500"} />
                 </div>
                 <h4 className="font-semibold text-(--text-main) text-sm">Internet</h4>
               </div>
@@ -737,8 +748,8 @@ const GoOnlinePage = () => {
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Total Rides</p><p className="text-2xl font-black">{profile?.stats?.totalRides || 0}</p></div>
-              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Completed</p><p className="text-2xl font-black text-emerald-500">{profile?.stats?.completedRides || 0}</p></div>
-              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Rating</p><p className="text-2xl font-black text-amber-500">{profile?.averageRating?.toFixed(1) || "0.0"}</p></div>
+              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Completed</p><p className="text-2xl font-black text-primary">{profile?.stats?.completedRides || 0}</p></div>
+              <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Rating</p><p className="text-2xl font-black text-primary">{profile?.averageRating?.toFixed(1) || "0.0"}</p></div>
               <div className="rounded-xl bg-(--bg-main) p-4"><p className="text-xs text-(--text-dim) mb-1">Trust Score</p><p className="text-2xl font-black text-primary">{profile?.trustScore || 0}</p></div>
             </div>
           </div>

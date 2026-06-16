@@ -203,11 +203,11 @@ const RideMap = ({
                 key={`sel-${selectedRoute.id || selectedRouteIdx}`}
                 positions={selectedRoute.coords}
                 pathOptions={{
-                  color:   selectedRoute.color || primaryColor,
-                  weight:  7,
-                  opacity: 0.9,
+                  color:   selectedRoute.color || "blue",
+                  weight:  5,
+                  opacity: 1,
+                  dashArray: "10 3",
                   lineCap: "round",
-                  lineJoin: "round",
                 }}
               />
             )}
@@ -237,7 +237,7 @@ const RideMap = ({
         {showSplit && remainingCoords.length > 1 && (
           <Polyline
             positions={remainingCoords}
-            pathOptions={{ color: selectedRoute?.color ?? "#6366f1", weight: 7, opacity: 0.92 }}
+            pathOptions={{ color: selectedRoute?.color ?? "blue", weight: 5, opacity: 1, dashArray: "10 3", lineCap: "round" }}
           />
         )}
 

@@ -296,9 +296,9 @@ const HistoryPage = () => {
               <h3 className="text-xs font-bold text-(--text-dim) uppercase tracking-wider">
                 {role === "driver" ? "Total Earnings" : "Total Spent"}
               </h3>
-              <IndianRupee size={18} className={role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"} />
+              <IndianRupee size={18} className={role === "driver" || role === "passenger" ? "text-primary" : "text-primary"} />
             </div>
-            <p className={`text-2xl font-black ${role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"}`}>
+            <p className={`text-2xl font-black ${role === "driver" || role === "passenger" ? "text-black" : "text-black"}`}>
               ₹{stats.totalAmount.toLocaleString()}
             </p>
           </div>
@@ -307,9 +307,9 @@ const HistoryPage = () => {
               <h3 className="text-xs font-bold text-(--text-dim) uppercase tracking-wider">
                 {role === "driver" ? "Avg Rating" : "Avg Rating Given"}
               </h3>
-              <Star size={18} className="text-amber-500" />
+              <Star size={18} className="text-primary" />
             </div>
-            <p className="text-2xl font-black text-amber-500">{stats.averageRating}</p>
+            <p className="text-2xl font-black text-black">{stats.averageRating}</p>
           </div>
           <div className="glass-card rounded-2xl p-6 border border-(--card-border)">
             <div className="flex items-start justify-between mb-2">
@@ -406,7 +406,7 @@ const HistoryPage = () => {
                         <div className="flex flex-col items-center flex-shrink-0 py-1">
                           <MapPin size={16} className="text-emerald-500 flex-shrink-0" />
                           <div className="flex-1 w-[1px] border-l-2 border-dashed border-gray-300 dark:border-gray-600 my-1"></div>
-                          <MapPin size={16} className="text-red-500 flex-shrink-0" />
+                          <MapPin size={16} className="text-red-500 flex-shrink-0 mb-3" />
                         </div>
                         <div className="flex flex-col justify-between py-1 flex-1 min-h-[4.5rem]">
                           <div>
@@ -425,8 +425,8 @@ const HistoryPage = () => {
                         <span className="flex items-center gap-1 text-(--text-dim)">
                           <Clock size={12} />{ride.date}
                         </span>
-                        <span className={`flex items-center gap-1 font-semibold ${role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"}`}>
-                          <IndianRupee size={12} />₹{Math.round(ride.amount)}
+                        <span className={`flex items-center font-semibold ${role === "driver" || role === "passenger" ? "text-black" : "text-black"}`}>
+                          <IndianRupee size={12} />{Math.round(ride.amount)}
                         </span>
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full font-semibold ${getStatusColor(ride.status)}`}>
                           {getStatusIcon(ride.status)}
@@ -514,18 +514,6 @@ const HistoryPage = () => {
                             <span className="font-semibold text-indigo-400">₹{ride.nightFare.toFixed(2)}</span>
                           </div>
                         )}
-                        
-                        {ride.surgeAmount > 0 && (
-                          <div className="flex justify-between items-center py-2 px-3 bg-amber-500/10 rounded-xl border border-amber-500/20 my-3">
-                             <div className="flex flex-col">
-                                <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1.5">
-                                    <TrendingUp size={14} className="text-amber-500" /> Surge Charge
-                                </span>
-                                <span className="text-[10px] text-amber-500/70 font-black uppercase tracking-[0.1em] pl-5">Demand Multiplier: x{ride.surgeMultiplier.toFixed(2)}</span>
-                             </div>
-                             <span className="font-black text-lg text-amber-600 dark:text-amber-400">₹{ride.surgeAmount.toFixed(2)}</span>
-                          </div>
-                        )}
 
                         {ride.co2Saved > 0 && (
                           <div className="flex justify-between text-sm py-2 px-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 my-2">
@@ -537,7 +525,7 @@ const HistoryPage = () => {
                         )}
                         <div className="border-t border-(--card-border) pt-2 flex justify-between">
                           <span className="font-bold text-(--text-main)">Total</span>
-                          <span className={`font-black text-lg ${role === "driver" || role === "passenger" ? "text-emerald-500" : "text-violet-500"}`}>
+                          <span className={`font-black text-lg ${role === "driver" || role === "passenger" ? "text-black" : "text-black"}`}>
                             ₹{ride.amount}
                           </span>
                         </div>

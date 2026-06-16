@@ -19,6 +19,11 @@ const RevenueAnalyticsPage = () => {
   const [revenueData, setRevenueData] = useState({ dailyIncome: [], trips: [] });
   const [filters, setFilters] = useState({ startDate: "", endDate: "" });
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showAllDaily, setShowAllDaily] = useState(false);
+  const [showAllTrips, setShowAllTrips] = useState(false);
+
+  const displayedDaily = showAllDaily ? revenueData.dailyIncome : revenueData.dailyIncome.slice(0, 10);
+  const displayedTrips = showAllTrips ? revenueData.trips : revenueData.trips.slice(0, 10);
 
   useEffect(() => {
     fetchRevenue();
@@ -190,7 +195,7 @@ const RevenueAnalyticsPage = () => {
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-(--card-border)">
-                       {revenueData.dailyIncome.map((day) => (
+                       {displayedDaily.map((day) => (
                           <tr key={day._id} className="hover:bg-primary/5 transition-colors group">
                              <td className="px-4 py-4">
                                 <p className="text-xs font-black">{new Date(day._id).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}</p>
@@ -206,6 +211,14 @@ const RevenueAnalyticsPage = () => {
                        )}
                     </tbody>
                  </table>
+                 {revenueData.dailyIncome.length > 10 && (
+                    <button 
+                       onClick={() => setShowAllDaily(!showAllDaily)}
+                       className="w-full py-3 bg-(--card-bg) border-t border-(--card-border) text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
+                    >
+                       {showAllDaily ? "Show Less" : `View All (${revenueData.dailyIncome.length})`}
+                    </button>
+                 )}
               </div>
            </div>
 
@@ -226,7 +239,7 @@ const RevenueAnalyticsPage = () => {
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-(--card-border)">
-                          {revenueData.trips.map((trip) => (
+                          {displayedTrips.map((trip) => (
                              <tr key={trip.id} className="hover:bg-violet-500/5 transition-colors group">
                                 <td className="px-6 py-4">
                                    <div className="flex items-center gap-3">
@@ -261,6 +274,14 @@ const RevenueAnalyticsPage = () => {
                        </tbody>
                     </table>
                  </div>
+                 {revenueData.trips.length > 10 && (
+                    <button 
+                       onClick={() => setShowAllTrips(!showAllTrips)}
+                       className="w-full py-3 bg-(--card-bg) border-t border-(--card-border) text-xs font-bold text-violet-500 hover:bg-violet-500/10 transition-colors"
+                    >
+                       {showAllTrips ? "Show Less" : `View All (${revenueData.trips.length})`}
+                    </button>
+                 )}
               </div>
            </div>
         </div>

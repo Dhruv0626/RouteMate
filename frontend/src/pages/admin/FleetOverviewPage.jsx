@@ -166,17 +166,17 @@ const FleetOverviewPage = () => {
                 <p className="text-[10px] uppercase font-black tracking-widest text-(--text-dim)">Total Fleet</p>
               </div>
            </div>
-           <div className="glass-card p-5 rounded-3xl border border-emerald-500/20 flex items-center gap-4">
-              <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-500"><Navigation size={24} className="animate-pulse" /></div>
+           <div className="glass-card p-5 rounded-3xl border border-(--card-border) flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-2xl text-primary"><Navigation size={24} className="animate-pulse" /></div>
               <div>
-                <p className="text-3xl font-black text-emerald-400">{counts.active}</p>
+                <p className="text-3xl font-black text-black">{counts.active}</p>
                 <p className="text-[10px] uppercase font-black tracking-widest text-(--text-dim)">In Service</p>
               </div>
            </div>
-           <div className="glass-card p-5 rounded-3xl border border-violet-500/20 flex items-center gap-4">
-              <div className="p-3 bg-violet-500/10 rounded-2xl text-violet-400"><Clock size={24} /></div>
+           <div className="glass-card p-5 rounded-3xl border border-(--card-border) flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-2xl text-primary"><Clock size={24} /></div>
               <div>
-                <p className="text-3xl font-black text-violet-400">{counts.idle}</p>
+                <p className="text-3xl font-black text-black">{counts.idle}</p>
                 <p className="text-[10px] uppercase font-black tracking-widest text-(--text-dim)">Available</p>
               </div>
            </div>

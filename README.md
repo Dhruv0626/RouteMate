@@ -320,3 +320,6 @@ RouteMate supports three payment methods, all handled through the `Payment` and 
 - **Account suspension** — instant lock with global 403 interceptor on frontend
 - **OTP expiry** — time-limited verification codes for email and ride start
 
+
+
+(user?.passengerStats?.totalTrips || 0) === 0

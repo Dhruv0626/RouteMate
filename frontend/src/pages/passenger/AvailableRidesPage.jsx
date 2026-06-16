@@ -199,7 +199,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
                 {ride.routeCoords?.length > 0 && (
                   <Polyline 
                     positions={ride.routeCoords.map(c => [c[1], c[0]])} 
-                    pathOptions={{ color: "#6366f1", weight: 4, opacity: 0.6 }} 
+                    pathOptions={{ color: "blue", weight: 4, opacity: 0.6 }} 
                   />
                 )}
 
@@ -207,7 +207,7 @@ const BookingModal = ({ ride, onClose, onBooked }) => {
                 {pRouteCoords.length > 0 && (
                   <Polyline 
                     positions={pRouteCoords} 
-                    pathOptions={{ color:"#ffcc00", weight:5, dashArray:"10 6", lineCap:"round" }} 
+                    pathOptions={{ color: "blue", weight: 5, opacity: 1, dashArray: "10 3", lineCap: "round" }} 
                   />
                 )}
               </MapContainer>
