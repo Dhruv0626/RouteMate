@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, CheckCircle, XCircle, Clock, MapPin,
   Users, IndianRupee, Car, Navigation, AlertCircle,
-  Loader2, Phone, MessageSquare, Shield,
+  Loader2, Phone, MessageSquare, Shield,Star
 } from "lucide-react";
 import api from "../../services/api";
 import ThemeToggle from "../../components/ui/ThemeToggle";
@@ -255,7 +255,7 @@ const RideRequestDetailsPage = () => {
                 <h2 className="text-lg font-black leading-tight truncate">{booking.passenger?.name || "Passenger"}</h2>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                     <span className="flex items-center gap-1 text-[9px] font-bold py-0.5 px-2 rounded-md bg-(--bg-main) text-(--text-dim) border border-(--card-border) whitespace-nowrap">
-                        <Clock size={10} /> {booking.passenger?.passengerStats?.averageRating?.toFixed(1) || "0.0"} Rating
+                        <Star size={10}/>{booking.passenger?.passengerStats?.averageRating?.toFixed(1) || "0.0"} <span>Rating</span>
                     </span>
                 </div>
             </div>
@@ -278,7 +278,7 @@ const RideRequestDetailsPage = () => {
             <div className="flex items-start gap-3">
                 <div className="mt-1 flex flex-col items-center gap-1">
                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                    <div className="w-[1px] h-6 bg-gradient-to-b from-emerald-500 to-red-500" />
+                    <div className="w-[1px] h-8 bg-gradient-to-b from-emerald-500 to-red-500" />
                     <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
                 </div>
                 <div className="flex-1 space-y-4">

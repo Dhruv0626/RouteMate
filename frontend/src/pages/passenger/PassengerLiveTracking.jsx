@@ -797,7 +797,7 @@ const PassengerLiveTracking = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-black text-sm">{ride.driver?.name || "Your Driver"}</p>
+                        <p className="text-white text-sm">{ride.driver?.name || "Your Driver"}</p>
                         <p className="text-[10px] text-white/40 font-medium">{(ride.vehicleType || "Vehicle").toUpperCase()}</p>
                       </div>
                       <div className="flex items-center gap-2">

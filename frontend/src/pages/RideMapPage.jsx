@@ -829,7 +829,7 @@ const RideMapPage = () => {
                           <div className="w-16 h-8 bg-white/10 rounded-lg animate-pulse" />
                         ) : (
                           <>
-                            <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "black", lineHeight: 1 }}>
+                            <p style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "var(--text)", lineHeight: 1 }}>
                                 ₹{Math.round(fareEstimate?.totalFare || 0)}
                             </p>
                             <p style={{ margin: 0, fontSize: "9px", color: "var(--text-dim)", marginTop: "2px" }}>final fare</p>

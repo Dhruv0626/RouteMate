@@ -289,7 +289,7 @@ const HistoryPage = () => {
               </h3>
               <Navigation size={18} className="text-primary" />
             </div>
-            <p className="text-2xl font-black text-(--text-main)">{stats.totalRides}</p>
+            <p className="text-2xl font-bold text-(--text-main)">{stats.totalRides}</p>
           </div>
           <div className="glass-card rounded-2xl p-6 border border-(--card-border)">
             <div className="flex items-start justify-between mb-2">
@@ -298,7 +298,7 @@ const HistoryPage = () => {
               </h3>
               <IndianRupee size={18} className={role === "driver" || role === "passenger" ? "text-primary" : "text-primary"} />
             </div>
-            <p className={`text-2xl font-black ${role === "driver" || role === "passenger" ? "text-black" : "text-black"}`}>
+            <p className={`text-2xl font-bold ${role === "driver" || role === "passenger" ? "text-var(-text)" : "text-var(-text)"}`}>
               ₹{stats.totalAmount.toLocaleString()}
             </p>
           </div>
@@ -309,7 +309,7 @@ const HistoryPage = () => {
               </h3>
               <Star size={18} className="text-primary" />
             </div>
-            <p className="text-2xl font-black text-black">{stats.averageRating}</p>
+            <p className="text-2xl font-bold text-(--text-main)">{stats.averageRating}</p>
           </div>
           <div className="glass-card rounded-2xl p-6 border border-(--card-border)">
             <div className="flex items-start justify-between mb-2">
@@ -425,7 +425,7 @@ const HistoryPage = () => {
                         <span className="flex items-center gap-1 text-(--text-dim)">
                           <Clock size={12} />{ride.date}
                         </span>
-                        <span className={`flex items-center font-semibold ${role === "driver" || role === "passenger" ? "text-black" : "text-black"}`}>
+                        <span className={`flex items-center font-semibold ${role === "driver" || role === "passenger" ? "text-var(-text)" : "text-var(-text)"}`}>
                           <IndianRupee size={12} />{Math.round(ride.amount)}
                         </span>
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full font-semibold ${getStatusColor(ride.status)}`}>

@@ -144,7 +144,7 @@ const PassengerBookingsPage = () => {
                    <span className="flex items-center gap-1 font-bold text-(--text-dim)">
                      <Clock size={14} className="shrink-0" /> <span className="truncate">Booked: {new Date(myBooking.bookedAt || ride.createdAt).toLocaleString("en-IN", { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" })}</span>
                    </span>
-                   <span className="flex items-center font-bold text-black shrink-0">
+                   <span className="flex items-center font-bold text-var(-text) shrink-0">
                      <IndianRupee size={14} /> {myBooking.amountPaid}
                    </span>
                  </div>

@@ -737,10 +737,6 @@ const StartRide = () => {
                     >
                       <X size={20} />
                     </button>
-                    <button onClick={() => setShowOtpBox(true)} disabled={isStartingRequest}
-                      className="w-12 h-12 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30 active:scale-95 transition disabled:opacity-60">
-                      <Play size={20} className="text-black" />
-                    </button>
                   </div>
                 ) : isNearDestination ? (
                   <div className="flex justify-end w-full">

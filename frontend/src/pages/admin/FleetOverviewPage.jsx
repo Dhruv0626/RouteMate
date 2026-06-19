@@ -169,14 +169,14 @@ const FleetOverviewPage = () => {
            <div className="glass-card p-5 rounded-3xl border border-(--card-border) flex items-center gap-4">
               <div className="p-3 bg-primary/10 rounded-2xl text-primary"><Navigation size={24} className="animate-pulse" /></div>
               <div>
-                <p className="text-3xl font-black text-black">{counts.active}</p>
+                <p className="text-3xl font-black text-(--text-main)">{counts.active}</p>
                 <p className="text-[10px] uppercase font-black tracking-widest text-(--text-dim)">In Service</p>
               </div>
            </div>
            <div className="glass-card p-5 rounded-3xl border border-(--card-border) flex items-center gap-4">
               <div className="p-3 bg-primary/10 rounded-2xl text-primary"><Clock size={24} /></div>
               <div>
-                <p className="text-3xl font-black text-black">{counts.idle}</p>
+                <p className="text-3xl font-black text-(--text-main)">{counts.idle}</p>
                 <p className="text-[10px] uppercase font-black tracking-widest text-(--text-dim)">Available</p>
               </div>
            </div>
