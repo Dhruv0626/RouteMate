@@ -96,6 +96,7 @@ const StartRide = () => {
   const [showOtpBox, setShowOtpBox]         = useState(true); // Default to true so it shows during pickup phase
   const [otpSlots, setOtpSlots]             = useState(["", "", "", ""]);
   const [isStartingRequest, setIsStartingRequest] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [route, setRoute]                   = useState([]);
   const [etaMins, setEtaMins]               = useState(null);
   const [routeDistKm, setRouteDistKm]       = useState(null);
@@ -289,7 +290,7 @@ const StartRide = () => {
         });
       },
       (e) => console.warn("GPS initial fix failed:", e.message),
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 }
     );
     const wid = navigator.geolocation.watchPosition(
       (p) => {
@@ -873,6 +874,7 @@ const StartRide = () => {
                       <button onClick={async () => {
                         const confirmed = await showConfirm("Did you receive cash from the passenger?", "Confirm Cash", "success", "Yes, Received");
                         if (!confirmed) return;
+                        setIsProcessingPayment(true);
                         try {
                           const res = await api.post("/payments/cash-received", { rideId: ride._id });
                           if (res.data.success) {
@@ -882,10 +884,14 @@ const StartRide = () => {
                           }
                         } catch (err) {
                           showAlert(err.response?.data?.message || "Failed to process cash payment", "Error", "error");
+                        } finally {
+                          setIsProcessingPayment(false);
                         }
                       }}
-                        className="w-full bg-emerald-500 text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
-                        <IndianRupee size={20} /> Collect Cash
+                        disabled={isProcessingPayment}
+                        className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-75 disabled:cursor-not-allowed text-black font-black py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
+                        {isProcessingPayment ? <Loader2 size={24} className="animate-spin" /> : <IndianRupee size={20} />} 
+                        {isProcessingPayment ? "Processing..." : "Collect Cash"}
                       </button>
 
                       <div className="flex flex-col gap-2 pt-1 border-t border-white/5">

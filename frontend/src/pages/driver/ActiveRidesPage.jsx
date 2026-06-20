@@ -189,7 +189,7 @@ const ActiveRidesPage = () => {
     return (elapsed / total) * 100;
   };
 
-  if(loading) return <Loader fullPage text="Fetching active rides..." />;
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="min-h-screen bg-(--bg-main) pb-20 transition-colors duration-500">
@@ -268,12 +268,36 @@ const ActiveRidesPage = () => {
             </p>
           </div>
         </div>
-        {/* Active Rides List or Empty State */}
         {loading ? (
-             <div className="min-h-[400px] flex flex-col items-center justify-center space-y-4">
-                 <Loader2 className="w-12 h-12 text-primary animate-spin opacity-40" />
-                 <p className="text-sm font-bold text-(--text-dim) animate-pulse">Scanning Rides......</p>
-             </div>
+          <div className="space-y-6">
+            {[1, 2].map((key) => (
+              <div key={key} className="bg-(--card-bg) rounded-xl border border-(--card-border) p-6 animate-pulse">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-24 h-6 bg-(--card-border) rounded-full" />
+                  <div className="w-16 h-6 bg-(--card-border) rounded-full" />
+                </div>
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-10 h-10 rounded-full bg-(--card-border)" />
+                  <div className="space-y-2">
+                    <div className="h-4 w-32 bg-(--card-border) rounded" />
+                    <div className="h-3 w-16 bg-(--card-border) rounded" />
+                  </div>
+                </div>
+                <div className="flex gap-4 mb-6">
+                  <div className="flex flex-col items-center flex-shrink-0 py-1">
+                    <div className="w-5 h-5 rounded-full bg-(--card-border)" />
+                    <div className="h-8 w-[2px] bg-(--card-border) my-1" />
+                    <div className="w-5 h-5 rounded-full bg-(--card-border)" />
+                  </div>
+                  <div className="flex-1 space-y-8 py-1">
+                    <div className="h-4 w-3/4 bg-(--card-border) rounded" />
+                    <div className="h-4 w-3/4 bg-(--card-border) rounded" />
+                  </div>
+                </div>
+                <div className="h-20 bg-(--card-border) rounded-xl" />
+              </div>
+            ))}
+          </div>
         ) : activeRides.length > 0 ? (
           <div className="space-y-6">
             {activeRides.map((ride) => (

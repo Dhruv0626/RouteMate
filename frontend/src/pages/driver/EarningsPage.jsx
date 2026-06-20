@@ -183,7 +183,7 @@ const EarningsPage = () => {
     );
   }
 
-  if (loading) return <Loader fullPage text="Fetching your earnings..." />;
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">
@@ -604,14 +604,7 @@ const EarningsPage = () => {
           </div>
         </section>
         
-        {loading && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-                <div className="glass-card p-6 flex items-center gap-3 rounded-2xl">
-                    <Loader2 size={24} className="text-primary animate-spin" />
-                    <span className="font-bold">Updating earnings data...</span>
-                </div>
-            </div>
-        )}
+
       </main>
 
       <footer className="mx-auto max-w-7xl border-t border-(--card-border) px-6 py-10 text-center">

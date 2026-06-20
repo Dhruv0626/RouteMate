@@ -230,9 +230,7 @@ const DriverProfile = () => {
     setErrors({});
   };
 
-  if (loading) {
-    return <Loader fullPage text="Fetching your Driver Profile..." />;
-  }
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg flex min-h-screen items-start justify-center p-4 py-16 md:py-20 transition-colors duration-500 overflow-y-auto">
@@ -250,6 +248,26 @@ const DriverProfile = () => {
       </div>
 
       <div className="glass-card relative z-10 w-full max-w-2xl overflow-hidden rounded-3xl border-(--card-border) shadow-2xl">
+        {loading ? (
+           <div className="animate-pulse">
+             <div className="h-40 bg-(--card-border) border-b border-(--card-border)" />
+             <div className="p-8 space-y-6">
+                <div className="flex items-center gap-6">
+                  <div className="h-20 w-20 rounded-2xl bg-(--card-border)" />
+                  <div className="space-y-3 flex-1">
+                     <div className="h-6 w-1/3 bg-(--card-border) rounded" />
+                     <div className="h-4 w-1/4 bg-(--card-border) rounded" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                   <div className="h-16 w-full bg-(--card-border) rounded-xl" />
+                   <div className="h-16 w-full bg-(--card-border) rounded-xl" />
+                   <div className="h-16 w-full bg-(--card-border) rounded-xl" />
+                </div>
+             </div>
+           </div>
+        ) : (
+          <>
         {/* Header */}
         <div className="from-primary/10 border-b border-(--card-border) bg-linear-to-br to-transparent p-8">
           <div className="flex items-start justify-between">
@@ -661,6 +679,8 @@ const DriverProfile = () => {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );

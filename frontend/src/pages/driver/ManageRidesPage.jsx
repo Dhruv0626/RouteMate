@@ -163,7 +163,7 @@ const ManageRidesPage = () => {
   const completedCount = rides.filter((r) => r.status === "completed").length;
   const cancelledCount = rides.filter((r) => r.status === "cancelled" || r.status === "expired").length;
 
-  if(loading) return <Loader fullPage text="Fetching your rides..." />;
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg min-h-screen pb-16 font-sans text-(--text-main) transition-colors duration-500">
@@ -303,11 +303,32 @@ const ManageRidesPage = () => {
           </div>
         </div>
 
-        {/* Loading State */}
+        {/* Loading Skeleton */}
         {loading && (
-          <div className="flex flex-col items-center gap-4 py-20">
-            <Loader2 size={36} className="text-primary animate-spin" />
-            <p className="text-sm text-(--text-dim)">Loading your rides...</p>
+          <div className="space-y-4">
+            {[1, 2, 3].map((key) => (
+              <div key={key} className="glass-card rounded-2xl border border-(--card-border) overflow-hidden animate-pulse">
+                <div className="p-5 bg-gradient-to-r from-primary/5 to-transparent border-b border-(--card-border)">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="flex flex-col items-center gap-1 pt-1 shrink-0">
+                      <div className="w-2.5 h-2.5 rounded-full bg-(--card-border)" />
+                      <div className="w-0.5 h-6 bg-(--card-border)" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-(--card-border)" />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-5">
+                      <div className="h-4 w-3/4 bg-(--card-border) rounded" />
+                      <div className="h-3 w-1/2 bg-(--card-border) rounded" />
+                    </div>
+                    <div className="h-5 w-16 bg-(--card-border) rounded-full shrink-0" />
+                  </div>
+                  <div className="flex gap-2 mt-4 pt-3 border-t border-(--card-border)/40">
+                    <div className="h-6 w-24 bg-(--card-border) rounded-full" />
+                    <div className="h-6 w-20 bg-(--card-border) rounded-full" />
+                    <div className="h-6 w-24 bg-(--card-border) rounded-full" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

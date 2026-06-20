@@ -297,7 +297,7 @@ const GoOnlinePage = () => {
         try {
           const pos = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: true, maximumAge: 0, timeout: 8000
+              enableHighAccuracy: false, maximumAge: 10000, timeout: 5000
             });
           });
           locationPayload = {
@@ -365,11 +365,29 @@ const GoOnlinePage = () => {
     : destPin ? [destPin.lat, destPin.lng]
     : [userLocation.lat, userLocation.lng];
 
-     if (loading) return <Loader fullPage text="Go Online..." />;
+  // Removed full-page loader to enable instant skeleton rendering
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="mesh-bg relative min-h-screen pb-16 font-sans text-(--text-main) transition-colors duration-500">
+      {/* Loading Skeleton */}
+      {loading && (
+        <div className="fixed inset-0 z-[100] bg-(--bg-main)/90 backdrop-blur-sm flex flex-col pt-16 px-6">
+           <div className="mx-auto w-full max-w-4xl space-y-6 mt-8">
+              <div className="rounded-2xl border border-(--card-border) bg-(--card-bg) h-64 w-full animate-pulse flex flex-col items-center justify-center gap-4">
+                 <div className="h-28 w-28 rounded-full bg-(--card-border)" />
+                 <div className="h-6 w-32 bg-(--card-border) rounded-full" />
+                 <div className="h-4 w-48 bg-(--card-border) rounded" />
+              </div>
+              <div className="rounded-2xl border border-(--card-border) bg-(--card-bg) h-24 w-full animate-pulse" />
+              <div className="grid gap-4 md:grid-cols-3">
+                 <div className="rounded-xl border border-(--card-border) bg-(--card-bg) h-32 animate-pulse" />
+                 <div className="rounded-xl border border-(--card-border) bg-(--card-bg) h-32 animate-pulse" />
+                 <div className="rounded-xl border border-(--card-border) bg-(--card-bg) h-32 animate-pulse" />
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Location popup */}
       {showLocationPopup && (

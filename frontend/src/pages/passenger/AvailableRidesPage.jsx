@@ -473,11 +473,36 @@ const AvailableRidesPage = () => {
           </div>
         )}
 
-        {/* Loading */}
+        {/* Loading Skeleton */}
         {loading && (
-          <div className="flex flex-col items-center gap-4 py-16">
-            <Loader2 size={36} className="text-primary animate-spin" />
-            <p className="text-sm text-(--text-dim)">Looking for available rides...</p>
+          <div className="space-y-4">
+            {[1, 2, 3].map((key) => (
+              <div key={key} className="rounded-2xl border border-(--card-border) bg-(--card-bg) overflow-hidden animate-pulse">
+                <div className="p-5 border-b border-(--card-border)">
+                  <div className="flex items-start gap-3">
+                    <div className="flex flex-col items-center gap-1 pt-1">
+                      <div className="w-3 h-3 rounded-full bg-(--card-border)" />
+                      <div className="w-0.5 h-8 bg-(--card-border)" />
+                      <div className="w-3 h-3 rounded-full bg-(--card-border)" />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-7 py-1">
+                      <div className="h-4 w-3/4 bg-(--card-border) rounded" />
+                      <div className="h-3 w-1/2 bg-(--card-border) rounded" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-(--card-border)" />
+                    <div className="space-y-2">
+                      <div className="h-3 w-24 bg-(--card-border) rounded" />
+                      <div className="h-2 w-16 bg-(--card-border) rounded" />
+                    </div>
+                  </div>
+                  <div className="h-12 w-full bg-(--card-border) rounded-xl" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

@@ -588,7 +588,7 @@ const DashboardPage = () => {
   const roleInfo = ROLE_LABELS[role] || ROLE_LABELS.passenger;
   const firstName = user?.name?.split(" ")[0] || "there";
 
-  if (loading) return <Loader fullPage text="Navigate to your Dashboard..." />;
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">
@@ -763,15 +763,24 @@ const DashboardPage = () => {
             </div>
 
             {/* Quick Stats */}
- <div className={`grid grid-cols-3 gap-4 rounded-3xl border border-(--card-border) bg-black/5 p-6 shadow-sm backdrop-blur-md md:gap-8 dark:bg-black/20 transition-opacity ${loading ? "opacity-50" : "opacity-100"}`}>
+ <div className={`grid grid-cols-3 gap-4 rounded-3xl border border-(--card-border) bg-black/5 p-6 shadow-sm backdrop-blur-md md:gap-8 dark:bg-black/20 transition-opacity`}>
               {stats.map((s, i) => (
-                <div key={i} className="min-w-17.5 text-center">
-                  <p className="mb-0.5 text-xl font-black text-(--text-main) md:text-2xl transition-all">
-                    {typeof s.value === 'string' && s.value.startsWith('₹') ? `₹${Math.round(parseFloat(s.value.replace(/[^0-9.]/g, ''))).toLocaleString()}` : s.value}
-                  </p>
-                  <p className="text-[8px] leading-none font-black tracking-widest text-(--text-dim) uppercase">
-                    {s.label}
-                  </p>
+                <div key={i} className="min-w-17.5 text-center flex flex-col items-center justify-center">
+                  {loading ? (
+                    <>
+                      <div className="h-7 w-16 bg-(--card-border) rounded-md animate-pulse mb-1"></div>
+                      <div className="h-2 w-12 bg-(--card-border) rounded-sm animate-pulse mt-1"></div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mb-0.5 text-xl font-black text-(--text-main) md:text-2xl transition-all">
+                        {typeof s.value === 'string' && s.value.startsWith('₹') ? `₹${Math.round(parseFloat(s.value.replace(/[^0-9.]/g, ''))).toLocaleString()}` : s.value}
+                      </p>
+                      <p className="text-[8px] leading-none font-black tracking-widest text-(--text-dim) uppercase">
+                        {s.label}
+                      </p>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -956,9 +965,23 @@ const DashboardPage = () => {
                       <p className="text-xs font-bold uppercase tracking-widest">No Past Trips Found</p>
                     </div>
                   ) : (
-                    <div className="p-10 flex flex-col items-center gap-2 opacity-30">
-                       <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                       <p className="text-[10px] font-black uppercase tracking-widest">Synchronizing Trips...</p>
+                    <div className="divide-y divide-(--card-border)">
+                      {[1, 2, 3].map((key) => (
+                        <div key={key} className="group flex items-start justify-between p-5">
+                          <div className="flex items-start gap-4 flex-1 min-w-0">
+                            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-6 bg-(--card-border) animate-pulse" />
+                            <div className="flex-1 space-y-2 min-w-0 py-1">
+                              <div className="h-4 w-3/4 bg-(--card-border) rounded animate-pulse" />
+                              <div className="h-3 w-1/2 bg-(--card-border) rounded animate-pulse" />
+                              <div className="h-2 w-1/4 bg-(--card-border) rounded animate-pulse mt-2" />
+                            </div>
+                          </div>
+                          <div className="text-right flex flex-col justify-between h-full min-h-[60px] pl-4 flex-shrink-0 py-1">
+                            <div className="h-5 w-16 bg-(--card-border) rounded animate-pulse ml-auto" />
+                            <div className="h-2 w-12 bg-(--card-border) rounded animate-pulse ml-auto mt-4" />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )
               )}
@@ -1037,9 +1060,23 @@ const DashboardPage = () => {
                       <p className="text-xs font-bold uppercase tracking-widest">No Recent Activity Found</p>
                     </div>
                   ) : (
-                    <div className="p-10 flex flex-col items-center gap-2 opacity-30">
-                       <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                       <p className="text-[10px] font-black uppercase tracking-widest">Retrieving Timeline...</p>
+                    <div className="divide-y divide-(--card-border)">
+                      {[1, 2, 3].map((key) => (
+                        <div key={key} className="group flex items-start justify-between p-5">
+                          <div className="flex items-start gap-4 flex-1 min-w-0">
+                            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-6 bg-(--card-border) animate-pulse" />
+                            <div className="flex-1 space-y-2 min-w-0 py-1">
+                              <div className="h-4 w-3/4 bg-(--card-border) rounded animate-pulse" />
+                              <div className="h-3 w-1/2 bg-(--card-border) rounded animate-pulse" />
+                              <div className="h-2 w-1/4 bg-(--card-border) rounded animate-pulse mt-2" />
+                            </div>
+                          </div>
+                          <div className="text-right flex flex-col justify-between h-full min-h-[60px] pl-4 flex-shrink-0 py-1">
+                            <div className="h-5 w-16 bg-(--card-border) rounded animate-pulse ml-auto" />
+                            <div className="h-2 w-12 bg-(--card-border) rounded animate-pulse ml-auto mt-4" />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )
               )}

@@ -220,8 +220,7 @@ const HistoryPage = () => {
     }
   };
 
-  if (role === "passenger" && loading) return <Loader fullPage text="fetching your ride history..." />;
-  if (role === "driver" && loading) return <Loader fullPage text="Fetching your Trip history..." />;
+  // Removed full-page loaders to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">
@@ -371,9 +370,34 @@ const HistoryPage = () => {
         {/* Rides List */}
         <div className="space-y-3">
           {loading && rideHistory === null ? (
-            <div className="flex flex-col items-center py-20 gap-4">
-              <RefreshCw size={36} className="text-primary animate-spin" />
-              <p className="text-xs font-black uppercase tracking-widest text-(--text-dim) animate-pulse">Loading History...</p>
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((key) => (
+                <div key={key} className="glass-card w-full rounded-2xl p-6 border border-(--card-border) overflow-hidden animate-pulse">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-(--card-border) flex-shrink-0" />
+                    <div className="flex-1 space-y-4 py-1">
+                      <div className="h-4 w-1/3 bg-(--card-border) rounded" />
+                      <div className="flex gap-4">
+                        <div className="w-4 flex flex-col items-center gap-1">
+                          <div className="w-3 h-3 rounded-full bg-(--card-border)" />
+                          <div className="w-0.5 h-6 bg-(--card-border)" />
+                          <div className="w-3 h-3 rounded-full bg-(--card-border)" />
+                        </div>
+                        <div className="flex-1 space-y-6 py-0.5">
+                          <div className="h-3 w-3/4 bg-(--card-border) rounded" />
+                          <div className="h-3 w-1/2 bg-(--card-border) rounded" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="h-4 w-16 bg-(--card-border) rounded-full" />
+                        <div className="h-4 w-16 bg-(--card-border) rounded-full" />
+                        <div className="h-4 w-20 bg-(--card-border) rounded-full" />
+                      </div>
+                    </div>
+                    <div className="w-5 h-5 bg-(--card-border) rounded-full mt-4" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filteredRides.length > 0 ? (
             filteredRides.map((ride) => (

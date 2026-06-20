@@ -129,7 +129,7 @@ const AdminHistoryPage = () => {
     exportAuditLogsToCSV(filteredLogs, filename);
   };
 
-  if (loading && auditLogs.length === 0) return <Loader fullPage text="Retrieving Platform Audit Records..." />;
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">
@@ -248,7 +248,28 @@ const AdminHistoryPage = () => {
 
         {/* Audit Log List */}
         <div className="space-y-3">
-          {filteredLogs.length > 0 ? (
+          {loading && auditLogs.length === 0 ? (
+            [1, 2, 3, 4].map((key) => (
+              <div key={key} className="glass-card w-full rounded-2xl p-6 border border-(--card-border) overflow-hidden animate-pulse">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-(--card-border) flex-shrink-0" />
+                  <div className="flex-1 space-y-3 py-1">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-1/3 bg-(--card-border) rounded" />
+                      <div className="h-4 w-16 bg-(--card-border) rounded-full" />
+                    </div>
+                    <div className="h-3 w-2/3 bg-(--card-border) rounded" />
+                    <div className="flex gap-3">
+                      <div className="h-3 w-24 bg-(--card-border) rounded" />
+                      <div className="h-3 w-20 bg-(--card-border) rounded-full" />
+                      <div className="h-3 w-16 bg-(--card-border) rounded" />
+                    </div>
+                  </div>
+                  <div className="w-5 h-5 bg-(--card-border) rounded-full mt-4" />
+                </div>
+              </div>
+            ))
+          ) : filteredLogs.length > 0 ? (
             filteredLogs.map((log) => {
               const CategoryIcon = categoryIcons[log.category] || Database;
               return (

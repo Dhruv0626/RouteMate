@@ -31,8 +31,7 @@ const PassengerBookingsPage = () => {
 
   useEffect(() => { fetchRides(); }, [unreadCount]);
 
-  if (loading) return <Loader fullPage text="Fetching your rides..." />;
-  
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg min-h-screen pb-16 font-sans text-(--text-main) transition-colors duration-500">
@@ -59,6 +58,38 @@ const PassengerBookingsPage = () => {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-8 space-y-5">
+
+        {/* Loading Skeleton */}
+        {loading && (
+          <div className="space-y-5">
+            {[1, 2, 3].map((key) => (
+              <div key={key} className="rounded-2xl border border-(--card-border) bg-(--card-bg) overflow-hidden p-5 animate-pulse">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="space-y-2">
+                    <div className="h-2 w-12 bg-(--card-border) rounded" />
+                    <div className="h-5 w-32 bg-(--card-border) rounded" />
+                  </div>
+                  <div className="h-6 w-20 bg-(--card-border) rounded-full" />
+                </div>
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-(--card-border)" />
+                    <div className="h-3 w-3/4 bg-(--card-border) rounded" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-(--card-border)" />
+                    <div className="h-3 w-1/2 bg-(--card-border) rounded" />
+                  </div>
+                </div>
+                <div className="flex gap-4 mb-4">
+                  <div className="h-4 w-28 bg-(--card-border) rounded" />
+                  <div className="h-4 w-16 bg-(--card-border) rounded" />
+                </div>
+                <div className="h-10 w-full bg-(--card-border) rounded-xl" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {!loading && rides !== null && rides.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-20 text-(--text-dim)">

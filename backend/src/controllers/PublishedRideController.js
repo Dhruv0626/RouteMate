@@ -926,10 +926,17 @@ export const GetMyBookedRides = async (req, res) => {
     try {
         const rides = await PublishedRideModel.find({ "bookings.passenger": req.user.id })
             .populate("driver", "name email Mobile_no profileImage")
-            .sort({ departureTime: -1 });
+            .sort({ departureTime: -1 })
+            .lean();
+
+        const rideIds = rides.map(r => r._id);
 
         // Find associated trips to check for any cancelled/completed trips
-        const trips = await TripModel.find({ passenger: req.user.id });
+        const trips = await TripModel.find({ 
+            passenger: req.user.id,
+            publishedRide: { $in: rideIds }
+        }).lean();
+
         const tripMap = new Map();
         trips.forEach(t => {
             if (t.publishedRide) {
@@ -937,8 +944,7 @@ export const GetMyBookedRides = async (req, res) => {
             }
         });
 
-        const mappedRides = rides.map(ride => {
-            const rideObj = ride.toObject();
+        const mappedRides = rides.map(rideObj => {
             const rideIdStr = rideObj._id.toString();
             const tripPhase = tripMap.get(rideIdStr);
 

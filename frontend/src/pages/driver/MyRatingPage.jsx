@@ -132,9 +132,7 @@ const MyRatingPage = () => {
 
   const maxCount = Math.max(...ratingDistribution.map(r => r.count), 1);
 
-  if (loading && !refreshing) return (
-    <Loader fullPage text="Fetching your rating..." />
-  );
+  // Removed full-page loader to enable instant skeleton rendering
 
   return (
     <div className="mesh-bg relative min-h-screen pb-10 font-sans text-(--text-main) transition-colors duration-500">

@@ -206,7 +206,7 @@ const PickupMap = () => {
         socket.emit("driver_location_update", { rideId, lat: coords.lat, lng: coords.lng });
       },
       (e) => console.warn("GPS initial fix error:", e.message),
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 }
     );
 
     // 2. Continuous watch

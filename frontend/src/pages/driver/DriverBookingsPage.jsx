@@ -100,9 +100,43 @@ const DriverBookingsPage = () => {
         )}
 
         {loading && (
-          <div className="flex flex-col items-center gap-4 py-20">
-            <Loader2 size={36} className="text-primary animate-spin" />
-            <p className="text-sm text-(--text-dim)">Loading your rides...</p>
+          <div className="space-y-5">
+            {[1, 2].map((key) => (
+              <div key={key} className="rounded-2xl border border-(--card-border) bg-(--card-bg) overflow-hidden animate-pulse">
+                <div className="p-5 bg-gradient-to-r from-primary/5 to-transparent border-b border-(--card-border)">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="flex flex-col items-center gap-1 pt-1 shrink-0">
+                      <div className="w-2.5 h-2.5 rounded-full bg-(--card-border)" />
+                      <div className="w-0.5 h-6 bg-(--card-border)" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-(--card-border)" />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-5">
+                      <div className="h-4 w-3/4 bg-(--card-border) rounded" />
+                      <div className="h-3 w-1/2 bg-(--card-border) rounded" />
+                    </div>
+                    <div className="h-5 w-16 bg-(--card-border) rounded-full shrink-0" />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="h-6 w-28 bg-(--card-border) rounded-full" />
+                    <div className="h-6 w-20 bg-(--card-border) rounded-full" />
+                  </div>
+                </div>
+                <div className="p-5 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-(--card-border)" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-3 w-28 bg-(--card-border) rounded" />
+                      <div className="h-2 w-20 bg-(--card-border) rounded" />
+                    </div>
+                    <div className="h-5 w-20 bg-(--card-border) rounded-full" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="h-14 bg-(--card-border) rounded-lg" />
+                    <div className="h-14 bg-(--card-border) rounded-lg" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

@@ -156,9 +156,7 @@ const DriverWalletPage = () => {
     }
   };
 
-  if (loading) {
-    return <Loader fullPage text="Fetching your Driver Wallet..." />;
-  }
+  // Removed full-page loader to enable instant skeleton rendering
 
   const earningsBalance  = wallet?.walletBalance    ?? 0;
   const commissionBal    = wallet?.commissionWallet  ?? 0;
@@ -203,7 +201,21 @@ const DriverWalletPage = () => {
 
       <main className="mx-auto max-w-4xl space-y-6 px-6 py-8">
 
-
+        {loading ? (
+          <div className="space-y-6 animate-pulse">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+               <div className="rounded-[2rem] bg-(--card-bg) border border-(--card-border) h-48 w-full" />
+               <div className="rounded-[2rem] bg-(--card-bg) border border-(--card-border) h-48 w-full" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+               <div className="rounded-2xl border border-(--card-border) bg-(--card-bg) h-24" />
+               <div className="rounded-2xl border border-(--card-border) bg-(--card-bg) h-24" />
+               <div className="rounded-2xl border border-(--card-border) bg-(--card-bg) h-24" />
+            </div>
+            <div className="rounded-3xl border border-(--card-border) bg-(--card-bg) h-64 w-full" />
+          </div>
+        ) : (
+          <>
         {/* ── Trips Blocked Alert ── */}
         {tripsBlocked && (
           <div className="flex items-center gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-4">
@@ -364,6 +376,8 @@ const DriverWalletPage = () => {
             </div>
           )}
         </section>
+          </>
+        )}
       </main>
 
       {/* ── Commission Topup Modal ── */}

@@ -11,6 +11,7 @@ import ThemeToggle          from "../components/ui/ThemeToggle";
 import LocationSearch       from "../components/map/LocationSearch";
 import { getMultipleRoutes, getTrafficCondition } from "../utils/geocode";
 import { useGeoNavigation } from "../hooks/useGeoNavigation";
+import { haversineKm } from "../utils/routing";
 import api from "../services/api";
 import { openRazorpayCheckout } from "../services/paymentService";
 
@@ -107,7 +108,7 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
   const meta = VEHICLE_METADATA[ride.vehicleType?.toUpperCase()] || { name: ride.vehicleType, capacity: 4, desc: "Safe city ride", icon: "🚗" };
   const [travelToPickupMins, setTravelToPickupMins] = useState(null);
 
-  // ── Real Timing from departure time + OSRM route ──
+  // ── Fast Timing from departure time + Haversine (No API calls!) ──
   useEffect(() => {
     // Prefer driver's live GPS coordinates (if active) over static published source
     const driverSrc = ride.driverLocation || ride.source?.location?.coordinates; // [lng, lat]
@@ -115,21 +116,13 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
 
     if (!driverSrc || !passPickup || !ride.departureTime) return;
 
-    let cancelled = false;
-    const fetchEta = async () => {
-      try {
-        // Fetch driver source → Passenger pickup travel time
-        const { fetchRouteInfo } = await import("../utils/routing");
-        const info = await fetchRouteInfo(driverSrc[1], driverSrc[0], passPickup.lat, passPickup.lng);
-        if (!cancelled && info) {
-          setTravelToPickupMins(info.durationMin);
-        }
-      } catch (e) {
-        // silently fail
-      }
-    };
-    fetchEta();
-    return () => { cancelled = true; };
+    // Use instant client-side Haversine estimate instead of firing concurrent API calls to OSRM
+    const distKm = haversineKm(driverSrc[1], driverSrc[0], passPickup.lat, passPickup.lng);
+    const estimatedMin = Math.round((distKm / 25) * 60); // assuming ~25 km/h city speed
+    
+    // Add small buffer
+    const finalMin = Math.max(1, estimatedMin + (distKm > 5 ? 3 : 1));
+    setTravelToPickupMins(finalMin);
   }, [ride._id, passengerPickup?.lat, passengerPickup?.lng, ride.departureTime]);
 
   // ── Derived timing values based entirely on live driver position to pickup ──
@@ -406,7 +399,7 @@ const RideMapPage = () => {
     navigator.geolocation.getCurrentPosition(
       (p) => setUserLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
       (e) => console.warn("[RideMapPage] GPS:", e.message),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 }
     );
     const wid = navigator.geolocation.watchPosition(
       (p) => setUserLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),

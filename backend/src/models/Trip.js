@@ -116,6 +116,7 @@ const TripSchema = new Schema(
 
 TripSchema.index({ passenger: 1, phase: 1 });
 TripSchema.index({ driver: 1, phase: 1 });
+TripSchema.index({ publishedRide: 1, phase: 1 });
 TripSchema.index({ createdAt: -1 });
 
 export default mongoose.model("Trip", TripSchema);
