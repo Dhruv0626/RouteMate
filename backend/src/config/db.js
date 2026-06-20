@@ -1,13 +1,14 @@
 import mongoose from "mongoose";
 
 const connectDB = async () => {
-    try {
+        try {
         await mongoose.connect(process.env.MONGODB_URI, {
             // ─── Connection Pool ─────────────────────────────────────────────
             // Keep up to 20 persistent connections — avoids reconnecting on
             // every request which is the main source of 4-5s delays.
             maxPoolSize: 20,
             minPoolSize: 5,
+            family: 4, // Force IPv4 to prevent Node.js IPv6 DNS resolution issues with MongoDB Atlas SRV
 
             // ─── Timeouts ────────────────────────────────────────────────────
             serverSelectionTimeoutMS: 5000,  // fail fast if Atlas unreachable

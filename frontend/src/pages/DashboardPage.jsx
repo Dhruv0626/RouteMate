@@ -427,8 +427,8 @@ const DashboardPage = () => {
             } else {
               setStats([
                 { label: "Total Trips", value: s.totalRides.toString() },
-                { label: "Active", value: liveRides.filter(r => r.status === 'active').length.toString() }, 
-                { label: "Total Spent", value: `₹${s.totalSpent.toLocaleString()}` },
+                { label: "Active Rides", value: liveRides.filter(r => r.status === 'active').length.toString() }, 
+                { label: "Wallet", value: `₹${(user.walletBalance || 0).toLocaleString()}` },
               ]);
             }
 
