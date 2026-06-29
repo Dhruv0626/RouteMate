@@ -291,6 +291,11 @@ export const GetAvailableRides = async (req, res) => {
                 image: profile.vehicle?.vehicleImage,
             } : null;
 
+            if (rideObj.driver && profile) {
+                rideObj.driver.rating = profile.averageRating;
+                rideObj.driver.totalRatings = profile.totalRatingsReceived;
+            }
+
             // Remove legacy seat logic
             delete rideObj.availableSeats;
             delete rideObj.totalSeats;

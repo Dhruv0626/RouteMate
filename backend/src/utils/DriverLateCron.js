@@ -28,14 +28,14 @@ const toIST = (date) => {
 
 // ─── Help: Get actual ride start timestamp based on confirmed booking ─────────
 const getRideStartTs = (ride) => {
+    const departureTs = new Date(ride.departureTime).getTime();
     const confirmedBooking = (ride.bookings || []).find(b => b.status === "confirmed");
     if (confirmedBooking && confirmedBooking.confirmedAt) {
-        return new Date(confirmedBooking.confirmedAt).getTime();
+        const confirmedTs = new Date(confirmedBooking.confirmedAt).getTime();
+        // Timer starts at the LATER of the scheduled departure time or when the driver accepted
+        return Math.max(departureTs, confirmedTs);
     }
-    if (confirmedBooking && confirmedBooking.bookedAt) {
-        return new Date(confirmedBooking.bookedAt).getTime();
-    }
-    return new Date(ride.createdAt).getTime();
+    return departureTs;
 };
 
 
@@ -406,16 +406,16 @@ const runDriverLateMonitor = async () => {
         if (lateRides.length === 0) return;
 
         for (const ride of lateRides) {
-            // Filter for active bookings (pending or confirmed)
-            const activeBookings = (ride.bookings || []).filter(b => ["pending", "confirmed"].includes(b.status));
+            // Filter for confirmed bookings (only track late pickups AFTER driver accepts)
+            const confirmedBookings = (ride.bookings || []).filter(b => b.status === "confirmed");
 
-            // Skip rides with no passengers
-            if (activeBookings.length === 0) continue;
+            // Skip rides with no confirmed passengers
+            if (confirmedBookings.length === 0) continue;
 
             // ── STEP 1: Ensure pickupEtaMins is set ──────────────────────────────
             if (!ride.pickupEtaMins || ride.pickupEtaMins === 0) {
                 try {
-                    const confirmedBooking = activeBookings.find(b => b.status === "confirmed") || activeBookings[0];
+                    const confirmedBooking = confirmedBookings[0];
                     const driverSrc = ride.source?.location?.coordinates;
                     const paxSrc = confirmedBooking?.passengerSource?.location?.coordinates;
 

@@ -97,7 +97,7 @@ const GoOnlinePage = () => {
   const [signalStrength, setSignalStrength] = useState(null);
   const [connectionType, setConnectionType] = useState("Unknown");
   const [isOnlineNet, setIsOnlineNet] = useState(navigator.onLine);
-  const [userLocation, setUserLocation] = useState({ lat: 23.0225, lng: 72.5714 });
+  const [userLocation, setUserLocation] = useState(null);
 
   // Form state (no baseFare — system-calculated)
   const nowIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -148,7 +148,10 @@ const GoOnlinePage = () => {
     if (appSettings.locationTracking !== false && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => {}
+        (err) => {
+          console.warn("Location error:", err);
+          // Do NOT set fallback location. We only show true live location.
+        }
       );
     }
 
@@ -363,7 +366,8 @@ const GoOnlinePage = () => {
 
   const mapCenter = sourcePin ? [sourcePin.lat, sourcePin.lng]
     : destPin ? [destPin.lat, destPin.lng]
-    : [userLocation.lat, userLocation.lng];
+    : userLocation ? [userLocation.lat, userLocation.lng]
+    : [23.0225, 72.5714];
 
   // Removed full-page loader to enable instant skeleton rendering
 
@@ -593,8 +597,8 @@ const GoOnlinePage = () => {
                 </div>
 
                 {/* Map */}
-                <div className={`rounded-2xl overflow-hidden border-2 transition-all ${pickingMode ? "border-primary shadow-lg shadow-primary/20 cursor-crosshair" : "border-(--card-border)"}`} style={{ height: 320 }}>
-                  <MapContainer center={mapCenter} zoom={13} style={{ width: "100%", height: "100%" }} scrollWheelZoom>
+                <div className={`relative rounded-2xl overflow-hidden border-2 transition-all ${pickingMode ? "border-primary shadow-lg shadow-primary/20 cursor-crosshair" : "border-(--card-border)"}`} style={{ height: 320 }}>
+                  <MapContainer key={userLocation ? 'has-loc' : 'no-loc'} center={mapCenter} zoom={13} style={{ width: "100%", height: "100%" }} scrollWheelZoom>
                     <TileLayer
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

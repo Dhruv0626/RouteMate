@@ -2,7 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
   Navigation, User as UserIcon, Loader2,
   Play, Square, AlertCircle, CheckCircle2, Shuffle, MapPinOff, ChevronRight,
-  Gift, Ticket, Lock, IndianRupee
+  Gift, Ticket, Lock, IndianRupee, Star
 } from "lucide-react";
 import { useAuth }          from "../context/AuthContext";
 import { useDialog }        from "../context/DialogContext";
@@ -188,9 +188,18 @@ function PublishedRideCard({ ride, isSelected, onClick, durationMin = 0, passeng
 
         {/* Middle: Data */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-            <span style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-main)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-main)", display: "flex", alignItems: "center", gap: "6px" }}>
                 {meta.name}
+                {ride.driver && (
+                  <span style={{ display: "flex", alignItems: "baseline", gap: "3px", fontSize: "12px", background: "var(--bg-main)", padding: "2px 6px", borderRadius: "6px", border: "1px solid var(--card-border)" }}>
+                    <span style={{ fontSize: "10px", alignSelf: "center" }}><Star size={10}/></span> 
+                    <>
+                      <span style={{ fontWeight: 900, color: "var(--text-main)" }}>{ride.driver.rating ? Number(ride.driver.rating).toFixed(1) : "5.0"}</span>
+                      <span style={{ color: "#f59e0b", fontSize: "10px", fontWeight: 800, marginLeft: "1px" }}></span>
+                    </>
+                  </span>
+                )}
             </span>
 
             {meta.tag && (
